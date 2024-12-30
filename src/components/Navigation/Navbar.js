@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import LogoutButton from './LogoutButton';
 
 function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -64,6 +65,7 @@ function Navbar() {
                   Admin
                 </Link>
               )}
+              <LogoutButton />
             </div>
           </div>
         </div>
@@ -124,6 +126,9 @@ function Navbar() {
                     Admin
                   </Link>
                 )}
+                <div className="mt-2">
+                  <LogoutButton className="w-full justify-center" />
+                </div>
               </div>
             </div>
           </div>

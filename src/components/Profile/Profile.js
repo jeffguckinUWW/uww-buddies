@@ -4,11 +4,78 @@ import { db, storage } from '../../firebase/config';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
-// EditForm component moved outside of Profile
+// Keep your existing InstructorCertificationFields component exactly as it is
+const InstructorCertificationFields = ({ certifications = [], onChange }) => {
+  // Your existing component code...
+  const agencies = ["NAUI", "SDI", "TDI", "PADI", "SSI", "Other"];
+
+  const handleAddCertification = () => {
+    onChange([...certifications, { agency: '', number: '' }]);
+  };
+
+  const handleRemoveCertification = (index) => {
+    const newCerts = certifications.filter((_, i) => i !== index);
+    onChange(newCerts);
+  };
+
+  const updateCertification = (index, field, value) => {
+    const newCerts = [...certifications];
+    newCerts[index] = { ...newCerts[index], [field]: value };
+    onChange(newCerts);
+  };
+
+  return (
+    <div className="space-y-4">
+      <label className="block text-sm font-medium text-gray-700">Instructor Certifications</label>
+      
+      {certifications.map((cert, index) => (
+        <div key={index} className="flex gap-2 items-start">
+          <select
+            value={cert.agency}
+            onChange={(e) => updateCertification(index, 'agency', e.target.value)}
+            className="mt-1 block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="">Select Agency</option>
+            {agencies.map(agency => (
+              <option key={agency} value={agency}>{agency}</option>
+            ))}
+          </select>
+          
+          <input
+            type="text"
+            value={cert.number}
+            onChange={(e) => updateCertification(index, 'number', e.target.value)}
+            placeholder="Certification Number"
+            className="mt-1 block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          />
+          
+          <button
+            type="button"
+            onClick={() => handleRemoveCertification(index)}
+            className="mt-1 text-red-600 hover:text-red-800"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      
+      <button
+        type="button"
+        onClick={handleAddCertification}
+        className="text-blue-600 hover:text-blue-800"
+      >
+        + Add Certification
+      </button>
+    </div>
+  );
+};
+
+// Keep your existing EditForm component exactly as it is
 const EditForm = ({ 
   formData, 
   onInputChange, 
-  onSpecialtyChange, 
+  onSpecialtyChange,
+  onInstructorCertChange, 
   onImageChange,
   onDeletePhoto,
   onSubmit, 
@@ -121,6 +188,14 @@ const EditForm = ({
       </select>
     </div>
 
+    {/* Show Instructor Certification fields only when Instructor is selected */}
+    {formData.certificationLevel === "Instructor" && (
+      <InstructorCertificationFields
+        certifications={formData.instructorCertifications || []}
+        onChange={onInstructorCertChange}
+      />
+    )}
+
     {/* Specialties */}
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
@@ -173,7 +248,7 @@ const EditForm = ({
 );
 
 function Profile() {
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
@@ -186,7 +261,8 @@ function Profile() {
     specialties: [],
     numberOfDives: 0,
     hideEmail: false,
-    hidePhone: false
+    hidePhone: false,
+    instructorCertifications: []
   });
   const [profile, setProfile] = useState({
     photoURL: '',
@@ -197,7 +273,8 @@ function Profile() {
     specialties: [],
     numberOfDives: 0,
     hideEmail: false,
-    hidePhone: false
+    hidePhone: false,
+    instructorCertifications: []
   });
 
   const certificationLevels = [
@@ -220,7 +297,7 @@ function Profile() {
     "Solo Diver"
   ];
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+  const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
   const validateImage = (file) => {
     if (!file) return "No file selected";
@@ -262,6 +339,13 @@ function Profile() {
     }));
   };
 
+  const handleInstructorCertChange = (certifications) => {
+    setFormData(prev => ({
+      ...prev,
+      instructorCertifications: certifications
+    }));
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     const error = validateImage(file);
@@ -275,17 +359,12 @@ function Profile() {
   const handleDeletePhoto = async () => {
     if (!window.confirm('Are you sure you want to delete your profile picture?')) return;
     try {
-      // Get the current profile photo URL
       const currentPhotoURL = formData.photoURL;
   
       if (currentPhotoURL) {
-        // Extract the file path from the URL
         const filePath = decodeURIComponent(new URL(currentPhotoURL).pathname.split('/o/')[1]);
-  
-        // Delete the file from Storage
         await deleteObject(ref(storage, filePath));
   
-        // Update profile
         const updatedProfile = { ...profile, photoURL: '' };
         await setDoc(doc(db, 'profiles', user.uid), updatedProfile);
         setProfile(updatedProfile);
@@ -309,17 +388,10 @@ function Profile() {
     try {
       let photoURL = formData.photoURL;
       if (profileImage) {
-        // Create a file name with timestamp to prevent caching issues
         const timestamp = Date.now();
         const fileName = `${timestamp}_${profileImage.name}`;
-        
-        // Create reference to the file
         const storageRef = ref(storage, `users/${user.uid}/profile/${fileName}`);
-        
-        // Upload as array buffer
         const arrayBuffer = await profileImage.arrayBuffer();
-        
-        // Upload with metadata
         const metadata = {
           contentType: profileImage.type,
         };
@@ -327,8 +399,7 @@ function Profile() {
         console.log('Starting upload...');
         const uploadTask = await uploadBytes(storageRef, arrayBuffer, metadata);
         console.log('Upload successful');
-        
-        // Get URL
+
         photoURL = await getDownloadURL(uploadTask.ref);
         console.log('Got download URL:', photoURL);
       }
@@ -339,7 +410,12 @@ function Profile() {
         updatedAt: new Date().toISOString()
       };
   
-      await setDoc(doc(db, 'profiles', user.uid), updatedProfile);
+      // Update both Firestore profile and Auth profile
+      await Promise.all([
+        setDoc(doc(db, 'profiles', user.uid), updatedProfile),
+        updateUserProfile(formData.name, photoURL)
+      ]);
+
       setProfile(updatedProfile);
       setIsEditing(false);
     } catch (error) {
@@ -357,6 +433,7 @@ function Profile() {
             formData={formData}
             onInputChange={handleInputChange}
             onSpecialtyChange={handleSpecialtyChange}
+            onInstructorCertChange={handleInstructorCertChange}
             onImageChange={handleImageChange}
             onDeletePhoto={handleDeletePhoto}
             onSubmit={handleSubmit}
@@ -405,6 +482,20 @@ function Profile() {
               </p>
             </div>
 
+            {/* Instructor Certifications */}
+            {profile.certificationLevel === "Instructor" && profile.instructorCertifications?.length > 0 && (
+              <div className="mt-6">
+                <h3 className="font-medium text-gray-900 mb-2">Instructor Certifications</h3>
+                <div className="space-y-2">
+                  {profile.instructorCertifications.map((cert, index) => (
+                    <div key={index} className="text-sm text-gray-600">
+                      {cert.agency} - #{cert.number}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Specialties */}
             {profile.specialties?.length > 0 && (
               <div className="mt-6">
@@ -426,13 +517,14 @@ function Profile() {
             <button
               onClick={() => setIsEditing(true)}
               className="mt-6 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
->
-Edit Profile
-</button>
-</div>
-)}
-</div>
-</div>
-);
+            >
+              Edit Profile
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
+
 export default Profile;

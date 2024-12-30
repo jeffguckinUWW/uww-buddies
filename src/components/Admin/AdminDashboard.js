@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 
 const AdminDashboard = () => {
@@ -30,26 +30,40 @@ const AdminDashboard = () => {
     fetchUsers();
   }, []);
 
-  // Toggle instructor status
-  const toggleInstructorStatus = async (userId, currentStatus) => {
+  // Toggle instructor access
+  const toggleInstructorAccess = async (userId, currentAccess) => {
+    if (!window.confirm(
+      currentAccess 
+        ? 'Are you sure you want to revoke instructor access?' 
+        : 'Are you sure you want to grant instructor access?'
+    )) return;
+
     try {
       const userRef = doc(db, 'profiles', userId);
-      await updateDoc(userRef, {
-        role: currentStatus === 'instructor' ? 'user' : 'instructor'
-      });
+      const updateData = {
+        instructorAccess: currentAccess 
+          ? null  // Remove instructor access
+          : {     // Grant instructor access
+              hasAccess: true,
+              grantedAt: Timestamp.now(),
+              grantedBy: user.email
+            }
+      };
+      
+      await updateDoc(userRef, updateData);
 
       // Update local state
-      setUsers(users.map(user => {
-        if (user.id === userId) {
+      setUsers(users.map(u => {
+        if (u.id === userId) {
           return {
-            ...user,
-            role: currentStatus === 'instructor' ? 'user' : 'instructor'
+            ...u,
+            instructorAccess: updateData.instructorAccess
           };
         }
-        return user;
+        return u;
       }));
     } catch (err) {
-      setError('Error updating user status');
+      setError('Error updating instructor access');
       console.error('Error:', err);
     }
   };
@@ -71,7 +85,7 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
+    <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Admin Dashboard</h2>
         
@@ -86,7 +100,13 @@ const AdminDashboard = () => {
                   Email
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Instructor Status
+                  Certification Level
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Instructor Access
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Access Details
                 </th>
               </tr>
             </thead>
@@ -104,17 +124,34 @@ const AdminDashboard = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {user.certificationLevel || 'Not set'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <label className="inline-flex items-center">
                       <input
                         type="checkbox"
-                        checked={user.role === 'instructor'}
-                        onChange={() => toggleInstructorStatus(user.id, user.role)}
+                        checked={!!user.instructorAccess?.hasAccess}
+                        onChange={() => toggleInstructorAccess(user.id, user.instructorAccess?.hasAccess)}
                         className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                       />
                       <span className="ml-2 text-sm text-gray-600">
-                        {user.role === 'instructor' ? 'Instructor' : 'User'}
+                        {user.instructorAccess?.hasAccess ? 'Enabled' : 'Disabled'}
                       </span>
                     </label>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {user.instructorAccess?.hasAccess ? (
+                        <>
+                          <div>Granted by: {user.instructorAccess.grantedBy}</div>
+                          <div>Date: {user.instructorAccess.grantedAt?.toDate().toLocaleDateString()}</div>
+                        </>
+                      ) : (
+                        'No access granted'
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

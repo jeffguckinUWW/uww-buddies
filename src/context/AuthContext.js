@@ -4,7 +4,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut
+  signOut,
+  updateProfile
 } from 'firebase/auth';
 
 const AuthContext = createContext({});
@@ -17,10 +18,14 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Auth state changed:", user?.uid); // Debug log
       setUser(user);
       setLoading(false);
+    }, (error) => {
+      console.error("Auth state change error:", error);
+      setLoading(false);
     });
-
+  
     return unsubscribe;
   }, []);
 
@@ -36,11 +41,28 @@ export const AuthProvider = ({ children }) => {
     return signOut(auth);
   };
 
+  // Add updateUserProfile function
+  const updateUserProfile = async (displayName, photoURL) => {
+    if (!user) return;
+    try {
+      await updateProfile(user, {
+        displayName: displayName || user.displayName,
+        photoURL: photoURL || user.photoURL
+      });
+      // Force a user state update
+      setUser({ ...user, displayName, photoURL });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     login,
     signup,
     logout,
+    updateUserProfile
   };
 
   return (
