@@ -1,12 +1,12 @@
-import React, { useState, useEffect, memo} from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
+import LogbookEntry from './LogbookEntry';
 import { 
   collection, 
   addDoc, 
   getDocs, 
   doc, 
-  getDoc, 
   setDoc, 
   deleteDoc, 
   query, 
@@ -44,7 +44,28 @@ const initialFormData = {
   buddy: '',
   notes: '',
   requiresSignature: false,
-  signature: null
+  signature: null,
+  // New fields from paper logbook
+  visibility: '',
+  airTemp: '',
+  waterTemp: '',
+  tankPressureStart: '',
+  tankPressureEnd: '',
+  tankVolume: '',
+  diveType: {
+    lake: false,
+    river: false,
+    ocean: false,
+    shore: false,
+    boat: false,
+    wreck: false,
+    drift: false,
+    night: false
+  },
+  weather: {
+    condition: 'sunny',
+    windSpeed: ''
+  }
 };
 
 const initialInstructorSignature = {
@@ -57,7 +78,7 @@ const initialInstructorSignature = {
 
 const Logbook = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState(TABS.LOGBOOK);
+  const [activeTab, setActiveTab] = useState(TABS.STATS);
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState(initialStats);
   const [searchFilters, setSearchFilters] = useState(initialSearchFilters);
@@ -68,7 +89,6 @@ const Logbook = () => {
   const [signatureError, setSignatureError] = useState('');
   const [formData, setFormData] = useState(initialFormData);
 
-  // Initial data fetch
   useEffect(() => {
     if (user?.uid) {
       fetchLogs();
@@ -76,7 +96,6 @@ const Logbook = () => {
     }
   }, [user]);
 
-  // Helper Functions
   const calculateNextDiveNumber = async () => {
     try {
       const querySnapshot = await getDocs(
@@ -89,6 +108,7 @@ const Logbook = () => {
       if (!querySnapshot.empty) {
         const highestNumber = querySnapshot.docs[0].data().diveNumber;
         setNextDiveNumber(highestNumber + 1);
+        setFormData(prev => ({ ...prev, diveNumber: highestNumber + 1 }));
       }
     } catch (error) {
       console.error('Error calculating next dive number:', error);
@@ -122,7 +142,6 @@ const Logbook = () => {
     });
   };
 
-  // PIN and Signature Handling
   const verifyInstructorPin = async (pin) => {
     if (!pin || pin.length !== 6) {
       return { verified: false, error: 'PIN must be 6 digits' };
@@ -163,14 +182,6 @@ const Logbook = () => {
     }
   };
 
-  const handlePinChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-    setInstructorSignature(prev => ({
-      ...prev,
-      pinNumber: value
-    }));
-  };
-  
   const handleSignature = async (e) => {
     e.preventDefault();
     setSignatureError('');
@@ -208,21 +219,27 @@ const Logbook = () => {
     }
   };
 
-  // Form Handling
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      // When signed, use existing values for protected fields
       const logData = {
         diveNumber: formData.signature ? formData.diveNumber : parseInt(formData.diveNumber),
-        diveDate: formData.signature ? Timestamp.fromDate(new Date(formData.diveDate)) : Timestamp.fromDate(new Date(formData.diveDate)),
-        location: formData.signature ? formData.location : formData.location,
-        bottomTime: formData.signature ? formData.bottomTime : parseInt(formData.bottomTime),
-        maxDepth: formData.signature ? formData.maxDepth : parseInt(formData.maxDepth),
-        buddy: formData.signature ? formData.buddy : formData.buddy,
-        notes: formData.signature ? formData.notes : formData.notes,
+        diveDate: Timestamp.fromDate(new Date(formData.diveDate)),
+        location: formData.location,
+        bottomTime: parseInt(formData.bottomTime),
+        maxDepth: parseInt(formData.maxDepth),
+        buddy: formData.buddy,
+        notes: formData.notes,
         requiresSignature: formData.requiresSignature,
+        visibility: formData.visibility,
+        airTemp: formData.airTemp,
+        waterTemp: formData.waterTemp,
+        tankPressureStart: formData.tankPressureStart,
+        tankPressureEnd: formData.tankPressureEnd,
+        tankVolume: formData.tankVolume,
+        diveType: formData.diveType,
+        weather: formData.weather,
         signature: formData.signature ? {
           instructorId: formData.signature.instructorId,
           instructorName: formData.signature.instructorName,
@@ -254,7 +271,7 @@ const Logbook = () => {
     } catch (error) {
       console.error('Error saving log:', error);
     }
-};
+  };
 
   const handleDelete = async (logId) => {
     if (window.confirm('Are you sure you want to delete this log entry?')) {
@@ -269,13 +286,9 @@ const Logbook = () => {
 
   const handleEdit = (log) => {
     setFormData({
-      diveNumber: log.diveNumber,
+      ...initialFormData,
+      ...log,
       diveDate: new Date(log.diveDate).toISOString().split('T')[0],
-      location: log.location,
-      bottomTime: log.bottomTime,
-      maxDepth: log.maxDepth,
-      buddy: log.buddy,
-      notes: log.notes,
       requiresSignature: log.requiresSignature || false,
       signature: log.signature || null
     });
@@ -288,16 +301,14 @@ const Logbook = () => {
       ...initialFormData,
       diveNumber: nextDiveNumber
     });
+    setInstructorSignature(initialInstructorSignature);
   };
-
-  // Component Functions
-  // Find this SignatureModal component in your Logbook.js and replace it with:
 
   const SignatureModal = memo(({ isVisible }) => {
     if (!isVisible) return null;
   
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 w-full max-w-md">
           <h3 className="text-lg font-semibold mb-4">Instructor Signature</h3>
           <form onSubmit={handleSignature} className="space-y-4">
@@ -311,7 +322,7 @@ const Logbook = () => {
                 value={instructorSignature.pinNumber}
                 onChange={(e) => setInstructorSignature(prev => ({
                   ...prev,
-                  pinNumber: e.target.value
+                  pinNumber: e.target.value.replace(/\D/g, '').slice(0, 6)
                 }))}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter 6-digit PIN"
@@ -344,7 +355,6 @@ const Logbook = () => {
     );
   });
   
-  // Filter logs based on search criteria
   const filteredLogs = logs.filter(log => {
     let matchesKeyword = true;
     let matchesDateRange = true;
@@ -370,7 +380,7 @@ const Logbook = () => {
   });
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
+    <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
         {/* Tab Navigation */}
         <div className="flex gap-4 mb-6">
@@ -405,7 +415,7 @@ const Logbook = () => {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {editingLog ? 'Edit Dive' : 'New Dive'}
+            New Dive
           </button>
         </div>
 
@@ -491,16 +501,16 @@ const Logbook = () => {
                         className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"
                       >
                         Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(log.id)}
-                      className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
-                    >
-                      Delete
-                    </button>
-                </div>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(log.id)}
+                        className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <span className="text-gray-600">Max Depth:</span>
                       <span className="ml-2 font-medium">{log.maxDepth} ft</span>
@@ -513,23 +523,45 @@ const Logbook = () => {
                       <span className="text-gray-600">Buddy:</span>
                       <span className="ml-2 font-medium">{log.buddy}</span>
                     </div>
+                    {log.visibility && (
+                      <div>
+                        <span className="text-gray-600">Visibility:</span>
+                        <span className="ml-2 font-medium">{log.visibility} ft</span>
+                      </div>
+                    )}
                   </div>
+                  {(log.tankPressureStart || log.tankPressureEnd) && (
+                    <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      {log.tankPressureStart && (
+                        <div>
+                          <span className="text-gray-600">Start Pressure:</span>
+                          <span className="ml-2 font-medium">{log.tankPressureStart} psi</span>
+                        </div>
+                      )}
+                      {log.tankPressureEnd && (
+                        <div>
+                          <span className="text-gray-600">End Pressure:</span>
+                          <span className="ml-2 font-medium">{log.tankPressureEnd} psi</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {log.notes && (
                     <p className="mt-2 text-sm text-gray-600">{log.notes}</p>
                   )}
                   {log.signature && (
-  <div className="mt-2 p-2 bg-blue-50 rounded-md">
-    <p className="text-sm text-blue-800">
-      ✓ Signed by {log.signature.instructorName} 
-      <span className="mx-1">•</span>
-      {log.signature.certificationLevel}
-      <span className="mx-1">•</span>
-      {log.signature.signatureDate && log.signature.signatureDate.toDate 
-        ? log.signature.signatureDate.toDate().toLocaleDateString()
-        : new Date(log.signature.signatureDate).toLocaleDateString()}
-    </p>
-  </div>
-)}
+                    <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                      <p className="text-sm text-blue-800">
+                        ✓ Signed by {log.signature.instructorName} 
+                        <span className="mx-1">•</span>
+                        {log.signature.certificationLevel}
+                        <span className="mx-1">•</span>
+                        {log.signature.signatureDate && log.signature.signatureDate.toDate 
+                          ? log.signature.signatureDate.toDate().toLocaleDateString()
+                          : new Date(log.signature.signatureDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -538,236 +570,103 @@ const Logbook = () => {
 
         {/* New/Edit Dive Form */}
         {activeTab === TABS.NEW_DIVE && (
-  <div>
-    <h2 className="text-xl font-bold mb-6">
-      {editingLog ? 'Edit Dive Entry' : 'New Dive Entry'}
-    </h2>
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Warning message for signed dives */}
-      {formData.signature && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-          <p className="text-sm text-yellow-800">
-            ⚠️ This dive log is signed and cannot be edited unless the signature is removed.
-          </p>
-        </div>
-      )}
+          <div>
+            <h2 className="text-xl font-bold mb-6">
+              {editingLog ? 'Edit Dive Entry' : 'New Dive Entry'}
+            </h2>
+            <form onSubmit={handleSubmit}>
+              {/* Warning message for signed dives */}
+              {formData.signature && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ This dive log is signed and cannot be edited unless the signature is removed.
+                  </p>
+                </div>
+              )}
 
-      {/* Basic Info */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Dive Number
-          </label>
-          <input
-            type="number"
-            value={formData.diveNumber}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              diveNumber: e.target.value 
-            }))}
-            readOnly={formData.signature}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-              formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Date
-          </label>
-          <input
-            type="date"
-            value={formData.diveDate}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              diveDate: e.target.value 
-            }))}
-            readOnly={formData.signature}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-              formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
-            required
-          />
-        </div>
-      </div>
+              {/* New Styled LogbookEntry Component */}
+              <LogbookEntry
+                formData={formData}
+                setFormData={setFormData}
+                readOnly={!!formData.signature}
+              />
 
-      {/* Location */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Location
-        </label>
-        <input
-          type="text"
-          value={formData.location}
-          onChange={(e) => setFormData(prev => ({ 
-            ...prev, 
-            location: e.target.value 
-          }))}
-          readOnly={formData.signature}
-          className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-            formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
-          required
-        />
-      </div>
+              {/* Signature Section */}
+              <div className="mt-6">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="requiresSignature"
+                    checked={formData.requiresSignature}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      requiresSignature: e.target.checked 
+                    }))}
+                    readOnly={formData.signature}
+                    className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${
+                      formData.signature ? 'cursor-not-allowed' : ''
+                    }`}
+                  />
+                  <label htmlFor="requiresSignature" className="text-sm font-medium text-gray-700">
+                    This dive requires instructor signature
+                  </label>
+                </div>
+                
+                {formData.requiresSignature && !formData.signature && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSignatureModal(true)}
+                    className="mt-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md"
+                  >
+                    Add Instructor Signature
+                  </button>
+                )}
+                
+                {formData.signature && (
+                  <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                    <p className="text-sm text-gray-600">
+                      Signed by: {formData.signature.instructorName}
+                      <br />
+                      Date: {formData.signature.signatureDate instanceof Date 
+                        ? formData.signature.signatureDate.toLocaleDateString()
+                        : new Date(formData.signature.signatureDate).toLocaleDateString()}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, signature: null }))}
+                      className="mt-2 text-sm text-red-600 hover:text-red-700"
+                    >
+                      Remove Signature to Edit
+                    </button>
+                  </div>
+                )}
+              </div>
 
-      {/* Dive Details */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Bottom Time (minutes)
-          </label>
-          <input
-            type="number"
-            value={formData.bottomTime}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              bottomTime: e.target.value 
-            }))}
-            readOnly={formData.signature}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-              formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Max Depth (feet)
-          </label>
-          <input
-            type="number"
-            value={formData.maxDepth}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              maxDepth: e.target.value 
-            }))}
-            readOnly={formData.signature}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-              formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-            }`}
-            required
-          />
-        </div>
-      </div>
+              {/* Form Actions */}
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(TABS.LOGBOOK);
+                    setEditingLog(null);
+                    resetForm();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                  {editingLog ? 'Save Changes' : 'Add Log Entry'}
+                </button>
+              </div>
+            </form>
 
-      {/* Buddy */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Dive Buddy
-        </label>
-        <input
-          type="text"
-          value={formData.buddy}
-          onChange={(e) => setFormData(prev => ({ 
-            ...prev, 
-            buddy: e.target.value 
-          }))}
-          readOnly={formData.signature}
-          className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-            formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
-          required
-        />
-      </div>
-
-      {/* Notes */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700">
-          Notes
-        </label>
-        <textarea
-          value={formData.notes}
-          onChange={(e) => setFormData(prev => ({ 
-            ...prev, 
-            notes: e.target.value 
-          }))}
-          readOnly={formData.signature}
-          rows={4}
-          className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
-            formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
-          }`}
-        />
-      </div>
-
-      {/* Signature Section */}
-      <div className="mb-6">
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="requiresSignature"
-            checked={formData.requiresSignature}
-            onChange={(e) => setFormData(prev => ({ 
-              ...prev, 
-              requiresSignature: e.target.checked 
-            }))}
-            readOnly={formData.signature}
-            className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${
-              formData.signature ? 'cursor-not-allowed' : ''
-            }`}
-          />
-          <label htmlFor="requiresSignature" className="text-sm font-medium text-gray-700">
-            This dive requires instructor signature
-          </label>
-        </div>
-        
-        {formData.requiresSignature && !formData.signature && (
-          <button
-            type="button"
-            onClick={() => setShowSignatureModal(true)}
-            className="mt-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md"
-          >
-            Add Instructor Signature
-          </button>
-        )}
-        
-        {formData.signature && (
-          <div className="mt-2 p-3 bg-gray-50 rounded-md">
-            <p className="text-sm text-gray-600">
-              Signed by: {formData.signature.instructorName}
-              <br />
-              Date: {formData.signature.signatureDate instanceof Date 
-                ? formData.signature.signatureDate.toLocaleDateString()
-                : new Date(formData.signature.signatureDate).toLocaleDateString()}
-            </p>
-            <button
-              type="button"
-              onClick={() => setFormData(prev => ({ ...prev, signature: null }))}
-              className="mt-2 text-sm text-red-600 hover:text-red-700"
-            >
-              Remove Signature to Edit
-            </button>
+            <SignatureModal isVisible={showSignatureModal} />
           </div>
         )}
-      </div>
-
-      {/* Form Actions */}
-      <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={() => {
-            setActiveTab(TABS.LOGBOOK);
-            setEditingLog(null);
-            resetForm();
-          }}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          Cancel
-        </button>
-        <button
-  type="submit"
-  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
->
-  {editingLog ? 'Save Changes' : 'Add Log Entry'}
-</button>
-      </div>
-    </form>
-  </div>
-)}
-
-<SignatureModal isVisible={showSignatureModal} />
-
       </div>
     </div>
   );
