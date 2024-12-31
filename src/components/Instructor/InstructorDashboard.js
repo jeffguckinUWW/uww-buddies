@@ -10,20 +10,64 @@ const InstructorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [courses, setCourses] = useState([]);
+  const [instructorProfile, setInstructorProfile] = useState(null);
   const [isNewCourseModalOpen, setIsNewCourseModalOpen] = useState(false);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [userRole, setUserRole] = useState('student');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [newCourse, setNewCourse] = useState({
     name: "",
     location: "",
     startDate: "",
     endDate: ""
   });
-  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
-  const [studentSearch, setStudentSearch] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
-  
-  const searchStudents = async (searchTerm) => {
+
+  // Fetch instructor profile and check PIN on component mount
+  useEffect(() => {
+    const init = async () => {
+      if (user?.uid) {
+        try {
+          // Fetch instructor profile
+          const profileRef = doc(db, 'profiles', user.uid);
+          const profileSnap = await getDoc(profileRef);
+          
+          if (profileSnap.exists()) {
+            const profileData = profileSnap.data();
+            setInstructorProfile(profileData);
+            setHasPin(!!profileData.instructorPin?.pin);
+            
+            // If user has a PIN but no role, update their role
+            if (profileData.instructorPin?.pin && (!profileData.role || profileData.role !== 'instructor')) {
+              await updateDoc(profileRef, { role: 'instructor' });
+            }
+          }
+
+          // Fetch courses
+          const coursesRef = collection(db, 'courses');
+          const q = query(coursesRef, where('instructorId', '==', user.uid));
+          const querySnapshot = await getDocs(q);
+          const coursesData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setCourses(coursesData);
+
+        } catch (err) {
+          console.error('Error initializing dashboard:', err);
+          setError('Error loading instructor dashboard');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
+    init();
+  }, [user]);
+
+  const searchUsers = async (searchTerm) => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
       return;
@@ -34,76 +78,82 @@ const InstructorDashboard = () => {
       const usersRef = collection(db, 'profiles');
       const searchTermLower = searchTerm.toLowerCase();
       
-      // Get all users (we'll filter on client side for more flexible search)
       const querySnapshot = await getDocs(usersRef);
       const users = [];
       
       querySnapshot.forEach((doc) => {
         const userData = doc.data();
-        // Check if user is not already in the course
+        // Check if user is already in the course as student or assistant
         const isAlreadyInCourse = selectedCourse?.students?.some(
           student => student.uid === doc.id
         );
+        const isAlreadyAssistant = selectedCourse?.assistants?.some(
+          assistant => assistant.uid === doc.id
+        );
         
-        if (!isAlreadyInCourse && // Skip if already in course
+        if (!isAlreadyInCourse && !isAlreadyAssistant && // Skip if already in course
             userData.role !== 'instructor' && // Skip instructors
-            (userData.email?.toLowerCase().includes(searchTermLower) || // Search email
-             userData.name?.toLowerCase().includes(searchTermLower))) { // Search name using the name field
+            (userRole === 'student' ? userData.role !== 'assistant' : true) && // Filter by selected role
+            (userData.email?.toLowerCase().includes(searchTermLower) || 
+             userData.name?.toLowerCase().includes(searchTermLower))) {
           users.push({
             uid: doc.id,
             email: userData.email,
-            displayName: userData.name || 'Unnamed User' // Use the name field
+            phone: userData.phone || '',
+            displayName: userData.name || 'Unnamed User'
           });
         }
       });
       
       setSearchResults(users);
     } catch (err) {
-      console.error('Error searching for students:', err);
-      setError('Failed to search for students');
+      console.error('Error searching for users:', err);
+      setError('Failed to search for users');
     } finally {
       setIsSearching(false);
     }
   };
 
-  const addStudentToCourse = async (student) => {
+  const addUserToCourse = async (user, role = 'student') => {
     try {
-      // Get the latest profile data to ensure we have the most recent name
-      const profileRef = doc(db, 'profiles', student.uid);
+      // Get the latest profile data
+      const profileRef = doc(db, 'profiles', user.uid);
       const profileSnap = await getDoc(profileRef);
       const profileData = profileSnap.data();
 
-      const studentData = {
-        ...student,
-        displayName: profileData.name || student.displayName || 'Unnamed User'
+      const userData = {
+        ...user,
+        displayName: profileData.name || user.displayName || 'Unnamed User',
+        phone: profileData.phone || ''
       };
 
       const courseRef = doc(db, 'courses', selectedCourse.id);
-      const updatedStudents = [...(selectedCourse.students || []), studentData];
-      
-      await updateDoc(courseRef, {
-        students: updatedStudents
-      });
+      let updatedCourse;
+
+      if (role === 'assistant') {
+        const updatedAssistants = [...(selectedCourse.assistants || []), userData];
+        updatedCourse = { ...selectedCourse, assistants: updatedAssistants };
+        await updateDoc(courseRef, { assistants: updatedAssistants });
+      } else {
+        const updatedStudents = [...(selectedCourse.students || []), userData];
+        updatedCourse = { ...selectedCourse, students: updatedStudents };
+        await updateDoc(courseRef, { students: updatedStudents });
+      }
 
       // Update local state
       setCourses(courses.map(course => 
-        course.id === selectedCourse.id 
-          ? { ...course, students: updatedStudents }
-          : course
+        course.id === selectedCourse.id ? updatedCourse : course
       ));
-      setSelectedCourse({ ...selectedCourse, students: updatedStudents });
+      setSelectedCourse(updatedCourse);
       
-      // Clear search results after adding
+      // Clear search results
       setSearchResults([]);
       setStudentSearch('');
       
-      // Update student's training data
-      const trainingRef = doc(db, 'profiles', student.uid);
-      const trainingSnap = await getDoc(trainingRef);
-      
-      if (trainingSnap.exists()) {
-        const currentTraining = trainingSnap.data().training || [];
-        await updateDoc(trainingRef, {
+      // Update user's training data
+      if (profileSnap.exists()) {
+        const currentTraining = profileData.training || [];
+        await updateDoc(profileRef, {
           training: [...currentTraining, {
             courseId: selectedCourse.id,
             courseName: selectedCourse.name,
@@ -111,126 +161,79 @@ const InstructorDashboard = () => {
             startDate: selectedCourse.startDate,
             endDate: selectedCourse.endDate,
             location: selectedCourse.location,
-            instructorId: user.uid
+            role: role,
+            instructorId: selectedCourse.instructorId,
+            instructorEmail: selectedCourse.instructor.email
           }]
         });
       }
     } catch (err) {
-      console.error('Error adding student to course:', err);
-      setError('Failed to add student to course');
+      console.error('Error adding user to course:', err);
+      setError(`Failed to add ${role} to course`);
     }
   };
 
-  const removeStudentFromCourse = async (studentToRemove) => {
-    if (window.confirm('Are you sure you want to remove this student from the course?')) {
+  const removeUserFromCourse = async (userToRemove, role = 'student') => {
+    if (window.confirm(`Are you sure you want to remove this ${role} from the course?`)) {
       try {
         const courseRef = doc(db, 'courses', selectedCourse.id);
-        const updatedStudents = selectedCourse.students.filter(
-          student => student.uid !== studentToRemove.uid
-        );
-        
-        await updateDoc(courseRef, {
-          students: updatedStudents
-        });
+        let updatedCourse;
+
+        // Update course roster
+        if (role === 'assistant') {
+          const updatedAssistants = selectedCourse.assistants.filter(
+            assistant => assistant.uid !== userToRemove.uid
+          );
+          updatedCourse = { ...selectedCourse, assistants: updatedAssistants };
+          await updateDoc(courseRef, { assistants: updatedAssistants });
+        } else {
+          const updatedStudents = selectedCourse.students.filter(
+            student => student.uid !== userToRemove.uid
+          );
+          updatedCourse = { ...selectedCourse, students: updatedStudents };
+          await updateDoc(courseRef, { students: updatedStudents });
+        }
 
         // Update local state
         setCourses(courses.map(course => 
-          course.id === selectedCourse.id 
-            ? { ...course, students: updatedStudents }
-            : course
+          course.id === selectedCourse.id ? updatedCourse : course
         ));
-        setSelectedCourse({ ...selectedCourse, students: updatedStudents });
+        setSelectedCourse(updatedCourse);
         
-        // Remove course from student's training data
-        const trainingRef = doc(db, 'profiles', studentToRemove.uid);
-        const trainingSnap = await getDoc(trainingRef);
+        // Remove course from user's training data
+        const userRef = doc(db, 'profiles', userToRemove.uid);
+        const userSnap = await getDoc(userRef);
         
-        if (trainingSnap.exists()) {
-          const currentTraining = trainingSnap.data().training || [];
-          await updateDoc(trainingRef, {
-            training: currentTraining.filter(t => t.courseId !== selectedCourse.id)
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const updatedTraining = (userData.training || []).filter(training => {
+            // Remove only the specific course instance
+            return training.courseId !== selectedCourse.id;
           });
-        }
-      } catch (err) {
-        console.error('Error removing student from course:', err);
-        setError('Failed to remove student from course');
-      }
-    }
-  };
-
-  const checkInstructorPin = async () => {
-    if (user?.uid) {
-      try {
-        const docRef = doc(db, 'profiles', user.uid);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const userData = docSnap.data();
-          setHasPin(!!userData.instructorPin?.pin);
           
-          // If user has a PIN but no role, update their role
-          if (userData.instructorPin?.pin && (!userData.role || userData.role !== 'instructor')) {
-            try {
-              await updateDoc(docRef, {
-                role: 'instructor'
-              });
-              console.log('Instructor role updated successfully');
-            } catch (updateErr) {
-              console.error('Error updating instructor role:', updateErr);
-            }
-          }
+          // Update the user's profile with filtered training data
+          await updateDoc(userRef, { training: updatedTraining });
         }
       } catch (err) {
-        console.error('Error checking instructor PIN:', err);
-        setError('Error loading instructor dashboard');
-      } finally {
-        setLoading(false);
+        console.error(`Error removing ${role} from course:`, err);
+        setError(`Failed to remove ${role} from course`);
       }
     }
   };
-
-  const fetchCourses = async () => {
-    if (user?.uid) {
-      try {
-        const docRef = doc(db, 'profiles', user.uid);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists() && docSnap.data().role === 'instructor') {
-          const coursesRef = collection(db, 'courses');
-          const q = query(coursesRef, where('instructorId', '==', user.uid));
-          const querySnapshot = await getDocs(q);
-          const coursesData = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          setCourses(coursesData);
-        } else {
-          console.error('User is not an instructor');
-          setError('Access denied: User is not an instructor');
-        }
-      } catch (err) {
-        console.error('Error fetching courses:', err);
-        setError('Error loading courses');
-      }
-    }
-  };
-
-  useEffect(() => {
-    const init = async () => {
-      await checkInstructorPin();
-      await fetchCourses();
-    };
-    
-    init();
-  }, [user]);
 
   const handleCreateCourse = async () => {
     try {
       const courseData = {
         ...newCourse,
         instructorId: user.uid,
+        instructor: {
+          uid: user.uid,
+          email: instructorProfile.email,
+          displayName: instructorProfile.name || 'Unnamed Instructor'
+        },
         status: 'active',
         students: [],
+        assistants: [],
         createdAt: new Date(),
       };
 
@@ -248,11 +251,59 @@ const InstructorDashboard = () => {
   const handleDeleteCourse = async (courseId) => {
     if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       try {
+        // Get the course data first to know which students to update
         const courseRef = doc(db, 'courses', courseId);
-        await deleteDoc(courseRef);
-        setCourses(courses.filter(course => course.id !== courseId));
-        setIsManageModalOpen(false);
-        setSelectedCourse(null);
+        const courseSnap = await getDoc(courseRef);
+        
+        if (courseSnap.exists()) {
+          const courseData = courseSnap.data();
+          const updatePromises = [];
+
+          // Remove training record from all students in the course
+          if (courseData.students && courseData.students.length > 0) {
+            courseData.students.forEach(student => {
+              const studentRef = doc(db, 'profiles', student.uid);
+              updatePromises.push(
+                getDoc(studentRef).then(studentSnap => {
+                  if (studentSnap.exists()) {
+                    const studentData = studentSnap.data();
+                    const updatedTraining = (studentData.training || []).filter(
+                      t => t.courseId !== courseId
+                    );
+                    return updateDoc(studentRef, { training: updatedTraining });
+                  }
+                })
+              );
+            });
+          }
+
+          // Remove training record from all assistants in the course
+          if (courseData.assistants && courseData.assistants.length > 0) {
+            courseData.assistants.forEach(assistant => {
+              const assistantRef = doc(db, 'profiles', assistant.uid);
+              updatePromises.push(
+                getDoc(assistantRef).then(assistantSnap => {
+                  if (assistantSnap.exists()) {
+                    const assistantData = assistantSnap.data();
+                    const updatedTraining = (assistantData.training || []).filter(
+                      t => t.courseId !== courseId
+                    );
+                    return updateDoc(assistantRef, { training: updatedTraining });
+                  }
+                })
+              );
+            });
+          }
+
+          // Wait for all updates to complete
+          await Promise.all(updatePromises);
+          
+          // Finally delete the course
+          await deleteDoc(courseRef);
+          setCourses(courses.filter(course => course.id !== courseId));
+          setIsManageModalOpen(false);
+          setSelectedCourse(null);
+        }
       } catch (err) {
         console.error('Error deleting course:', err);
         setError('Failed to delete course');
@@ -275,7 +326,7 @@ const InstructorDashboard = () => {
 
       setCourses(courses.map(course => 
         course.id === courseId 
-          ? { ...course, status: 'completed' }
+          ? { ...course, status: 'completed', completedAt: new Date() }
           : course
       ));
     } catch (err) {
@@ -318,6 +369,7 @@ const InstructorDashboard = () => {
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Instructor Dashboard</h2>
           <button
@@ -330,141 +382,6 @@ const InstructorDashboard = () => {
             Create New Course
           </button>
         </div>
-
-        {/* Manage Course Modal */}
-        {isManageModalOpen && selectedCourse && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Manage Course: {selectedCourse.name}</h3>
-                <button
-                  onClick={() => {
-                    setIsManageModalOpen(false);
-                    setSelectedCourse(null);
-                    setSearchResults([]);
-                    setStudentSearch('');
-                  }}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              <div className="space-y-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600">
-                    Location: {selectedCourse.location}<br />
-                    Start Date: {new Date(selectedCourse.startDate).toLocaleDateString()}<br />
-                    End Date: {new Date(selectedCourse.endDate).toLocaleDateString()}<br />
-                    Students: {selectedCourse.students?.length || 0}
-                  </p>
-                </div>
-
-                {/* Student Management Section */}
-                <div className="border-t pt-4">
-                  <h4 className="text-md font-semibold mb-4">Manage Students</h4>
-                  
-                  {/* Search Students */}
-                  <div className="mb-4">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Search students by name or email"
-                        className="flex-1 p-2 border rounded"
-                        value={studentSearch}
-                        onChange={(e) => {
-                          setStudentSearch(e.target.value);
-                          searchStudents(e.target.value);
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Search Results */}
-                    {isSearching ? (
-                      <div className="mt-2 text-sm text-gray-600">Searching...</div>
-                    ) : searchResults.length > 0 ? (
-                      <div className="mt-2 border rounded max-h-40 overflow-y-auto">
-                        {searchResults.map(student => (
-                          <div 
-                            key={student.uid}
-                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                          >
-                            <div>
-                              <div className="font-medium">{student.displayName}</div>
-                              <div className="text-sm text-gray-600">{student.email}</div>
-                            </div>
-                            <button
-                              onClick={() => addStudentToCourse(student)}
-                              className="text-blue-600 hover:text-blue-700 text-sm"
-                            >
-                              Add to Course
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : studentSearch && (
-                      <div className="mt-2 text-sm text-gray-600">No students found</div>
-                    )}
-                  </div>
-
-                  {/* Current Students List */}
-                  <div className="mt-4">
-                    <h5 className="text-sm font-medium text-gray-700 mb-2">Enrolled Students</h5>
-                    <div className="border rounded max-h-60 overflow-y-auto">
-                      {selectedCourse.students?.length > 0 ? (
-                        selectedCourse.students.map(student => (
-                          <div 
-                            key={student.uid}
-                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                          >
-                            <div>
-                              <div className="font-medium">{student.displayName}</div>
-                              <div className="text-sm text-gray-600">{student.email}</div>
-                            </div>
-                            <button
-                              onClick={() => removeStudentFromCourse(student)}
-                              className="text-red-600 hover:text-red-700 text-sm"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-4 text-sm text-gray-600 text-center">
-                          No students enrolled yet
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="border-t pt-4 space-y-2">
-                  <button
-                    onClick={() => handleDeleteCourse(selectedCourse.id)}
-                    className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700"
-                  >
-                    Delete Course
-                  </button>
-                  
-                  {selectedCourse.status === 'active' && (
-                    <button
-                      onClick={() => {
-                        handleCompleteCourse(selectedCourse.id);
-                        setIsManageModalOpen(false);
-                        setSelectedCourse(null);
-                      }}
-                      className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
-                    >
-                      Mark as Complete
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* New Course Modal */}
         {isNewCourseModalOpen && (
@@ -521,6 +438,197 @@ const InstructorDashboard = () => {
           </div>
         )}
 
+        {/* Manage Course Modal */}
+        {isManageModalOpen && selectedCourse && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Manage Course: {selectedCourse.name}</h3>
+                <button
+                  onClick={() => {
+                    setIsManageModalOpen(false);
+                    setSelectedCourse(null);
+                    setSearchResults([]);
+                    setStudentSearch('');
+                    setUserRole('student');
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="space-y-6">
+                {/* Course Info Section */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-2">Course Information</h4>
+                  <p className="text-sm text-gray-600">
+                    Location: {selectedCourse.location}<br />
+                    Start Date: {new Date(selectedCourse.startDate).toLocaleDateString()}<br />
+                    End Date: {new Date(selectedCourse.endDate).toLocaleDateString()}<br />
+                    Instructor: {selectedCourse.instructor?.displayName || instructorProfile?.name || 'Unknown'} 
+                    ({selectedCourse.instructor?.email || instructorProfile?.email || 'No email'})<br />
+                    Students: {selectedCourse.students?.length || 0}<br />
+                    Assistants: {selectedCourse.assistants?.length || 0}
+                  </p>
+                </div>
+
+                {/* User Management Section */}
+                <div className="border-t pt-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-md font-semibold">Manage Course Users</h4>
+                    <select
+                      value={userRole}
+                      onChange={(e) => setUserRole(e.target.value)}
+                      className="p-2 border rounded"
+                    >
+                      <option value="student">Add Student</option>
+                      <option value="assistant">Add Assistant</option>
+                    </select>
+                  </div>
+                  
+                  {/* Search Users */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      placeholder={`Search ${userRole}s by name or email`}
+                      className="w-full p-2 border rounded"
+                      value={studentSearch}
+                      onChange={(e) => {
+                        setStudentSearch(e.target.value);
+                        searchUsers(e.target.value);
+                      }}
+                    />
+                    
+                    {/* Search Results */}
+                    {isSearching ? (
+                      <div className="mt-2 text-sm text-gray-600">Searching...</div>
+                    ) : searchResults.length > 0 ? (
+                      <div className="mt-2 border rounded max-h-40 overflow-y-auto">
+                        {searchResults.map(user => (
+                          <div 
+                            key={user.uid}
+                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                          >
+                            <div>
+                              <div className="font-medium">{user.displayName}</div>
+                              <div className="text-sm text-gray-600">
+                                {user.email}
+                                {userRole === 'student' && user.phone && (
+                                  <div className="text-gray-500">Phone: {user.phone}</div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => addUserToCourse(user, userRole)}
+                              className="text-blue-600 hover:text-blue-700 text-sm"
+                            >
+                              Add as {userRole}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : studentSearch && (
+                      <div className="mt-2 text-sm text-gray-600">No users found</div>
+                    )}
+                  </div>
+
+                  {/* Assistants List */}
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Course Assistants</h5>
+                    <div className="border rounded max-h-40 overflow-y-auto">
+                      {selectedCourse.assistants?.length > 0 ? (
+                        selectedCourse.assistants.map(assistant => (
+                          <div 
+                            key={assistant.uid}
+                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                          >
+                            <div>
+                              <div className="font-medium">{assistant.displayName}</div>
+                              <div className="text-sm text-gray-600">{assistant.email}</div>
+                            </div>
+                            <button
+                              onClick={() => removeUserFromCourse(assistant, 'assistant')}
+                              className="text-red-600 hover:text-red-700 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-sm text-gray-600 text-center">
+                          No assistants assigned
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Students List */}
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Enrolled Students</h5>
+                    <div className="border rounded max-h-60 overflow-y-auto">
+                      {selectedCourse.students?.length > 0 ? (
+                        selectedCourse.students.map(student => (
+                          <div 
+                            key={student.uid}
+                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                          >
+                            <div>
+                              <div className="font-medium">{student.displayName}</div>
+                              <div className="text-sm text-gray-600">
+                                {student.email}
+                                {student.phone && (
+                                  <div className="text-gray-500">Phone: {student.phone}</div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeUserFromCourse(student, 'student')}
+                              className="text-red-600 hover:text-red-700 text-sm"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-4 text-sm text-gray-600 text-center">
+                          No students enrolled yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Course Actions */}
+                <div className="border-t pt-4 space-y-2">
+                  <button
+                    onClick={() => handleDeleteCourse(selectedCourse.id)}
+                    className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700"
+                  >
+                    Delete Course
+                  </button>
+                  
+                  {selectedCourse.status === 'active' && (
+                    <button
+                      onClick={() => {
+                        handleCompleteCourse(selectedCourse.id);
+                        setIsManageModalOpen(false);
+                        setSelectedCourse(null);
+                      }}
+                      className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+                    >
+                      Mark as Complete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Course Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Active Courses */}
           <div>
@@ -531,38 +639,40 @@ const InstructorDashboard = () => {
                   <p className="text-gray-600">No active courses yet.</p>
                 </div>
               ) : (
-                courses.filter(course => course.status === 'active').map(course => (
-                  <div key={course.id} className="bg-white border rounded-lg shadow-sm p-4">
-                    <div className="mb-2">
-                      <h4 className="text-lg font-semibold">{course.name}</h4>
-                      <p className="text-sm text-gray-600">
-                        {course.location} • {new Date(course.startDate).toLocaleDateString()} - {new Date(course.endDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="flex gap-4">
-                        <button className="text-sm text-gray-600 hover:text-blue-600">
-                          {course.students?.length || 0} Students
-                        </button>
+                courses
+                  .filter(course => course.status === 'active')
+                  .map(course => (
+                    <div key={course.id} className="bg-white border rounded-lg shadow-sm p-4">
+                      <div className="mb-2">
+                        <h4 className="text-lg font-semibold">{course.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {course.location} • {new Date(course.startDate).toLocaleDateString()} - {new Date(course.endDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex gap-4">
+                          <button className="text-sm text-gray-600 hover:text-blue-600">
+                            {course.students?.length || 0} Students
+                          </button>
+                          <button 
+                            onClick={() => handleManageCourse(course)}
+                            className="text-sm text-gray-600 hover:text-blue-600"
+                          >
+                            Manage Course
+                          </button>
+                          <button className="text-sm text-gray-600 hover:text-blue-600">
+                            View Records
+                          </button>
+                        </div>
                         <button 
-                          onClick={() => handleManageCourse(course)}
-                          className="text-sm text-gray-600 hover:text-blue-600"
+                          onClick={() => handleCompleteCourse(course.id)}
+                          className="text-sm text-green-600 hover:text-green-700"
                         >
-                          Manage All
-                        </button>
-                        <button className="text-sm text-gray-600 hover:text-blue-600">
-                          Records
+                          Complete Course
                         </button>
                       </div>
-                      <button 
-                        onClick={() => handleCompleteCourse(course.id)}
-                        className="text-sm text-green-600 hover:text-green-700"
-                      >
-                        Complete Course
-                      </button>
                     </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
           </div>
@@ -576,29 +686,35 @@ const InstructorDashboard = () => {
                   <p className="text-gray-600">No completed courses yet.</p>
                 </div>
               ) : (
-                courses.filter(course => course.status === 'completed').map(course => (
-                  <div key={course.id} className="bg-gray-50 border rounded-lg p-4">
-                    <div className="mb-2">
-                      <h4 className="text-lg font-semibold">{course.name}</h4>
-                      <p className="text-sm text-gray-600">
-                        {course.location} • Completed {new Date(course.completedAt).toLocaleDateString()}
-                      </p>
+                courses
+                  .filter(course => course.status === 'completed')
+                  .map(course => (
+                    <div key={course.id} className="bg-gray-50 border rounded-lg p-4">
+                      <div className="mb-2">
+                        <h4 className="text-lg font-semibold">{course.name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {course.location} • Completed {course.completedAt ? new Date(course.completedAt).toLocaleDateString() : 'Date not available'}
+                        </p>
+                      </div>
+                      <div className="flex gap-4">
+                        <button 
+                          onClick={() => handleManageCourse(course)}
+                          className="text-sm text-gray-600 hover:text-blue-600"
+                        >
+                          View Details
+                        </button>
+                        <button className="text-sm text-gray-600 hover:text-blue-600">
+                          Course Records
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-4">
-                      <button className="text-sm text-gray-600 hover:text-blue-600">
-                        View Records
-                      </button>
-                      <button className="text-sm text-gray-600 hover:text-blue-600">
-                        Course End Report
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
           </div>
         </div>
 
+        {/* Settings Section */}
         <div className="mt-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Settings</h3>
           <button

@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navigation/Navbar';
 import Profile from './components/Profile/Profile';
 import Login from './components/Auth/Login';
-import Register from './components/Auth/Register';  // Add this import
+import Register from './components/Auth/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Logbook from './components/Logbook/Logbook';
 import Training from './components/Training/Training';
@@ -33,28 +33,40 @@ function AppContent() {
       <Navbar />
       <main className="container mx-auto px-4 py-4">
         <Routes>
-          <Route path="/" element={
-            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-6">
-              <AdBlock 
-                ads={['/ads/ad1.jpg', '/ads/ad2.jpg']}
-                interval={4000}
-              />
-              <AdBlock 
-                ads={['/ads/ad3.jpg', '/ads/ad4.jpg']}
-                interval={5000}
-              />
-            </div>
-          } />
+          <Route
+            path="/"
+            element={
+              <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-6">
+                <AdBlock
+  ads={[
+    { src: '/ads/ad1.jpg', link: 'https://www.diveunderwaterworld.com/module/class/510420/bonaire-july-25' },
+    { src: '/ads/ad2.jpg', link: 'https://www.diveunderwaterworld.com' },
+    { src: '/ads/ad3.jpg', link: 'https://www.diveunderwaterworld.com/module/class/407570/naui-advanced-scuba-diver-local-diving' },
+    { src: '/ads/ad4.jpg', link: 'https://www.diveunderwaterworld.com/shop/c/p/OCEANIC-DELTA-5-EDX-REGULATOR-x44838157.htm' },
+  ]}
+  interval={5000}
+  renderAd={(ad) => (
+    <a href={ad.link} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
+      <img src={ad.src} alt="Advertisement" style={{ width: '100%', height: 'auto' }} />
+    </a>
+  )}
+/>
+              </div>
+            }
+          />
           <Route path="/profile" element={<Profile />} />
           <Route path="/logbook" element={<Logbook />} />
           <Route path="/training" element={<Training />} />
           <Route path="/instructor" element={<InstructorLogin />} />
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/instructor/dashboard" element={
-            <RequireInstructor>
-              <InstructorDashboard />
-            </RequireInstructor>
-          } />
+          <Route
+            path="/instructor/dashboard"
+            element={
+              <RequireInstructor>
+                <InstructorDashboard />
+              </RequireInstructor>
+            }
+          />
         </Routes>
       </main>
     </div>

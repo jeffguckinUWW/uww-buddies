@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const AdBlock = ({ ads = [], interval = 3000, title = '' }) => {
+const AdBlock = ({ ads = [], interval = 3000, renderAd }) => {
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   
   useEffect(() => {
@@ -15,13 +15,26 @@ const AdBlock = ({ ads = [], interval = 3000, title = '' }) => {
 
   if (ads.length === 0) return null;
 
+  const currentAd = ads[currentAdIndex];
+
   return (
     <div className="relative w-full max-w-2xl mx-auto">
-      <img
-        src={ads[currentAdIndex]}
-        alt={`Advertisement ${currentAdIndex + 1}`}
-        className="w-full h-auto rounded-lg shadow-md"
-      />
+      {renderAd ? (
+        renderAd(currentAd)
+      ) : (
+        <a 
+          href={currentAd.link} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="block"
+        >
+          <img
+            src={currentAd.src}
+            alt={`Advertisement ${currentAdIndex + 1}`}
+            className="w-full h-auto rounded-lg shadow-md"
+          />
+        </a>
+      )}
       
       {/* Navigation dots - only show if there's more than one ad */}
       {ads.length > 1 && (

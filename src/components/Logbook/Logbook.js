@@ -213,19 +213,24 @@ const Logbook = () => {
     e.preventDefault();
     
     try {
+      // When signed, use existing values for protected fields
       const logData = {
-        diveNumber: parseInt(formData.diveNumber),
-        diveDate: Timestamp.fromDate(new Date(formData.diveDate)),
-        location: formData.location,
-        bottomTime: parseInt(formData.bottomTime),
-        maxDepth: parseInt(formData.maxDepth),
-        buddy: formData.buddy,
-        notes: formData.notes,
+        diveNumber: formData.signature ? formData.diveNumber : parseInt(formData.diveNumber),
+        diveDate: formData.signature ? Timestamp.fromDate(new Date(formData.diveDate)) : Timestamp.fromDate(new Date(formData.diveDate)),
+        location: formData.signature ? formData.location : formData.location,
+        bottomTime: formData.signature ? formData.bottomTime : parseInt(formData.bottomTime),
+        maxDepth: formData.signature ? formData.maxDepth : parseInt(formData.maxDepth),
+        buddy: formData.signature ? formData.buddy : formData.buddy,
+        notes: formData.signature ? formData.notes : formData.notes,
         requiresSignature: formData.requiresSignature,
         signature: formData.signature ? {
           instructorId: formData.signature.instructorId,
           instructorName: formData.signature.instructorName,
-          signatureDate: Timestamp.fromDate(formData.signature.signatureDate),
+          signatureDate: Timestamp.fromDate(
+            formData.signature.signatureDate instanceof Date 
+              ? formData.signature.signatureDate 
+              : new Date(formData.signature.signatureDate)
+          ),
           certificationLevel: formData.signature.certificationLevel
         } : null
       };
@@ -249,7 +254,7 @@ const Logbook = () => {
     } catch (error) {
       console.error('Error saving log:', error);
     }
-  };
+};
 
   const handleDelete = async (logId) => {
     if (window.confirm('Are you sure you want to delete this log entry?')) {
@@ -560,7 +565,7 @@ const Logbook = () => {
               ...prev, 
               diveNumber: e.target.value 
             }))}
-            disabled={formData.signature}
+            readOnly={formData.signature}
             className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
               formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
@@ -578,7 +583,7 @@ const Logbook = () => {
               ...prev, 
               diveDate: e.target.value 
             }))}
-            disabled={formData.signature}
+            readOnly={formData.signature}
             className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
               formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
@@ -599,7 +604,7 @@ const Logbook = () => {
             ...prev, 
             location: e.target.value 
           }))}
-          disabled={formData.signature}
+          readOnly={formData.signature}
           className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
             formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
           }`}
@@ -620,7 +625,7 @@ const Logbook = () => {
               ...prev, 
               bottomTime: e.target.value 
             }))}
-            disabled={formData.signature}
+            readOnly={formData.signature}
             className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
               formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
@@ -638,7 +643,7 @@ const Logbook = () => {
               ...prev, 
               maxDepth: e.target.value 
             }))}
-            disabled={formData.signature}
+            readOnly={formData.signature}
             className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
               formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
             }`}
@@ -659,7 +664,7 @@ const Logbook = () => {
             ...prev, 
             buddy: e.target.value 
           }))}
-          disabled={formData.signature}
+          readOnly={formData.signature}
           className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
             formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
           }`}
@@ -678,7 +683,7 @@ const Logbook = () => {
             ...prev, 
             notes: e.target.value 
           }))}
-          disabled={formData.signature}
+          readOnly={formData.signature}
           rows={4}
           className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${
             formData.signature ? 'bg-gray-100 cursor-not-allowed' : ''
@@ -697,7 +702,7 @@ const Logbook = () => {
               ...prev, 
               requiresSignature: e.target.checked 
             }))}
-            disabled={formData.signature}
+            readOnly={formData.signature}
             className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${
               formData.signature ? 'cursor-not-allowed' : ''
             }`}
@@ -751,14 +756,11 @@ const Logbook = () => {
           Cancel
         </button>
         <button
-          type="submit"
-          disabled={formData.signature}
-          className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-            formData.signature ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
-        >
-          {editingLog ? 'Save Changes' : 'Add Log Entry'}
-        </button>
+  type="submit"
+  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+>
+  {editingLog ? 'Save Changes' : 'Add Log Entry'}
+</button>
       </div>
     </form>
   </div>
