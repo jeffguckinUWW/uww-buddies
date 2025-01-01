@@ -12,6 +12,10 @@ import RequireInstructor from './components/Instructor/RequireInstructor';
 import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import AdBlock from './components/AdBlock/AdBlock';
+// Add messaging imports
+import { MessagesContainer } from './components/Messaging/MessagesContainer';
+import { BuddyList } from './components/Messaging/BuddyList';
+import { BuddyProfile } from './components/Messaging/BuddyProfile';
 
 function AppContent() {
   const { user } = useAuth();
@@ -38,25 +42,28 @@ function AppContent() {
             element={
               <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-6">
                 <AdBlock
-  ads={[
-    { src: '/ads/ad1.jpg', link: 'https://www.diveunderwaterworld.com/module/class/510420/bonaire-july-25' },
-    { src: '/ads/ad2.jpg', link: 'https://www.diveunderwaterworld.com' },
-    { src: '/ads/ad3.jpg', link: 'https://www.diveunderwaterworld.com/module/class/407570/naui-advanced-scuba-diver-local-diving' },
-    { src: '/ads/ad4.jpg', link: 'https://www.diveunderwaterworld.com/shop/c/p/OCEANIC-DELTA-5-EDX-REGULATOR-x44838157.htm' },
-  ]}
-  interval={5000}
-  renderAd={(ad) => (
-    <a href={ad.link} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
-      <img src={ad.src} alt="Advertisement" style={{ width: '100%', height: 'auto' }} />
-    </a>
-  )}
-/>
+                  ads={[
+                    { src: '/ads/ad1.jpg', link: 'https://www.diveunderwaterworld.com/module/class/510420/bonaire-july-25' },
+                    { src: '/ads/ad2.jpg', link: 'https://www.diveunderwaterworld.com' },
+                    { src: '/ads/ad3.jpg', link: 'https://www.diveunderwaterworld.com/module/class/407570/naui-advanced-scuba-diver-local-diving' },
+                    { src: '/ads/ad4.jpg', link: 'https://www.diveunderwaterworld.com/shop/c/p/OCEANIC-DELTA-5-EDX-REGULATOR-x44838157.htm' },
+                  ]}
+                  interval={5000}
+                  renderAd={(ad) => (
+                    <a href={ad.link} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block' }}>
+                      <img src={ad.src} alt="Advertisement" style={{ width: '100%', height: 'auto' }} />
+                    </a>
+                  )}
+                />
               </div>
             }
           />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/buddy/:userId" element={<BuddyProfile />} />
           <Route path="/logbook" element={<Logbook />} />
           <Route path="/training" element={<Training />} />
+          <Route path="/messages" element={<MessagesContainer />} />
+          <Route path="/buddies" element={<BuddyList />} />
           <Route path="/instructor" element={<InstructorLogin />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route
