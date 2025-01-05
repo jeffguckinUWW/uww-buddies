@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export const MessageInput = ({ onSend, disabled }) => {
+const MessageInput = ({ onSend, disabled }) => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,3 +43,5 @@ export const MessageInput = ({ onSend, disabled }) => {
     </form>
   );
 };
+
+export default MessageInput;  // Add this line

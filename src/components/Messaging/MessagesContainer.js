@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { MessageInput } from './MessageInput';
+import MessageInput from './MessageInput';
 import { NewChatModal } from './NewChatModal';
 import { ChatPreview } from './ChatPreview';
 import { ChatHeader } from './ChatHeader';

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import StudentCourseMessages from './StudentCourseMessages';
 
 const Training = () => {
   const { user } = useAuth();
@@ -9,49 +10,308 @@ const Training = () => {
   const [error, setError] = useState('');
   const [trainings, setTrainings] = useState([]);
   const [expandedCourseId, setExpandedCourseId] = useState(null);
-  const [selectedCourseId, setSelectedCourseId] = useState(null);
-  const [showDetails, setShowDetails] = useState(false);
   const [courseDetails, setCourseDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
-  const cleanupTrainingData = async (trainingData) => {
-    const updatedTraining = [];
+
+  const cleanupTrainingData = useCallback(async (trainingData) => {
+    console.log('Starting cleanup of training data:', trainingData);
+    if (!trainingData || trainingData.length === 0) {
+      console.log('No training data to clean up');
+      return [];
+    }
+
+    const updatedTraining = [...trainingData];
     const invalidCourses = [];
 
     for (const training of trainingData) {
       try {
+        console.log('Checking course:', {
+          courseId: training.courseId,
+          courseName: training.courseName,
+          status: training.status
+        });
+
         const courseRef = doc(db, 'courses', training.courseId);
         const courseSnap = await getDoc(courseRef);
         
-        if (courseSnap.exists()) {
-          updatedTraining.push(training);
-        } else {
+        if (!courseSnap.exists()) {
+          console.log('Course does not exist:', training.courseId);
           invalidCourses.push(training.courseId);
+        } else {
+          const courseData = courseSnap.data();
+          console.log('Course exists:', {
+            courseId: training.courseId,
+            status: courseData.status,
+            students: courseData.students?.length || 0
+          });
         }
       } catch (err) {
-        console.error('Error checking course:', training.courseId, err);
-        invalidCourses.push(training.courseId);
+        console.log('Error checking course:', {
+          courseId: training.courseId,
+          error: err.message
+        });
+        // Don't mark as invalid on permission errors
+        if (err.code !== 'permission-denied') {
+          invalidCourses.push(training.courseId);
+        }
       }
     }
 
-    // If we found invalid courses, update the user's profile
+    // Only remove courses we're sure don't exist
     if (invalidCourses.length > 0) {
+      const filteredTraining = updatedTraining.filter(
+        training => !invalidCourses.includes(training.courseId)
+      );
+      
       try {
+        console.log('Removing invalid courses:', {
+          removing: invalidCourses,
+          remaining: filteredTraining.length
+        });
         const userRef = doc(db, 'profiles', user.uid);
-        await updateDoc(userRef, { training: updatedTraining });
-        console.log('Removed invalid courses:', invalidCourses);
+        await updateDoc(userRef, { training: filteredTraining });
+        return filteredTraining;
       } catch (err) {
-        console.error('Error updating user profile:', err);
+        console.error('Error updating profile:', err);
+        return updatedTraining;
       }
     }
 
     return updatedTraining;
+  }, [user?.uid]);
+
+  const fetchCourseDetails = async (courseId) => {
+    if (!courseId) return;
+    
+    try {
+      setDetailsLoading(true);
+      setDetailsError('');
+  
+      console.log('Fetching details for course:', courseId);
+      const courseRef = doc(db, 'courses', courseId);
+      
+      try {
+        const courseSnap = await getDoc(courseRef);
+        console.log('Course snapshot exists:', courseSnap.exists());
+        
+        if (courseSnap.exists()) {
+          const data = courseSnap.data();
+          console.log('Course data retrieved:', {
+            id: courseId,
+            students: data.students?.length || 0,
+            instructorId: data.instructorId,
+            status: data.status
+          });
+          
+          // Check if user is enrolled
+          const isStudent = data.students?.some(student => student.uid === user.uid);
+          const isAssistant = data.assistants?.some(assistant => assistant.uid === user.uid);
+          
+          console.log('Access check:', {
+            isStudent,
+            isAssistant,
+            userId: user.uid
+          });
+  
+          if (isStudent || isAssistant) {
+            // Fetch instructor details if needed
+            let instructorData = data.instructor;
+            if (!instructorData && data.instructorId) {
+              console.log('Fetching instructor details');
+              try {
+                const instructorRef = doc(db, 'profiles', data.instructorId);
+                const instructorSnap = await getDoc(instructorRef);
+                if (instructorSnap.exists()) {
+                  instructorData = {
+                    uid: data.instructorId,
+                    email: instructorSnap.data().email,
+                    displayName: instructorSnap.data().name || instructorSnap.data().displayName,
+                    photoURL: instructorSnap.data().photoURL
+                  };
+                }
+              } catch (instructorErr) {
+                console.warn('Failed to fetch instructor details:', instructorErr);
+                // Continue without instructor details
+              }
+            }
+  
+            setCourseDetails({
+              ...data,
+              id: courseId,
+              instructor: instructorData,
+              instructorId: data.instructorId
+            });
+          } else {
+            console.log('User not enrolled in course');
+            setDetailsError('You are not enrolled in this course.');
+          }
+        } else {
+          console.log('Course not found, cleaning up training data');
+          const userRef = doc(db, 'profiles', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
+            await updateDoc(userRef, { training: updatedTraining });
+            setTrainings(updatedTraining);
+          }
+          
+          setDetailsError('This course has been deleted. It has been removed from your training history.');
+        }
+      } catch (err) {
+        console.error('Error fetching course:', {
+          courseId,
+          error: err.message,
+          code: err.code
+        });
+        throw err;
+      }
+    } catch (err) {
+      console.error('Error in fetchCourseDetails:', err);
+      if (err.code === 'permission-denied') {
+        setDetailsError('Unable to access course details. Please try again in a moment.');
+      } else {
+        setDetailsError('Failed to load course details. Please try again later.');
+      }
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleToggleDetails = async (courseId) => {
+    if (expandedCourseId === courseId) {
+      setExpandedCourseId(null);
+      setCourseDetails(null);
+    } else {
+      setExpandedCourseId(courseId);
+      try {
+        await debugCourseAccess(courseId);
+        await fetchCourseDetails(courseId);
+      } catch (error) {
+        console.error('Toggle details error:', error);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const fetchTraining = async () => {
+      if (user?.uid) {
+        console.log('Fetching training for user:', user.uid);
+        try {
+          const userRef = doc(db, 'profiles', user.uid);
+          const docSnap = await getDoc(userRef);
+          
+          console.log('User profile exists:', docSnap.exists());
+          
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            console.log('Full user profile data:', userData);
+            console.log('Training data from profile:', userData.training);
+            
+            const trainingData = userData.training || [];
+            const validTraining = await cleanupTrainingData(trainingData);
+            setTrainings(validTraining);
+          } else {
+            console.log('No user profile document found');
+          }
+        } catch (err) {
+          console.error('Error fetching training:', err);
+          setError('Error loading training data');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchTraining();
+  }, [user, cleanupTrainingData]);
+
+  const debugCourseAccess = async (courseId) => {
+    try {
+      console.log('=== DEBUG START ===');
+      console.log('Debugging course access for:', courseId);
+      console.log('Current user:', {
+        uid: user?.uid,
+        email: user?.email
+      });
+      
+      // First, try to get the user's profile
+      const profileRef = doc(db, 'profiles', user.uid);
+      const profileSnap = await getDoc(profileRef);
+      console.log('User profile:', {
+        exists: profileSnap.exists(),
+        data: profileSnap.exists() ? profileSnap.data() : null
+      });
+  
+      console.log('Training array from profile:', 
+        profileSnap.exists() ? profileSnap.data().training : null
+      );
+      
+      // Then, try to get the course data
+      const courseRef = doc(db, 'courses', courseId);
+      const courseSnap = await getDoc(courseRef);
+      
+      if (!courseSnap.exists()) {
+        console.log('Course does not exist');
+        return;
+      }
+      
+      const courseData = courseSnap.data();
+      
+      // Log all the relevant course data
+      console.log('Course data:', {
+        id: courseId,
+        instructorId: courseData.instructorId,
+        studentsLength: courseData.students?.length || 0,
+        assistantsLength: courseData.assistants?.length || 0,
+        hasStudents: !!courseData.students,
+        hasAssistants: !!courseData.assistants
+      });
+  
+      if (courseData.students) {
+        console.log('Student check:', {
+          userUid: user.uid,
+          studentCount: courseData.students.length,
+          studentUids: courseData.students.map(s => s.uid),
+          isStudentFound: courseData.students.some(s => s.uid === user.uid),
+          firstStudent: courseData.students[0]
+        });
+      }
+  
+      if (courseData.assistants) {
+        console.log('Assistant check:', {
+          userUid: user.uid,
+          assistantCount: courseData.assistants.length,
+          assistantUids: courseData.assistants.map(a => a.uid),
+          isAssistantFound: courseData.assistants.some(a => a.uid === user.uid)
+        });
+      }
+  
+      console.log('Access summary:', {
+        isInstructor: courseData.instructorId === user.uid,
+        isStudent: courseData.students?.some(s => s.uid === user.uid) || false,
+        isAssistant: courseData.assistants?.some(a => a.uid === user.uid) || false
+      });
+      console.log('=== DEBUG END ===');
+      
+    } catch (error) {
+      console.error('Debug error:', {
+        code: error.code,
+        message: error.message,
+        fullError: error,
+        errorStack: error.stack
+      });
+    }
   };
 
   const CourseCard = ({ training, isExpanded, onToggle, details, isLoading, error }) => {
+    const [activeTab, setActiveTab] = useState('details');
+  
     return (
       <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-        {/* Course Header - Always visible */}
+        {/* Course Header */}
         <div className="p-4">
           <div className="mb-2">
             <h4 className="text-lg font-semibold">{training.courseName}</h4>
@@ -80,13 +340,10 @@ const Training = () => {
                 </>
               )}
             </button>
-            <button className="text-sm text-gray-600 hover:text-blue-600">
-              View Records
-            </button>
           </div>
         </div>
-  
-        {/* Expandable Details Section */}
+
+        {/* Expandable Section */}
         {isExpanded && (
           <div className="border-t bg-gray-50">
             {isLoading ? (
@@ -94,68 +351,80 @@ const Training = () => {
             ) : error ? (
               <div className="p-4 text-center text-red-600">{error}</div>
             ) : details ? (
-              <div className="p-4 space-y-4">
-                {/* Instructor Section */}
-                <div>
-                  <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
-                  {details.instructor ? (
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                        {details.instructor.photoURL ? (
-                          <img 
-                            src={details.instructor.photoURL} 
-                            alt={details.instructor.displayName}
-                            className="w-full h-full rounded-full"
-                          />
-                        ) : (
-                          <span className="text-gray-600">
-                            {details.instructor.displayName?.charAt(0)}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">{details.instructor.displayName}</p>
-                        <p className="text-sm text-gray-600">{details.instructor.email}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600">Instructor information not available</p>
-                  )}
+              <div>
+                {/* Tabs */}
+                <div className="border-b">
+                  <nav className="flex">
+                    <button
+                      onClick={() => setActiveTab('details')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                        activeTab === 'details'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Details
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('messages')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                        activeTab === 'messages'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Messages
+                    </button>
+                  </nav>
                 </div>
-  
-                {/* Students Section */}
-                <div>
-                  <h5 className="text-sm font-semibold text-gray-700 mb-2">
-                    Enrolled Students ({details.students?.length || 0})
-                  </h5>
-                  <div className="space-y-2">
-                    {details.students?.length > 0 ? (
-                      details.students.map(student => (
-                        <div key={student.uid} className="flex items-center space-x-3">
-                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-                            {student.photoURL ? (
+
+                {/* Tab Content */}
+                {activeTab === 'details' ? (
+                  <div className="p-4 space-y-4">
+                    {/* Instructor Info */}
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
+                      {details.instructor ? (
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                            {details.instructor.photoURL ? (
                               <img 
-                                src={student.photoURL} 
-                                alt={student.displayName}
+                                src={details.instructor.photoURL} 
+                                alt={details.instructor.displayName}
                                 className="w-full h-full rounded-full"
                               />
                             ) : (
-                              <span className="text-sm text-gray-600">
-                                {student.displayName?.charAt(0)}
+                              <span className="text-gray-600">
+                                {details.instructor.displayName?.charAt(0)}
                               </span>
                             )}
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{student.displayName}</p>
-                            <p className="text-xs text-gray-600">{student.email}</p>
+                            <p className="font-medium">{details.instructor.displayName}</p>
+                            <p className="text-sm text-gray-600">{details.instructor.email}</p>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-gray-600">No students enrolled yet</p>
-                    )}
+                      ) : (
+                        <p className="text-sm text-gray-600">Instructor information not available</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-4">
+                    <StudentCourseMessages 
+                      course={{
+                        id: training.courseId,
+                        name: training.courseName,
+                        instructor: {
+                          id: details.instructor?.uid,
+                          displayName: details.instructor?.displayName,
+                          email: details.instructor?.email
+                        },
+                        instructorId: details.instructorId
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-4 text-center text-gray-600">No details available</div>
@@ -164,118 +433,6 @@ const Training = () => {
         )}
       </div>
     );
-  };
-
-  useEffect(() => {
-    const fetchTraining = async () => {
-      if (user?.uid) {
-        try {
-          const userRef = doc(db, 'profiles', user.uid);
-          const docSnap = await getDoc(userRef);
-
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            const trainingData = userData.training || [];
-            
-            // Clean up any invalid training entries
-            const validTraining = await cleanupTrainingData(trainingData);
-            setTrainings(validTraining);
-          }
-        } catch (err) {
-          console.error('Error fetching training:', err);
-          setError('Error loading training data');
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchTraining();
-  }, [user]);
-
-  const fetchCourseDetails = async (courseId) => {
-    if (!courseId) return;
-    
-    try {
-      setDetailsLoading(true);
-      setDetailsError('');
-  
-      const courseRef = doc(db, 'courses', courseId);
-      const courseSnap = await getDoc(courseRef);
-  
-      if (courseSnap.exists()) {
-        const data = courseSnap.data();
-        
-        console.log('Course data:', data);
-        console.log('Current user:', user.uid);
-        
-        // Check if the user is enrolled in the course - handle array with numeric indices
-        const isStudent = data.students && 
-          data.students.some(student => student.uid === user.uid);
-        const isAssistant = data.assistants && 
-          data.assistants.some(assistant => assistant.uid === user.uid);
-  
-        console.log('Is student:', isStudent);
-        console.log('Is assistant:', isAssistant);
-  
-        if (isStudent || isAssistant) {
-          // Fetch instructor details if not already included
-          let instructorData = data.instructor;
-          if (!instructorData && data.instructorId) {
-            const instructorRef = doc(db, 'profiles', data.instructorId);
-            const instructorSnap = await getDoc(instructorRef);
-            if (instructorSnap.exists()) {
-              instructorData = {
-                uid: data.instructorId,
-                email: instructorSnap.data().email,
-                name: instructorSnap.data().name || instructorSnap.data().displayName,
-                photoURL: instructorSnap.data().photoURL
-              };
-            }
-          }
-  
-          setCourseDetails({
-            ...data,
-            id: courseId,
-            instructor: instructorData
-          });
-        } else {
-          setDetailsError('You are not enrolled in this course.');
-        }
-      } else {
-        // If the course doesn't exist, clean up user's training data
-        const userRef = doc(db, 'profiles', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
-          await updateDoc(userRef, { training: updatedTraining });
-          setTrainings(updatedTraining);
-        }
-        
-        setDetailsError('This course has been deleted. It has been removed from your training history.');
-      }
-    } catch (err) {
-      console.error('Error fetching course details:', err);
-      if (err.code === 'permission-denied') {
-        setDetailsError('You do not have permission to view this course.');
-      } else {
-        setDetailsError('Failed to load course details. Please try again later.');
-      }
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
-
-  const handleToggleDetails = (courseId) => {
-    if (expandedCourseId === courseId) {
-      setExpandedCourseId(null);
-      setCourseDetails(null);
-    } else {
-      setExpandedCourseId(courseId);
-      fetchCourseDetails(courseId);
-    }
   };
 
   if (loading) {
