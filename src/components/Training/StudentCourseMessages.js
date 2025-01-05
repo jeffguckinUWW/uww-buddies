@@ -30,9 +30,9 @@ const StudentCourseMessages = ({ course }) => {
 
     const q = query(
       collection(db, 'courseMessages'),
-      where('participants', 'array-contains', user.uid),
       where('courseId', '==', course.id),
-      orderBy('timestamp', 'asc')
+      orderBy('timestamp', 'desc'),
+      orderBy('__name__', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -63,49 +63,46 @@ const StudentCourseMessages = ({ course }) => {
     if (!text.trim() || !user || !course) return;
 
     try {
-      setLoading(true);
-      
-      // Create message
-      const messageData = {
-        courseId: course.id,
-        courseName: course.name,
-        type: 'individual',
-        senderId: user.uid,
-        senderName: user.displayName || 'Student',
-        senderRole: 'student',
-        text,
-        timestamp: serverTimestamp(),
-        participants: [user.uid, course.instructorId],
-        recipientId: course.instructorId,
-        recipientName: course.instructor.displayName,
-        readBy: [user.uid] // Initialize with sender having read the message
-      };
+        setLoading(true);
+        
+        // Create message with consistent structure
+        const messageData = {
+            courseId: course.id,
+            senderId: user.uid,
+            senderName: user.displayName || 'Student',
+            text: text,
+            timestamp: serverTimestamp(),
+            type: 'individual',  // Students can only send individual messages
+            recipientId: course.instructorId,
+            recipientName: course.instructor?.displayName,
+            readBy: [user.uid]  // Mark as read by sender
+        };
 
-      // Save message
-      const messageRef = await addDoc(collection(db, 'courseMessages'), messageData);
+        // Save message
+        const messageRef = await addDoc(collection(db, 'courseMessages'), messageData);
 
-      // Create notification for instructor
-      await addDoc(collection(db, 'notifications'), {
-        type: 'course_message',
-        courseId: course.id,
-        courseName: course.name,
-        fromUser: user.uid,
-        fromUserName: user.displayName || 'Student',
-        toUser: course.instructorId,
-        messageId: messageRef.id,
-        messagePreview: text.length > 50 ? `${text.substring(0, 50)}...` : text,
-        messageType: 'individual',
-        timestamp: serverTimestamp(),
-        read: false
-      });
+        // Create notification for instructor
+        await addDoc(collection(db, 'notifications'), {
+            type: 'course_message',
+            courseId: course.id,
+            courseName: course.name,
+            fromUser: user.uid,
+            fromUserName: user.displayName || 'Student',
+            toUser: course.instructorId,
+            messageId: messageRef.id,
+            messagePreview: text.length > 50 ? `${text.substring(0, 50)}...` : text,
+            messageType: 'individual',
+            timestamp: serverTimestamp(),
+            read: false
+        });
 
     } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message');
+        console.error('Error sending message:', err);
+        setError('Failed to send message');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   if (loading && messages.length === 0) {
     return (

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase/config';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { useAuth } from '../../context/AuthContext';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';import { useAuth } from '../../context/AuthContext';
 import MessageInput from '../Messaging/MessageInput';
 import MessageReadReceipts from './MessageReadReceipts';
 import { X } from 'lucide-react';
@@ -96,26 +95,73 @@ const CourseMessaging = ({ course, isOpen, onClose }) => {
 
     const handleSendMessage = async (text) => {
         try {
+            // Get sender's profile data first
+            const profileRef = doc(db, 'profiles', user.uid);
+            const profileSnap = await getDoc(profileRef);
+            const senderName = profileSnap.exists() ? 
+                (profileSnap.data().name || profileSnap.data().displayName) : 
+                (user.displayName || 'Unknown User');
+            
             const messageType = !isInstructor ? 'individual' : 
-                              (course?.messageRecipient ? 'individual' : 'course');
+                              (course?.messageRecipient ? 'individual' : 'broadcast');
             
             const messageData = {
                 courseId: course.id,
                 senderId: user.uid,
-                senderName: user.displayName || 'Unknown User',
+                senderName: senderName,  // Use the name from profile
                 text: text,
                 timestamp: serverTimestamp(),
-                type: messageType
+                type: messageType,
+                readBy: [user.uid]
             };
-
-            // Add recipientId for individual messages
+    
+            // For individual messages, add recipient info
             if (messageType === 'individual') {
-                messageData.recipientId = !isInstructor ? 
+                const recipientId = !isInstructor ? 
                     course.instructorId : 
                     course?.messageRecipient?.uid;
+                
+                messageData.recipientId = recipientId;
+                messageData.recipientName = !isInstructor ? 
+                    course.instructor?.displayName : 
+                    course?.messageRecipient?.displayName;
             }
-
-            await addDoc(collection(db, 'courseMessages'), messageData);
+    
+            // Create the message
+            const messageRef = await addDoc(collection(db, 'courseMessages'), messageData);
+    
+            // Create notifications for recipients
+            let notificationData = {
+                type: 'course_message',
+                courseId: course.id,
+                courseName: course.name,
+                fromUser: user.uid,
+                fromUserName: user.displayName || 'Unknown User',
+                messageId: messageRef.id,
+                messagePreview: text.length > 50 ? `${text.substring(0, 50)}...` : text,
+                messageType: messageType,
+                timestamp: serverTimestamp(),
+                read: false
+            };
+    
+            if (messageType === 'broadcast') {
+                // Create notifications for all students
+                if (course.students) {
+                    for (const student of course.students) {
+                        await addDoc(collection(db, 'notifications'), {
+                            ...notificationData,
+                            toUser: student.uid
+                        });
+                    }
+                }
+            } else {
+                // Create notification for individual recipient
+                await addDoc(collection(db, 'notifications'), {
+                    ...notificationData,
+                    toUser: messageData.recipientId
+                });
+            }
+    
             return true;
         } catch (err) {
             console.error('Error sending message:', err);
