@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   collection, 
   query, 
@@ -21,9 +21,15 @@ export const NotificationCenter = ({ onClose }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const notificationRef = useRef(null);
 
   useEffect(() => {
-    if (!user) return;
+    console.log('Fetching notifications for user:', user?.uid);
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const q = query(
       collection(db, 'notifications'),
@@ -32,26 +38,26 @@ export const NotificationCenter = ({ onClose }) => {
       orderBy('timestamp', 'desc')
     );
 
-    try {
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const notificationList = snapshot.docs.map(doc => ({
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        console.log('Notification snapshot:', snapshot.docs);
+        const notificationList = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         }));
+        console.log('Notification list:', notificationList);
         setNotifications(notificationList);
         setLoading(false);
-      }, (err) => {
+      },
+      (err) => {
         console.error('Error fetching notifications:', err);
         setError('Failed to load notifications');
         setLoading(false);
-      });
+      }
+    );
 
-      return () => unsubscribe();
-    } catch (err) {
-      console.error('Error setting up notifications listener:', err);
-      setError('Failed to load notifications');
-      setLoading(false);
-    }
+    return () => unsubscribe();
   }, [user]);
 
   const handleBuddyRequest = async (notificationId, accepted) => {
@@ -198,193 +204,178 @@ export const NotificationCenter = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed right-0 top-16 w-80 max-h-96 overflow-y-auto bg-white shadow-lg rounded-lg m-4">
-      {error && (
-        <div className="p-2 bg-red-100 text-red-700 text-sm rounded-t-lg">
-          {error}
-        </div>
-      )}
-
-      {loading && notifications.length === 0 ? (
-        <div className="p-4 text-center text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
-          Loading notifications...
-        </div>
-      ) : notifications.length === 0 ? (
-        <div className="p-4 text-center text-gray-500">
-          No new notifications
-        </div>
-      ) : (
-        notifications.map(notification => (
-          <div key={notification.id} className="border-b last:border-b-0">
-            {/* Buddy Request */}
-            {notification.type === 'buddy_request' && (
-              <div className="p-4 bg-white">
-                <div className="flex items-start space-x-4">
-                  {/* Profile Avatar/Initial */}
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-lg font-semibold text-blue-600">
-                        {notification.fromUserName?.[0]?.toUpperCase() || '?'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Request Details */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 mb-1">
-                      Buddy Request from {notification.fromUserName || 'Unknown User'}
-                    </p>
-                    
-                    {/* Profile Details */}
-                    {notification.fromUserProfile && (
-                      <div className="text-sm text-gray-600 mb-2 space-y-1">
-                        {notification.fromUserProfile.certificationLevel && (
-                          <p>Certification: {notification.fromUserProfile.certificationLevel}</p>
-                        )}
-                        {notification.fromUserProfile.numberOfDives > 0 && (
-                          <p>Total Dives: {notification.fromUserProfile.numberOfDives}</p>
-                        )}
-                        {notification.fromUserProfile.location && (
-                          <p>Location: {notification.fromUserProfile.location}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="mt-3 flex space-x-3">
-                      <button
-                        onClick={() => handleBuddyRequest(notification.id, true)}
-                        className="flex-1 px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:bg-green-300"
-                        disabled={loading}
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => handleBuddyRequest(notification.id, false)}
-                        className="flex-1 px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:bg-red-300"
-                        disabled={loading}
-                      >
-                        Decline
-                      </button>
-                    </div>
-
-                    {/* Timestamp */}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {formatTimestamp(notification.timestamp)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Buddy Request Accepted */}
-            {notification.type === 'buddy_request_accepted' && (
-              <div className="p-4 bg-white">
-                <div className="flex items-start space-x-4">
-                  {/* Success Icon */}
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* Acceptance Details */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900">
-                      <span className="text-green-600 font-semibold">{notification.fromUserName}</span> accepted your buddy request!
-                    </p>
-                    
-                    {/* Profile Details */}
-                    {notification.fromUserProfile && (
-                      <div className="text-sm text-gray-600 mt-1 space-y-0.5">
-                        {notification.fromUserProfile.certificationLevel && (
-                          <p>Certification: {notification.fromUserProfile.certificationLevel}</p>
-                        )}
-                        {notification.fromUserProfile.numberOfDives > 0 && (
-                          <p>Total Dives: {notification.fromUserProfile.numberOfDives}</p>
-                        )}
-                        {notification.fromUserProfile.location && (
-                          <p>Location: {notification.fromUserProfile.location}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="mt-3 flex justify-between">
-                      <button
-                        onClick={() => handleViewProfile(notification.fromUser)}
-                        className="text-blue-500 hover:text-blue-600 font-medium text-sm"
-                      >
-                        View Profile
-                      </button>
-                      <button
-                        onClick={() => markAsRead(notification.id)}
-                        className="text-gray-500 hover:text-gray-600 text-sm"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-
-                    {/* Timestamp */}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {formatTimestamp(notification.timestamp)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* New Message */}
-            {notification.type === 'new_message' && (
-  <div className="p-4 bg-white">
-    <div className="flex items-start space-x-4">
-      {/* Message Icon */}
-      <div className="flex-shrink-0">
-        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Message Details */}
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900">
-          {notification.chatType === 'group' 
-            ? `New message in ${notification.chatName}`
-            : `New message from ${notification.fromUserName}`}
-        </p>
-        
-        {/* Message Preview */}
-        <p className="text-sm text-gray-600 mt-1">
-          {notification.messagePreview || 'New message'}
-        </p>
-
-        {/* Action Button */}
-        <div className="mt-3">
-          <button
-            onClick={() => handleMessageNotification(notification.id, notification.messageId)}
-            className="text-blue-500 hover:text-blue-600 text-sm font-medium"
-            disabled={loading}
-          >
-            View Conversation
-          </button>
-        </div>
-
-        {/* Timestamp */}
-        <p className="text-xs text-gray-500 mt-2">
-          {formatTimestamp(notification.timestamp)}
-        </p>
-      </div>
-    </div>
-  </div>
-)}
+    <div className="relative">
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/40 z-[100]"
+        onClick={onClose}
+      />
+      
+      {/* Notification Panel */}
+      <div 
+      ref={notificationRef}
+      className="fixed right-4 top-[4.5rem] w-80 max-h-[80vh] overflow-y-auto bg-white shadow-lg rounded-lg z-[110]"
+      onClick={(e) => e.stopPropagation()}
+      >
+        {error && (
+          <div className="p-2 bg-red-100 text-red-700 text-sm rounded-t-lg">
+            {error}
           </div>
-        ))
-      )}
+        )}
+
+        {loading && notifications.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2" />
+            Loading notifications...
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">
+            No new notifications
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {notifications.map(notification => (
+              <div key={notification.id}>
+                {notification.type === 'buddy_request' && (
+                  <div className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-lg font-semibold text-blue-600">
+                            {notification.fromUserName?.[0]?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 mb-1">
+                          Buddy Request from {notification.fromUserName || 'Unknown User'}
+                        </p>
+                        {notification.fromUserProfile && (
+                          <div className="text-sm text-gray-600 mb-2 space-y-1">
+                            {notification.fromUserProfile.certificationLevel && (
+                              <p>Certification: {notification.fromUserProfile.certificationLevel}</p>
+                            )}
+                            {notification.fromUserProfile.numberOfDives > 0 && (
+                              <p>Total Dives: {notification.fromUserProfile.numberOfDives}</p>
+                            )}
+                            {notification.fromUserProfile.location && (
+                              <p>Location: {notification.fromUserProfile.location}</p>
+                            )}
+                          </div>
+                        )}
+                        <div className="mt-3 flex space-x-3">
+                          <button
+                            onClick={() => handleBuddyRequest(notification.id, true)}
+                            className="flex-1 px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 transition-colors disabled:bg-green-300"
+                            disabled={loading}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleBuddyRequest(notification.id, false)}
+                            className="flex-1 px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:bg-red-300"
+                            disabled={loading}
+                          >
+                            Decline
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {formatTimestamp(notification.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {notification.type === 'buddy_request_accepted' && (
+                  <div className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">
+                          <span className="text-green-600 font-semibold">{notification.fromUserName}</span> accepted your buddy request!
+                        </p>
+                        {notification.fromUserProfile && (
+                          <div className="text-sm text-gray-600 mt-1 space-y-0.5">
+                            {notification.fromUserProfile.certificationLevel && (
+                              <p>Certification: {notification.fromUserProfile.certificationLevel}</p>
+                            )}
+                            {notification.fromUserProfile.numberOfDives > 0 && (
+                              <p>Total Dives: {notification.fromUserProfile.numberOfDives}</p>
+                            )}
+                            {notification.fromUserProfile.location && (
+                              <p>Location: {notification.fromUserProfile.location}</p>
+                            )}
+                          </div>
+                        )}
+                        <div className="mt-3 flex justify-between">
+                          <button
+                            onClick={() => handleViewProfile(notification.fromUser)}
+                            className="text-blue-500 hover:text-blue-600 font-medium text-sm"
+                          >
+                            View Profile
+                          </button>
+                          <button
+                            onClick={() => markAsRead(notification.id)}
+                            className="text-gray-500 hover:text-gray-600 text-sm"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {formatTimestamp(notification.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {notification.type === 'new_message' && (
+                  <div className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900">
+                          {notification.chatType === 'group' 
+                            ? `New message in ${notification.chatName}`
+                            : `New message from ${notification.fromUserName}`}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {notification.messagePreview || 'New message'}
+                        </p>
+                        <div className="mt-3">
+                          <button
+                            onClick={() => handleMessageNotification(notification.id, notification.messageId)}
+                            className="text-blue-500 hover:text-blue-600 text-sm font-medium"
+                            disabled={loading}
+                          >
+                            View Conversation
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {formatTimestamp(notification.timestamp)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
-};
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../../firebase/config';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';import { useAuth } from '../../context/AuthContext';
+import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 import MessageInput from '../Messaging/MessageInput';
 import MessageReadReceipts from './MessageReadReceipts';
 import { X } from 'lucide-react';
@@ -33,48 +34,27 @@ const CourseMessaging = ({ course, isOpen, onClose }) => {
             return;
         }
 
-        // Match existing index structure exactly
+        // Query for chat-like message ordering (newest at bottom)
         const q = query(
             collection(db, 'courseMessages'),
             where('courseId', '==', course.id),
-            orderBy('timestamp', 'desc'),
-            orderBy('__name__', 'desc')
+            orderBy('timestamp', 'asc')
         );
         
-        console.log('Course ID for query:', course.id);
-        
-        console.log('Querying messages for course:', course.id);
-
         const unsubscribe = onSnapshot(q, 
             (snapshot) => {
                 const processedMessages = snapshot.docs
                     .map(doc => ({
                         id: doc.id,
                         ...doc.data(),
-                        timestamp: doc.data().timestamp?.toDate()
+                        timestamp: doc.data().timestamp?.toDate() || new Date(0)
                     }))
-                    .sort((a, b) => {
-                        // Sort by timestamp descending (newest first)
-                        const timeA = a.timestamp?.getTime() || 0;
-                        const timeB = b.timestamp?.getTime() || 0;
-                        return timeB - timeA;
-                    })
                     .filter(msg => {
-                        // Debug log
-                        console.log('Processing message:', {
-                            id: msg.id,
-                            type: msg.type,
-                            senderId: msg.senderId,
-                            recipientId: msg.recipientId
-                        });
-                        
                         // Show all messages to instructor
                         if (isInstructor) return true;
                         
-                        // For students/assistants, show:
-                        // 1. Course-wide messages
-                        // 2. Individual messages where they're involved
-                        return msg.type === 'course' || 
+                        // For students, show broadcasts and their direct messages
+                        return msg.type === 'broadcast' || 
                                msg.senderId === user.uid || 
                                msg.recipientId === user.uid;
                     });
@@ -94,75 +74,65 @@ const CourseMessaging = ({ course, isOpen, onClose }) => {
     }, [course, user, isInstructor]);
 
     const handleSendMessage = async (text) => {
+        if (!text.trim()) return;
+        
         try {
-            // Get sender's profile data first
             const profileRef = doc(db, 'profiles', user.uid);
             const profileSnap = await getDoc(profileRef);
             const senderName = profileSnap.exists() ? 
                 (profileSnap.data().name || profileSnap.data().displayName) : 
                 (user.displayName || 'Unknown User');
             
-            const messageType = !isInstructor ? 'individual' : 
-                              (course?.messageRecipient ? 'individual' : 'broadcast');
+            const messageType = course?.messageRecipient ? 'individual' : 'broadcast';
             
             const messageData = {
                 courseId: course.id,
                 senderId: user.uid,
-                senderName: senderName,  // Use the name from profile
-                text: text,
+                senderName: senderName,
+                text: text.trim(),
                 timestamp: serverTimestamp(),
                 type: messageType,
                 readBy: [user.uid]
             };
-    
-            // For individual messages, add recipient info
-            if (messageType === 'individual') {
-                const recipientId = !isInstructor ? 
-                    course.instructorId : 
-                    course?.messageRecipient?.uid;
-                
-                messageData.recipientId = recipientId;
-                messageData.recipientName = !isInstructor ? 
-                    course.instructor?.displayName : 
-                    course?.messageRecipient?.displayName;
+            
+            // Add recipient info for individual messages
+            if (messageType === 'individual' && course?.messageRecipient) {
+                messageData.recipientId = course.messageRecipient.uid;
+                messageData.recipientName = course.messageRecipient.displayName;
             }
-    
-            // Create the message
+            
             const messageRef = await addDoc(collection(db, 'courseMessages'), messageData);
-    
-            // Create notifications for recipients
-            let notificationData = {
+            
+            // Create notifications
+            const notificationData = {
                 type: 'course_message',
                 courseId: course.id,
                 courseName: course.name,
                 fromUser: user.uid,
-                fromUserName: user.displayName || 'Unknown User',
+                fromUserName: senderName,
                 messageId: messageRef.id,
                 messagePreview: text.length > 50 ? `${text.substring(0, 50)}...` : text,
                 messageType: messageType,
                 timestamp: serverTimestamp(),
                 read: false
             };
-    
-            if (messageType === 'broadcast') {
-                // Create notifications for all students
-                if (course.students) {
-                    for (const student of course.students) {
-                        await addDoc(collection(db, 'notifications'), {
-                            ...notificationData,
-                            toUser: student.uid
-                        });
-                    }
+
+            if (messageType === 'broadcast' && course.students) {
+                // Notify all students for broadcast messages
+                for (const student of course.students) {
+                    await addDoc(collection(db, 'notifications'), {
+                        ...notificationData,
+                        toUser: student.uid
+                    });
                 }
-            } else {
-                // Create notification for individual recipient
+            } else if (messageType === 'individual') {
+                // Notify individual recipient
                 await addDoc(collection(db, 'notifications'), {
                     ...notificationData,
                     toUser: messageData.recipientId
                 });
             }
-    
-            return true;
+
         } catch (err) {
             console.error('Error sending message:', err);
             setError('Failed to send message. Please try again.');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, arrayUnion, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -9,6 +9,7 @@ const StudentCourseMessages = ({ course }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const messagesEndRef = useRef(null);
 
   // Handle marking messages as read - wrapped in useCallback
   const markMessageAsRead = useCallback(async (messageId) => {
@@ -31,8 +32,7 @@ const StudentCourseMessages = ({ course }) => {
     const q = query(
       collection(db, 'courseMessages'),
       where('courseId', '==', course.id),
-      orderBy('timestamp', 'desc'),
-      orderBy('__name__', 'desc')
+      orderBy('timestamp', 'asc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -46,7 +46,11 @@ const StudentCourseMessages = ({ course }) => {
           markMessageAsRead(doc.id);
         }
 
-        messageList.push({ id: doc.id, ...messageData });
+        messageList.push({ 
+          id: doc.id, 
+          ...messageData,
+          timestamp: messageData.timestamp?.toDate()
+        });
       });
       setMessages(messageList);
       setLoading(false);
@@ -57,7 +61,7 @@ const StudentCourseMessages = ({ course }) => {
     });
 
     return () => unsubscribe();
-  }, [user, course, markMessageAsRead]); // Added markMessageAsRead to dependencies
+  }, [user, course, markMessageAsRead]);
 
   const handleSendMessage = async (text) => {
     if (!text.trim() || !user || !course) return;
@@ -70,7 +74,7 @@ const StudentCourseMessages = ({ course }) => {
             courseId: course.id,
             senderId: user.uid,
             senderName: user.displayName || 'Student',
-            text: text,
+            text: text.trim(),
             timestamp: serverTimestamp(),
             type: 'individual',  // Students can only send individual messages
             recipientId: course.instructorId,
@@ -102,7 +106,7 @@ const StudentCourseMessages = ({ course }) => {
     } finally {
         setLoading(false);
     }
-};
+  };
 
   if (loading && messages.length === 0) {
     return (
@@ -120,7 +124,14 @@ const StudentCourseMessages = ({ course }) => {
         </div>
       )}
 
-      <div className="h-96 overflow-y-auto mb-4 p-4 border rounded">
+      <div 
+        className="h-96 overflow-y-auto mb-4 p-4 border rounded"
+        ref={(el) => {
+          if (el) {
+            el.scrollTop = el.scrollHeight;
+          }
+        }}
+      >
         {messages.length === 0 ? (
           <p className="text-center text-gray-500">No messages yet</p>
         ) : (
@@ -156,7 +167,7 @@ const StudentCourseMessages = ({ course }) => {
                   <div className="flex flex-col">
                     <p>{message.text}</p>
                     <p className="text-xs mt-1 opacity-75">
-                      {message.timestamp?.toDate().toLocaleTimeString()}
+                      {message.timestamp?.toLocaleTimeString()}
                     </p>
                   </div>
                 </div>

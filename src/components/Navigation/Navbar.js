@@ -32,17 +32,46 @@ function Navbar() {
     return () => unsubscribe();
   }, [user]);
 
-  // Close notifications when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showNotifications && !event.target.closest('.notifications-container')) {
-        setShowNotifications(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showNotifications]);
+  const NotificationBell = () => {
+    return (
+      <div className="relative">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowNotifications(!showNotifications);
+          }}
+          className="relative px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center"
+          aria-label="Notifications"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            className="h-6 w-6" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+            />
+          </svg>
+          {unreadNotifications > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
+              {unreadNotifications}
+            </span>
+          )}
+        </button>
+  
+        {showNotifications && (
+  <div className="fixed inset-0 z-[100]">
+    <NotificationCenter onClose={() => setShowNotifications(false)} />
+  </div>
+)}
+      </div>
+    );
+  };
 
   const messageItems = (isMobile = false) => {
     const baseClasses = "px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700";
@@ -65,35 +94,8 @@ function Navbar() {
         >
           Messages
         </Link>
-  
-        {/* Separate Notification Bell */}
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className={`${baseClasses} flex items-center`}
-            aria-label="Notifications"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-6 w-6" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              />
-            </svg>
-            {unreadNotifications > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
-                {unreadNotifications}
-              </span>
-            )}
-          </button>
-        </div>
+        
+        <NotificationBell />
       </div>
     );
   };
@@ -213,13 +215,6 @@ function Navbar() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Notifications Dropdown */}
-        {showNotifications && (
-          <div className="notifications-container absolute right-0 mt-2 w-80 z-50">
-            <NotificationCenter onClose={() => setShowNotifications(false)} />
           </div>
         )}
       </div>
