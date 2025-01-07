@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, setDoc } from 'firebase/firestore';import InstructorPinSetup from './InstructorPinSetup';
+import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, setDoc } from 'firebase/firestore';
+import InstructorPinSetup from './InstructorPinSetup';
 import CourseMessaging from './CourseMessaging';
+import NAUIScubaRecord from '../Training/Records/NAUIScubaRecord';
+import { TRAINING_RECORD_TYPES, TRAINING_RECORD_LABELS } from '../../constants/trainingRecords';
+import TrainingRecord from '../Training/Records/TrainingRecord';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
@@ -19,19 +23,20 @@ const InstructorDashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [newCourse, setNewCourse] = useState({
     name: "",
     location: "",
     startDate: "",
-    endDate: ""
+    endDate: "",
+    trainingRecordType: TRAINING_RECORD_TYPES.NAUI_SCUBA
   });
 
-  // Fetch instructor profile and check PIN on component mount
   useEffect(() => {
     const init = async () => {
       if (user?.uid) {
         try {
-          // Fetch instructor profile
           const profileRef = doc(db, 'profiles', user.uid);
           const profileSnap = await getDoc(profileRef);
           
@@ -40,13 +45,11 @@ const InstructorDashboard = () => {
             setInstructorProfile(profileData);
             setHasPin(!!profileData.instructorPin?.pin);
             
-            // If user has a PIN but no role, update their role
             if (profileData.instructorPin?.pin && (!profileData.role || profileData.role !== 'instructor')) {
               await updateDoc(profileRef, { role: 'instructor' });
             }
           }
 
-          // Fetch courses
           const coursesRef = collection(db, 'courses');
           const q = query(coursesRef, where('instructorId', '==', user.uid));
           const querySnapshot = await getDocs(q);
@@ -67,7 +70,6 @@ const InstructorDashboard = () => {
     
     init();
   }, [user]);
-
   const searchUsers = async (searchTerm) => {
     if (!searchTerm.trim()) {
       setSearchResults([]);
@@ -84,7 +86,6 @@ const InstructorDashboard = () => {
       
       querySnapshot.forEach((doc) => {
         const userData = doc.data();
-        // Check if user is already in the course as student or assistant
         const isAlreadyInCourse = selectedCourse?.students?.some(
           student => student.uid === doc.id
         );
@@ -92,9 +93,9 @@ const InstructorDashboard = () => {
           assistant => assistant.uid === doc.id
         );
         
-        if (!isAlreadyInCourse && !isAlreadyAssistant && // Skip if already in course
-            userData.role !== 'instructor' && // Skip instructors
-            (userRole === 'student' ? userData.role !== 'assistant' : true) && // Filter by selected role
+        if (!isAlreadyInCourse && !isAlreadyAssistant &&
+            userData.role !== 'instructor' &&
+            (userRole === 'student' ? userData.role !== 'assistant' : true) &&
             (userData.email?.toLowerCase().includes(searchTermLower) || 
              userData.name?.toLowerCase().includes(searchTermLower))) {
           users.push({
@@ -115,30 +116,24 @@ const InstructorDashboard = () => {
     }
   };
 
+  const handleOpenTrainingRecord = (student) => {
+    setSelectedStudent(student);
+    setIsTrainingRecordModalOpen(true);
+    setIsManageModalOpen(false); // Close the manage modal when opening training record
+  };
+
   const addUserToCourse = async (user, role = 'student') => {
     try {
-      console.log('Starting to add user to course:', {
-        userId: user.uid,
-        role: role,
-        courseId: selectedCourse.id
-      });
-      
-      // Get the latest profile data
       const profileRef = doc(db, 'profiles', user.uid);
       const profileSnap = await getDoc(profileRef);
       const profileData = profileSnap.data();
       
-      console.log('Found user profile:', profileData);
-  
       const userData = {
         ...user,
         displayName: profileData.name || user.displayName || 'Unnamed User',
         phone: profileData.phone || ''
       };
   
-      console.log('Prepared user data:', userData);
-  
-      // First update the course document
       const courseRef = doc(db, 'courses', selectedCourse.id);
       let updatedCourse;
   
@@ -146,35 +141,28 @@ const InstructorDashboard = () => {
         const updatedAssistants = [...(selectedCourse.assistants || []), userData];
         updatedCourse = { ...selectedCourse, assistants: updatedAssistants };
         await updateDoc(courseRef, { assistants: updatedAssistants });
-        console.log('Added assistant to course');
       } else {
         const updatedStudents = [...(selectedCourse.students || []), userData];
         updatedCourse = { ...selectedCourse, students: updatedStudents };
         await updateDoc(courseRef, { students: updatedStudents });
-        console.log('Added student to course');
       }
   
-      // Update local state
       setCourses(courses.map(course => 
         course.id === selectedCourse.id ? updatedCourse : course
       ));
       setSelectedCourse(updatedCourse);
       
-      // Clear search results
       setSearchResults([]);
       setStudentSearch('');
       
-      // Update user's training data in their profile
       if (profileSnap.exists()) {
         try {
-          // Get current training array or initialize empty array
           const currentTraining = profileData.training || [];
           
-          // Create new training entry
           const newTrainingEntry = {
             courseId: selectedCourse.id,
             courseName: selectedCourse.name,
-            status: 'active',  // Explicitly set status
+            status: 'active',
             startDate: selectedCourse.startDate,
             endDate: selectedCourse.endDate,
             location: selectedCourse.location,
@@ -183,32 +171,12 @@ const InstructorDashboard = () => {
             instructorEmail: selectedCourse.instructor?.email,
             addedAt: new Date().toISOString()
           };
-          
-          console.log('Training update details:', {
-            currentTraining,
-            newEntry: newTrainingEntry,
-            profileId: user.uid
-          });
   
-          // Create complete update
           const profileUpdate = {
             training: [...currentTraining, newTrainingEntry]
           };
   
-          console.log('Attempting profile update with:', profileUpdate);
-  
-          // Update profile document
           await updateDoc(profileRef, profileUpdate);
-          console.log('Successfully updated training array');
-  
-          // Verify the update
-          const verifySnap = await getDoc(profileRef);
-          const verifyData = verifySnap.data();
-          console.log('Profile after update verification:', {
-            hasTraining: verifyData.hasOwnProperty('training'),
-            trainingArray: verifyData.training || [],
-            fullData: verifyData
-          });
   
         } catch (err) {
           console.error('Error updating training array:', err);
@@ -227,7 +195,6 @@ const InstructorDashboard = () => {
         const courseRef = doc(db, 'courses', selectedCourse.id);
         let updatedCourse;
 
-        // Update course roster
         if (role === 'assistant') {
           const updatedAssistants = selectedCourse.assistants.filter(
             assistant => assistant.uid !== userToRemove.uid
@@ -242,24 +209,20 @@ const InstructorDashboard = () => {
           await updateDoc(courseRef, { students: updatedStudents });
         }
 
-        // Update local state
         setCourses(courses.map(course => 
           course.id === selectedCourse.id ? updatedCourse : course
         ));
         setSelectedCourse(updatedCourse);
         
-        // Remove course from user's training data
         const userRef = doc(db, 'profiles', userToRemove.uid);
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
           const userData = userSnap.data();
           const updatedTraining = (userData.training || []).filter(training => {
-            // Remove only the specific course instance
             return training.courseId !== selectedCourse.id;
           });
           
-          // Update the user's profile with filtered training data
           await updateDoc(userRef, { training: updatedTraining });
         }
       } catch (err) {
@@ -268,7 +231,6 @@ const InstructorDashboard = () => {
       }
     }
   };
-
   const handleCreateCourse = async () => {
     try {
       const courseData = {
@@ -283,13 +245,20 @@ const InstructorDashboard = () => {
         students: [],
         assistants: [],
         createdAt: new Date(),
+        trainingRecordType: newCourse.trainingRecordType // Include the training record type
       };
-
+  
       const docRef = await addDoc(collection(db, 'courses'), courseData);
       const newCourseWithId = { id: docRef.id, ...courseData };
       setCourses([...courses, newCourseWithId]);
       setIsNewCourseModalOpen(false);
-      setNewCourse({ name: "", location: "", startDate: "", endDate: "" });
+      setNewCourse({ 
+        name: "", 
+        location: "", 
+        startDate: "", 
+        endDate: "",
+        trainingRecordType: TRAINING_RECORD_TYPES.NAUI_SCUBA 
+      });
     } catch (err) {
       console.error('Error creating course:', err);
       setError('Failed to create course');
@@ -299,7 +268,6 @@ const InstructorDashboard = () => {
   const handleDeleteCourse = async (courseId) => {
     if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       try {
-        // Get the course data first to know which students to update
         const courseRef = doc(db, 'courses', courseId);
         const courseSnap = await getDoc(courseRef);
         
@@ -307,7 +275,6 @@ const InstructorDashboard = () => {
           const courseData = courseSnap.data();
           const updatePromises = [];
 
-          // Remove training record from all students in the course
           if (courseData.students && courseData.students.length > 0) {
             courseData.students.forEach(student => {
               const studentRef = doc(db, 'profiles', student.uid);
@@ -325,7 +292,6 @@ const InstructorDashboard = () => {
             });
           }
 
-          // Remove training record from all assistants in the course
           if (courseData.assistants && courseData.assistants.length > 0) {
             courseData.assistants.forEach(assistant => {
               const assistantRef = doc(db, 'profiles', assistant.uid);
@@ -343,10 +309,7 @@ const InstructorDashboard = () => {
             });
           }
 
-          // Wait for all updates to complete
           await Promise.all(updatePromises);
-          
-          // Finally delete the course
           await deleteDoc(courseRef);
           setCourses(courses.filter(course => course.id !== courseId));
           setIsManageModalOpen(false);
@@ -413,7 +376,6 @@ const InstructorDashboard = () => {
       </div>
     );
   }
-
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -433,58 +395,74 @@ const InstructorDashboard = () => {
 
         {/* New Course Modal */}
         {isNewCourseModalOpen && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Create New Course</h3>
-                <button
-                  onClick={() => setIsNewCourseModalOpen(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Course Name"
-                  className="w-full p-2 border rounded"
-                  value={newCourse.name}
-                  onChange={(e) => setNewCourse({...newCourse, name: e.target.value})}
-                />
-                <input
-                  type="text"
-                  placeholder="Location"
-                  className="w-full p-2 border rounded"
-                  value={newCourse.location}
-                  onChange={(e) => setNewCourse({...newCourse, location: e.target.value})}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <input
-                    type="date"
-                    className="p-2 border rounded"
-                    value={newCourse.startDate}
-                    onChange={(e) => setNewCourse({...newCourse, startDate: e.target.value})}
-                  />
-                  <input
-                    type="date"
-                    className="p-2 border rounded"
-                    value={newCourse.endDate}
-                    onChange={(e) => setNewCourse({...newCourse, endDate: e.target.value})}
-                  />
-                </div>
-                <button
-                  onClick={handleCreateCourse}
-                  className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
-                >
-                  Create Course
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold">Create New Course</h3>
+        <button
+          onClick={() => setIsNewCourseModalOpen(false)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="space-y-4">
+        <input
+          type="text"
+          placeholder="Course Name"
+          className="w-full p-2 border rounded"
+          value={newCourse.name}
+          onChange={(e) => setNewCourse({...newCourse, name: e.target.value})}
+        />
+        <input
+          type="text"
+          placeholder="Location"
+          className="w-full p-2 border rounded"
+          value={newCourse.location}
+          onChange={(e) => setNewCourse({...newCourse, location: e.target.value})}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <input
+            type="date"
+            className="p-2 border rounded"
+            value={newCourse.startDate}
+            onChange={(e) => setNewCourse({...newCourse, startDate: e.target.value})}
+          />
+          <input
+            type="date"
+            className="p-2 border rounded"
+            value={newCourse.endDate}
+            onChange={(e) => setNewCourse({...newCourse, endDate: e.target.value})}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Training Record Type
+          </label>
+          <select
+            className="w-full p-2 border rounded"
+            value={newCourse.trainingRecordType}
+            onChange={(e) => setNewCourse({...newCourse, trainingRecordType: e.target.value})}
+          >
+            {Object.entries(TRAINING_RECORD_LABELS).map(([type, label]) => (
+              <option key={type} value={type}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={handleCreateCourse}
+          className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+        >
+          Create Course
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Course Lists */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -580,7 +558,6 @@ const InstructorDashboard = () => {
             </div>
           </div>
         </div>
-
         {/* Manage Course Modal */}
         {isManageModalOpen && selectedCourse && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -741,6 +718,12 @@ const InstructorDashboard = () => {
                             </div>
                             <div className="flex gap-2">
                               <button
+                                onClick={() => handleOpenTrainingRecord(student)}
+                                className="text-green-600 hover:text-green-700 text-sm"
+                              >
+                                Training Record
+                              </button>
+                              <button
                                 onClick={() => {
                                   setSelectedCourse({...selectedCourse, messageRecipient: student});
                                   setIsManageModalOpen(false);
@@ -753,7 +736,7 @@ const InstructorDashboard = () => {
                               <button
                                 onClick={() => removeUserFromCourse(student, 'student')}
                                 className="text-red-600 hover:text-red-700 text-sm"
-                                >
+                              >
                                 Remove
                               </button>
                             </div>
@@ -770,7 +753,6 @@ const InstructorDashboard = () => {
                 
                 {/* Course Actions */}
                 <div className="border-t pt-4 space-y-2">
-                  {/* Message Course Button */}
                   <button
                     onClick={() => {
                       setIsManageModalOpen(false);
@@ -816,6 +798,7 @@ const InstructorDashboard = () => {
             Reset PIN
           </button>
         </div>
+
         {/* Course Messaging Modal */}
         {selectedCourse && (
           <CourseMessaging
@@ -823,7 +806,6 @@ const InstructorDashboard = () => {
             isOpen={isMessageModalOpen}
             onClose={() => {
               setIsMessageModalOpen(false);
-              // Clear any individual recipient selection when closing
               if (selectedCourse.messageRecipient) {
                 setSelectedCourse({
                   ...selectedCourse,
@@ -833,7 +815,32 @@ const InstructorDashboard = () => {
             }}
           />
         )}
-        
+
+        {/* Training Record Modal */}
+        {isTrainingRecordModalOpen && selectedStudent && selectedCourse && (
+  <div className="fixed inset-0 bg-black/30 z-50">
+    <div className="fixed inset-0 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="relative bg-white w-full max-w-4xl rounded-lg p-4">
+          <button
+            onClick={() => setIsTrainingRecordModalOpen(false)}
+            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <TrainingRecord
+            type={selectedCourse.trainingRecordType}
+            courseId={selectedCourse.id}
+            studentId={selectedStudent.uid}
+            isInstructor={true}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );
