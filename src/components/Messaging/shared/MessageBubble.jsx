@@ -10,6 +10,16 @@ const MessageBubble = ({
 }) => {
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return '';
+    
+    // Check if timestamp is a Firestore Timestamp
+    if (timestamp.toDate) {
+      timestamp = timestamp.toDate();
+    }
+    // Make sure we have a valid Date object
+    if (!(timestamp instanceof Date)) {
+      return '';
+    }
+    
     return timestamp.toLocaleTimeString([], { 
       hour: '2-digit', 
       minute: '2-digit' 
@@ -39,8 +49,8 @@ const MessageBubble = ({
             : isBroadcast
               ? 'bg-green-50 text-gray-800 rounded-bl-none'
               : 'bg-gray-100 text-gray-800 rounded-bl-none'
-          }
-        `}>
+          }`}
+        >
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
           <div className="flex items-center justify-end mt-1 space-x-2">
             <span className="text-xs opacity-75">

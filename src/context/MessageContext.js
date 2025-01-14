@@ -74,6 +74,8 @@ export const MessageProvider = ({ children }) => {
 
   // Subscribe to messages
   const subscribeToMessages = useCallback((params) => {
+    // Clear old messages when subscribing to a new chat
+    dispatch({ type: MESSAGE_ACTIONS.CLEAR_MESSAGES });
     dispatch({ type: MESSAGE_ACTIONS.SET_LOADING, payload: true });
     
     return MessageService.subscribeToMessages(params, ({ messages, error }) => {
@@ -89,7 +91,6 @@ export const MessageProvider = ({ children }) => {
   const sendMessage = useCallback(async (messageData) => {
     try {
       const message = await MessageService.sendMessage(messageData);
-      dispatch({ type: MESSAGE_ACTIONS.ADD_MESSAGE, payload: message });
       return message;
     } catch (error) {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });

@@ -11,6 +11,15 @@ const MessageList = ({
 }) => {
   const messagesEndRef = useRef(null);
 
+  // Add debugging useEffect
+  useEffect(() => {
+    console.log('MessageList - Messages received:', messages.map(m => ({
+      id: m.id,
+      timestamp: m.timestamp,
+      uniqueKey: `${m.id}_${m.timestamp?.toMillis?.() || Date.now()}`
+    })));
+  }, [messages]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -43,11 +52,20 @@ const MessageList = ({
     );
   }
 
+  // Updated key generation function
+  const getUniqueMessageKey = (message) => {
+    if (!message.id) {
+      console.warn('Message missing ID:', message);
+      return Date.now() + Math.random();
+    }
+    return message.id;  // Just use the message ID if it exists
+  };
+
   return (
     <div className={`flex flex-col space-y-4 p-4 overflow-y-auto ${className}`}>
       {messages.map((message) => (
         <MessageBubble
-          key={message.id}
+          key={getUniqueMessageKey(message)}
           message={message}
           isCurrentUser={message.senderId === currentUserId}
           onDelete={onDeleteMessage}

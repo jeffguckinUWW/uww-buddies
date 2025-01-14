@@ -46,6 +46,7 @@ const ChatContainer = () => {
     if (!text.trim() || !user || !selectedChat) return;
 
     try {
+      console.log('ChatContainer - Preparing message data');
       const messageData = {
         chatId: selectedChat,
         senderId: user.uid,
@@ -55,9 +56,11 @@ const ChatContainer = () => {
         readBy: [user.uid]
       };
 
+      console.log('ChatContainer - Message data prepared:', messageData);
       await sendMessage(messageData);
+      console.log('ChatContainer - Message sent successfully');
     } catch (err) {
-      console.error('Error sending message:', err);
+      console.error('ChatContainer - Error in handleSendMessage:', err);
       throw err;
     }
   };
