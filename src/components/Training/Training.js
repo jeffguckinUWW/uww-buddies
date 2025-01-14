@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import StudentCourseMessages from './StudentCourseMessages';
+import CourseMessaging from '/Users/jeffguckin/uww-buddies/src/components/Messaging/course/CourseMessaging.jsx';
+
 
 const Training = () => {
   const { user } = useAuth();
@@ -411,7 +412,7 @@ const Training = () => {
                   </div>
                 ) : (
                   <div className="p-4">
-                    <StudentCourseMessages 
+                    <CourseMessaging 
                       course={{
                         id: training.courseId,
                         name: training.courseName,

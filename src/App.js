@@ -5,6 +5,7 @@ import Profile from './components/Profile/Profile';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { MessageProvider } from './context/MessageContext';
 import Logbook from './components/Logbook/Logbook';
 import Training from './components/Training/Training';
 import InstructorLogin from './components/Instructor/InstructorLogin';
@@ -12,8 +13,8 @@ import RequireInstructor from './components/Instructor/RequireInstructor';
 import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import AdBlock from './components/AdBlock/AdBlock';
-// Add messaging imports
-import { MessagesContainer } from './components/Messaging/MessagesContainer';
+// Import new chat components
+import ChatPage from './pages/ChatPage';  // New import
 import { BuddyList } from './components/Messaging/BuddyList';
 import { BuddyProfile } from './components/Messaging/BuddyProfile';
 
@@ -62,7 +63,11 @@ function AppContent() {
           <Route path="/buddy/:userId" element={<BuddyProfile />} />
           <Route path="/logbook" element={<Logbook />} />
           <Route path="/training" element={<Training />} />
-          <Route path="/messages" element={<MessagesContainer />} />
+          <Route path="/messages" element={
+            <MessageProvider>
+              <ChatPage />
+            </MessageProvider>
+          } />
           <Route path="/buddies" element={<BuddyList />} />
           <Route path="/instructor" element={<InstructorLogin />} />
           <Route path="/admin" element={<AdminDashboard />} />

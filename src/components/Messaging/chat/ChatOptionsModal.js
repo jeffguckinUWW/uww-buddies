@@ -121,3 +121,4 @@ export const ChatOptionsModal = ({
     </Transition>
   );
 };
+export default ChatOptionsModal;

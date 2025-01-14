@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, } from 'firebase/firestore';
 import InstructorPinSetup from './InstructorPinSetup';
-import CourseMessaging from './CourseMessaging';
-import NAUIScubaRecord from '../Training/Records/NAUIScubaRecord';
-import { TRAINING_RECORD_TYPES, TRAINING_RECORD_LABELS } from '../../constants/trainingRecords';
-import TrainingRecord from '../Training/Records/TrainingRecord';
+import CourseMessaging from '/Users/jeffguckin/uww-buddies/src/components/Messaging/course/CourseMessaging.jsx';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
@@ -23,14 +20,11 @@ const InstructorDashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
   const [newCourse, setNewCourse] = useState({
     name: "",
     location: "",
     startDate: "",
     endDate: "",
-    trainingRecordType: TRAINING_RECORD_TYPES.NAUI_SCUBA
   });
 
   useEffect(() => {
@@ -114,12 +108,6 @@ const InstructorDashboard = () => {
     } finally {
       setIsSearching(false);
     }
-  };
-
-  const handleOpenTrainingRecord = (student) => {
-    setSelectedStudent(student);
-    setIsTrainingRecordModalOpen(true);
-    setIsManageModalOpen(false); // Close the manage modal when opening training record
   };
 
   const addUserToCourse = async (user, role = 'student') => {
@@ -245,7 +233,6 @@ const InstructorDashboard = () => {
         students: [],
         assistants: [],
         createdAt: new Date(),
-        trainingRecordType: newCourse.trainingRecordType // Include the training record type
       };
   
       const docRef = await addDoc(collection(db, 'courses'), courseData);
@@ -257,7 +244,6 @@ const InstructorDashboard = () => {
         location: "", 
         startDate: "", 
         endDate: "",
-        trainingRecordType: TRAINING_RECORD_TYPES.NAUI_SCUBA 
       });
     } catch (err) {
       console.error('Error creating course:', err);
@@ -437,22 +423,6 @@ const InstructorDashboard = () => {
             onChange={(e) => setNewCourse({...newCourse, endDate: e.target.value})}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Training Record Type
-          </label>
-          <select
-            className="w-full p-2 border rounded"
-            value={newCourse.trainingRecordType}
-            onChange={(e) => setNewCourse({...newCourse, trainingRecordType: e.target.value})}
-          >
-            {Object.entries(TRAINING_RECORD_LABELS).map(([type, label]) => (
-              <option key={type} value={type}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </div>
         <button
           onClick={handleCreateCourse}
           className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
@@ -495,9 +465,6 @@ const InstructorDashboard = () => {
                             className="text-sm text-gray-600 hover:text-blue-600"
                           >
                             Manage Course
-                          </button>
-                          <button className="text-sm text-gray-600 hover:text-blue-600">
-                            View Records
                           </button>
                           <button
                             onClick={() => {
@@ -547,9 +514,6 @@ const InstructorDashboard = () => {
                           className="text-sm text-gray-600 hover:text-blue-600"
                         >
                           View Details
-                        </button>
-                        <button className="text-sm text-gray-600 hover:text-blue-600">
-                          Course Records
                         </button>
                       </div>
                     </div>
@@ -717,12 +681,7 @@ const InstructorDashboard = () => {
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => handleOpenTrainingRecord(student)}
-                                className="text-green-600 hover:text-green-700 text-sm"
-                              >
-                                Training Record
-                              </button>
+
                               <button
                                 onClick={() => {
                                   setSelectedCourse({...selectedCourse, messageRecipient: student});
@@ -815,32 +774,6 @@ const InstructorDashboard = () => {
             }}
           />
         )}
-
-        {/* Training Record Modal */}
-        {isTrainingRecordModalOpen && selectedStudent && selectedCourse && (
-  <div className="fixed inset-0 bg-black/30 z-50">
-    <div className="fixed inset-0 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white w-full max-w-4xl rounded-lg p-4">
-          <button
-            onClick={() => setIsTrainingRecordModalOpen(false)}
-            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <TrainingRecord
-            type={selectedCourse.trainingRecordType}
-            courseId={selectedCourse.id}
-            studentId={selectedStudent.uid}
-            isInstructor={true}
-          />
-        </div>
-      </div>
-    </div>
-  </div>
-)}
       </div>
     </div>
   );
