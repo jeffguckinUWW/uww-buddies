@@ -20,7 +20,8 @@ const ChatContainer = () => {
     error,
     subscribeToMessages, 
     sendMessage,
-    deleteMessage 
+    deleteMessage,
+    deleteChat  // Fixed capitalization
   } = useMessages();
 
   // Handle navigation from notifications or buddy profiles
@@ -73,6 +74,15 @@ const ChatContainer = () => {
     }
   };
 
+  const handleDeleteChat = async () => {
+    try {
+      await deleteChat(selectedChat, user.uid);
+      setSelectedChat(null);  // Clear selection after successful deletion
+    } catch (err) {
+      console.error('Error deleting chat:', err);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] flex bg-white rounded-lg shadow-md overflow-hidden">
       {/* Left Sidebar - Chat List */}
@@ -90,7 +100,7 @@ const ChatContainer = () => {
           <>
             <ChatHeader 
               chatId={selectedChat}
-              onDeleteChat={() => setSelectedChat(null)}
+              onDeleteChat={handleDeleteChat}  // Now using the proper handler
             />
             
             <MessageList

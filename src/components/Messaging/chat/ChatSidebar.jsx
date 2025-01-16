@@ -64,11 +64,17 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const getChatName = (chat) => {
     if (chat.type === 'group') return chat.name;
     
-    const otherParticipant = Object.entries(chat.participants)
-      .find(([id]) => id !== user?.uid)?.[1];
-      
-    return otherParticipant?.displayName || 'Unknown User';
-  };
+    const otherParticipantId = chat.activeParticipants.find(id => id !== user?.uid);
+  if (chat.names && otherParticipantId) {
+    return chat.names[otherParticipantId] || 'Unknown User';
+  }
+  
+  // Fallback to participants if names isn't available
+  const otherParticipant = Object.entries(chat.participants)
+    .find(([id]) => id !== user?.uid)?.[1];
+    
+  return otherParticipant?.displayName || 'Unknown User';
+};
 
   return (
     <>

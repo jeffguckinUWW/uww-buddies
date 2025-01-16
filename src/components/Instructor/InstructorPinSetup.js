@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
-const InstructorPinSetup = () => {
+const InstructorPinSetup = ({ onPinSet }) => {  // Add onPinSet prop
   const { user } = useAuth();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
@@ -11,7 +11,6 @@ const InstructorPinSetup = () => {
   const [hasExistingPin, setHasExistingPin] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Check if instructor has existing PIN
@@ -48,15 +47,13 @@ const InstructorPinSetup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
 
     // Validate PIN format
     const pinError = validatePin(pin);
-  if (pinError) {
-    setError(pinError);
-    return;
-  }
-
+    if (pinError) {
+      setError(pinError);
+      return;
+    }
 
     // Confirm PINs match
     if (pin !== confirmPin) {
@@ -74,12 +71,17 @@ const InstructorPinSetup = () => {
         role: 'instructor' // Ensure role is set
       });
   
-      setSuccess('PIN successfully ' + (hasExistingPin ? 'updated' : 'set'));
+      // Clear form
       setPin('');
       setConfirmPin('');
       setCurrentPin('');
       setIsResetting(false);
       setHasExistingPin(true);
+
+      // Call onPinSet to trigger the transition to dashboard
+      if (onPinSet) {
+        onPinSet();
+      }
     } catch (error) {
       console.error('Error saving PIN:', error);
       setError('Failed to save PIN. Please try again.');
@@ -157,12 +159,6 @@ const InstructorPinSetup = () => {
             {error && (
               <div className="text-red-600 text-sm">
                 {error}
-              </div>
-            )}
-
-            {success && (
-              <div className="text-green-600 text-sm">
-                {success}
               </div>
             )}
 

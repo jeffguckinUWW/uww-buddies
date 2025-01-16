@@ -77,13 +77,16 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
     try {
       setLoading(true);
       setError('');
+      
+      const userProfileDoc = await getDoc(doc(db, 'profiles', user.uid));
+      const userName = userProfileDoc.exists() ? userProfileDoc.data().name || 'Unknown User' : 'Unknown User';
 
       const isGroupChat = selectedBuddies.length > 1;
       const participants = {
         [user.uid]: {
           joined: serverTimestamp(),
           active: true,
-          displayName: user.displayName || 'Unknown User'
+          displayName: userName // Use name from profile
         }
       };
 
@@ -93,7 +96,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
         participants[buddyId] = {
           joined: serverTimestamp(),
           active: true,
-          displayName: buddy?.name || 'Unknown User'
+          displayName: buddy?.name || 'Unknown User'  // We already have buddy profiles loaded
         };
       });
 
@@ -103,7 +106,15 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
         createdAt: serverTimestamp(),
         lastMessageAt: serverTimestamp(),
         participants,
-        activeParticipants: [user.uid, ...selectedBuddies]
+        activeParticipants: [user.uid, ...selectedBuddies],
+        names: {  // Add this new field to store current names
+          [user.uid]: userName,
+          ...selectedBuddies.reduce((acc, buddyId) => {
+            const buddy = buddies.find(b => b.id === buddyId);
+            acc[buddyId] = buddy?.name || 'Unknown User';
+            return acc;
+          }, {})
+        }
       };
 
       // Add name for group chats
@@ -115,7 +126,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
       }
 
       const chatRef = await addDoc(collection(db, 'chats'), chatData);
-
       onChatCreated(chatRef.id);
     } catch (err) {
       console.error('Error creating chat:', err);
@@ -123,7 +133,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
     } finally {
       setLoading(false);
     }
-  };
+};
 
   const toggleBuddy = (buddyId) => {
     setSelectedBuddies(current => 

@@ -181,29 +181,61 @@ class MessageService {
   // Delete chat for user
   static async deleteChat(chatId, userId) {
     try {
-      const batch = writeBatch(db);
-      
-      // Delete the chat document itself
-      const chatRef = doc(db, 'chats', chatId);
-      batch.delete(chatRef);  // Changed from update to delete
+        const chatDoc = await getDoc(doc(db, 'chats', chatId));
+        if (!chatDoc.exists()) {
+            throw new Error('Chat not found');
+        }
 
-      // Delete all messages in the chat
-      const messagesQuery = query(
-        collection(db, 'messages'),
-        where('chatId', '==', chatId)
-      );
-      const messages = await getDocs(messagesQuery);
-      
-      messages.forEach(message => {
-        batch.delete(doc(db, 'messages', message.id));  // Delete messages instead of updating
-      });
+        const chatData = chatDoc.data();
+        if (!chatData.activeParticipants.includes(userId)) {
+            throw new Error('Not authorized to access this chat');
+        }
 
-      await batch.commit();
+        const batch = writeBatch(db);
+        const chatRef = doc(db, 'chats', chatId);
+
+        // Remove current user from activeParticipants
+        const updatedParticipants = chatData.activeParticipants.filter(id => id !== userId);
+
+        // If this was the last participant, delete the chat and its messages
+        if (updatedParticipants.length === 0) {
+            // Delete chat document
+            batch.delete(chatRef);
+
+            // Delete all messages
+            const messagesQuery = query(
+                collection(db, 'messages'),
+                where('chatId', '==', chatId)
+            );
+            const messages = await getDocs(messagesQuery);
+            messages.forEach(message => {
+                batch.delete(doc(db, 'messages', message.id));
+            });
+        } else {
+            // Otherwise just update activeParticipants
+            batch.update(chatRef, {
+                activeParticipants: updatedParticipants
+            });
+
+            // Mark messages as deleted for this user
+            const messagesQuery = query(
+                collection(db, 'messages'),
+                where('chatId', '==', chatId)
+            );
+            const messages = await getDocs(messagesQuery);
+            messages.forEach(message => {
+                batch.update(doc(db, 'messages', message.id), {
+                    deletedFor: arrayUnion(userId)
+                });
+            });
+        }
+
+        await batch.commit();
     } catch (error) {
-      console.error('Error deleting chat:', error);
-      throw new Error('Failed to delete chat');
+        console.error('Error deleting chat:', error);
+        throw new Error('Failed to delete chat');
     }
-  }
+}
 }
 
 export default MessageService;

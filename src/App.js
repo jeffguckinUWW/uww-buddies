@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navigation/Navbar';
 import Profile from './components/Profile/Profile';
 import Login from './components/Auth/Login';
@@ -8,24 +8,38 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { MessageProvider } from './context/MessageContext';
 import Logbook from './components/Logbook/Logbook';
 import Training from './components/Training/Training';
-import InstructorLogin from './components/Instructor/InstructorLogin';
 import RequireInstructor from './components/Instructor/RequireInstructor';
 import InstructorDashboard from './components/Instructor/InstructorDashboard';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import AdBlock from './components/AdBlock/AdBlock';
-// Import new chat components
-import ChatPage from './pages/ChatPage';  // New import
+import ChatPage from './pages/ChatPage';
 import { BuddyList } from './components/Messaging/BuddyList';
 import { BuddyProfile } from './components/Messaging/BuddyProfile';
 
-function AppContent() {
+function MainContent() {
   const { user } = useAuth();
+  const [error, setError] = useState('');
+  const location = useLocation();
+
+  useEffect(() => {
+    // Only check for error message when URL changes
+    const errorMessage = localStorage.getItem('instructorAccessError');
+    if (errorMessage) {
+      setError(errorMessage);
+      localStorage.removeItem('instructorAccessError');
+      
+      const timer = setTimeout(() => {
+        setError('');
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [location.pathname]); // Only run when the path changes
 
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-100">
         <Routes>
-          <Route path="/instructor" element={<InstructorLogin />} />
           <Route path="/register" element={<Register />} />
           <Route path="*" element={<Login />} />
         </Routes>
@@ -35,6 +49,11 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {error && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded shadow-lg">
+          <p>{error}</p>
+        </div>
+      )}
       <Navbar />
       <main className="container mx-auto px-4 py-4">
         <Routes>
@@ -69,10 +88,9 @@ function AppContent() {
             </MessageProvider>
           } />
           <Route path="/buddies" element={<BuddyList />} />
-          <Route path="/instructor" element={<InstructorLogin />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route
-            path="/instructor/dashboard"
+            path="/instructor"
             element={
               <RequireInstructor>
                 <InstructorDashboard />
@@ -89,7 +107,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <AppContent />
+        <MainContent />
       </Router>
     </AuthProvider>
   );

@@ -133,12 +133,23 @@ export const MessageProvider = ({ children }) => {
     }
   }, []);
 
+  const deleteChat = useCallback(async (chatId, userId) => {
+    try {
+      await MessageService.deleteChat(chatId, userId);
+      dispatch({ type: MESSAGE_ACTIONS.CLEAR_MESSAGES });
+    } catch (error) {
+      dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
+      throw error;
+    }
+  }, []);
+
   const value = {
     ...state,
     subscribeToMessages,
     sendMessage,
     markAsRead,
     deleteMessage,
+    deleteChat,
     dispatch
   };
 

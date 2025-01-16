@@ -12,8 +12,7 @@ import {
   query, 
   orderBy, 
   where, 
-  Timestamp,
-  writeBatch
+  Timestamp
 } from 'firebase/firestore';
 
 // Tab options
@@ -106,6 +105,14 @@ const Logbook = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [isLoading, setIsLoading] = useState(initialLoadingState);
   const [error, setError] = useState('');
+  const renderTypeOrEquipment = (items) => {
+    if (!items) return 'Not specified';
+    
+    return (Object.entries(items)
+      .filter(([_, checked]) => checked)
+      .map(([type]) => type)
+      .join(', ')) || 'None recorded';
+  };
 
   // Memoized filtered logs
   const filteredLogs = useMemo(() => {
@@ -770,26 +777,20 @@ const Logbook = () => {
 
         {/* Bottom Section: Dive Type, Equipment, and Notes */}
         <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="space-y-2">
-            <div>
-              <span className="text-gray-600">Dive Type:</span>
-              <span className="ml-2">
-                {log.diveType && Object.entries(log.diveType)
-                  .filter(([_, checked]) => checked)
-                  .map(([type]) => type)
-                  .join(', ') || 'Not specified'}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-600">Equipment:</span>
-              <span className="ml-2">
-                {log.equipment && Object.entries(log.equipment)
-                  .filter(([_, checked]) => checked)
-                  .map(([gear]) => gear)
-                  .join(', ') || 'None recorded'}
-              </span>
-            </div>
-          </div>
+        <div className="space-y-2">
+      <div>
+        <span className="text-gray-600">Dive Type:</span>
+        <span className="ml-2">
+          {renderTypeOrEquipment(log.diveType)}
+        </span>
+      </div>
+      <div>
+        <span className="text-gray-600">Equipment:</span>
+        <span className="ml-2">
+          {renderTypeOrEquipment(log.equipment)}
+        </span>
+      </div>
+    </div>
           
           {log.notes && (
             <div className="text-gray-700 bg-gray-50 p-2 rounded">
