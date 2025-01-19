@@ -48,7 +48,17 @@ const NotificationCenter = ({ onClose }) => {
     
     switch (notification.type) {
       case 'new_message':
-        navigate('/messages', { state: { chatId: notification.chatId } });
+        if (notification.courseId) {
+          // For course messages, navigate to the training page
+          navigate('/training');
+        } else {
+          // For regular chat messages
+          navigate('/messages', { state: { chatId: notification.chatId } });
+        }
+        break;
+      case 'course_response':
+        // Navigate to training page for course responses
+        navigate('/training');
         break;
       case 'buddy_request':
         navigate('/buddies');
@@ -66,6 +76,12 @@ const NotificationCenter = ({ onClose }) => {
         return {
           icon: '💬',
           title: `New message from ${notification.fromUserName}`,
+          preview: notification.messagePreview
+        };
+      case 'course_response':
+        return {
+          icon: '📢',
+          title: `Response to announcement from ${notification.fromUserName}`,
           preview: notification.messagePreview
         };
       case 'buddy_request':

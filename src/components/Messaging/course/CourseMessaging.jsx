@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Users, MessageCircle } from 'lucide-react';
 import { useMessages } from '../../../context/MessageContext';
 import { useAuth } from '../../../context/AuthContext';
 import MessageInput from '../shared/MessageInput';
@@ -10,7 +10,9 @@ const CourseMessaging = ({
   course, 
   isOpen, 
   onClose,
-  messageRecipient = null // For instructor direct messages
+  messageRecipient = null,
+  readOnly = false,
+  defaultView = 'broadcast'  // Changed from messageType to defaultView
 }) => {
   const { user } = useAuth();
   const { 
@@ -22,23 +24,24 @@ const CourseMessaging = ({
     deleteMessage 
   } = useMessages();
 
+  const [activeView, setActiveView] = useState(defaultView);
   const isInstructor = course?.instructorId === user?.uid;
 
   useEffect(() => {
     if (!course?.id || !user?.uid) return;
 
-    // Check if user has permission to view messages
-    const hasPermission = 
-      course.instructorId === user.uid || 
-      course.students?.some(student => student.uid === user.uid) ||
-      course.assistants?.some(assistant => assistant.uid === user.uid);
+    // Determine user's role and permissions
+    const isStudent = course.students?.some(student => student.uid === user.uid);
+    const isAssistant = course.assistants?.some(assistant => assistant.uid === user.uid);
+    const isInstructor = course.instructorId === user.uid;
 
+    // Check permissions
+    const hasPermission = isInstructor || isStudent || isAssistant;
     if (!hasPermission) {
-      console.error("User doesn't have permission to view messages");
+      console.error("User isn't a member of this course");
       return;
     }
 
-    // Subscribe to course messages
     const unsubscribe = subscribeToMessages({
       type: 'course',
       courseId: course.id
@@ -49,52 +52,57 @@ const CourseMessaging = ({
 
   const handleSendMessage = async (text) => {
     if (!text.trim() || !user || !course) return;
-
+  
     try {
       const messageData = {
         courseId: course.id,
         senderId: user.uid,
         senderName: user.displayName || 'Unknown User',
         text: text.trim(),
-        type: isInstructor ? 
-          (messageRecipient ? 'course' : 'course_broadcast') : 
-          'course',
-        readBy: [user.uid]
+        type: 'course',  // Always 'course' for student messages
+        readBy: [user.uid],
+        timestamp: new Date()
       };
-
+  
       // Add recipient info for direct messages
-      if (messageRecipient) {
+      if (!isInstructor) {
+        // Students always send to instructor
+        messageData.recipientId = course.instructorId;
+        messageData.recipientName = course.instructor?.displayName;
+      } else if (messageRecipient) {
         messageData.recipientId = messageRecipient.uid;
         messageData.recipientName = messageRecipient.displayName;
+      } else if (activeView === 'broadcast') {  // Changed from messageType to activeView
+        messageData.type = 'course_broadcast';
       }
-
+  
       await sendMessage(messageData);
-
     } catch (err) {
       console.error('Error sending message:', err);
       throw err;
     }
   };
 
-  const handleDeleteMessage = async (messageId) => {
-    try {
-      await deleteMessage(messageId, user.uid);
-    } catch (err) {
-      console.error('Error deleting message:', err);
+  const filteredMessages = messages.filter(msg => {
+    if (activeView === 'broadcast') {
+      return msg.type === MessageTypes.COURSE_BROADCAST;
     }
-  };
+
+    if (activeView === 'direct') {
+      if (isInstructor) {
+        return msg.type === MessageTypes.COURSE &&
+               !msg.type.includes('broadcast');
+      } else {
+        // For students, show direct messages with instructor
+        return (msg.senderId === user?.uid && msg.recipientId === course.instructorId) ||
+               (msg.senderId === course.instructorId && msg.recipientId === user?.uid);
+      }
+    }
+
+    return true; // Show all messages in combined view
+  });
 
   if (!isOpen) return null;
-
-  const filteredMessages = messages.filter(msg => {
-    // Show all messages to instructor
-    if (isInstructor) return true;
-    
-    // For students, show broadcasts and their direct messages
-    return msg.type === MessageTypes.COURSE_BROADCAST || 
-           msg.senderId === user.uid || 
-           msg.recipientId === user.uid;
-  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -103,16 +111,32 @@ const CourseMessaging = ({
         <div className="flex justify-between items-center p-4 border-b">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              {messageRecipient ? 
-                `Message to ${messageRecipient.displayName}` : 
-                `${course?.name} - Course Messages`
-              }
+              {course?.name} - Course Messages
             </h2>
-            {!isInstructor && (
-              <p className="text-sm text-gray-600">
-                You can message your instructor directly
-              </p>
-            )}
+            <div className="flex gap-4 mt-2">
+              <button
+                onClick={() => setActiveView('broadcast')}
+                className={`flex items-center gap-1 text-sm ${
+                  activeView === 'broadcast' 
+                    ? 'text-blue-600 font-medium' 
+                    : 'text-gray-600'
+                }`}
+              >
+                <Users size={16} />
+                Announcements
+              </button>
+              <button
+                onClick={() => setActiveView('direct')}
+                className={`flex items-center gap-1 text-sm ${
+                  activeView === 'direct' 
+                    ? 'text-blue-600 font-medium' 
+                    : 'text-gray-600'
+                }`}
+              >
+                <MessageCircle size={16} />
+                {isInstructor ? 'Direct Messages' : 'Message Instructor'}
+              </button>
+            </div>
           </div>
           <button 
             onClick={onClose}
@@ -126,26 +150,29 @@ const CourseMessaging = ({
         <MessageList
           messages={filteredMessages}
           currentUserId={user?.uid}
-          onDeleteMessage={handleDeleteMessage}
+          onDeleteMessage={deleteMessage}
           loading={loading}
           error={error}
           className="flex-1"
         />
 
         {/* Input */}
-        <div className="border-t p-4">
-          <MessageInput 
-            onSend={handleSendMessage}
-            disabled={loading}
-            placeholder={
-              isInstructor ? 
-                (messageRecipient ? 
-                  `Message ${messageRecipient.displayName}...` : 
-                  "Send a course announcement...") :
-                "Message your instructor..."
-            }
-          />
-        </div>
+        {activeView !== 'broadcast' || isInstructor ? (
+          <div className="border-t p-4">
+            <MessageInput 
+              onSend={handleSendMessage}
+              disabled={loading}
+              placeholder={
+                isInstructor ? 
+                  (activeView === 'broadcast' ? 
+                    "Send a course announcement..." :
+                    "Send a direct message..."
+                  ) :
+                  "Message your instructor..."
+              }
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -76,81 +76,135 @@ class MessageService {
   // Send a new message
   static async sendMessage(messageData) {
     try {
-      console.log('MessageService - Checking Chat:', messageData.chatId);
-      // Verify chat exists and user is participant
-      const chatDoc = await getDoc(doc(db, 'chats', messageData.chatId));
-      if (!chatDoc.exists()) {
-        console.error('Chat document does not exist');
-        throw new Error('Chat not found');
-      }
-      
-      const chatData = chatDoc.data();
-      console.log('MessageService - Chat data:', chatData);
-      console.log('MessageService - Active participants:', chatData.activeParticipants);
-      console.log('MessageService - Current user:', messageData.senderId);
-
       // Get sender's profile data
       const senderProfile = await getDoc(doc(db, 'profiles', messageData.senderId));
       const senderName = senderProfile.exists() ? 
         senderProfile.data().name || 'Unknown User' : 
         'Unknown User';
-
+  
       const baseMessage = {
         timestamp: serverTimestamp(),
         readBy: [messageData.senderId],
         deletedFor: [],
         senderName
       };
+  
+      // Check if it's a course message or chat message
+      if (messageData.courseId) {
+        // Course message - verify course exists and user has permission
+        const courseDoc = await getDoc(doc(db, 'courses', messageData.courseId));
+        if (!courseDoc.exists()) {
+          throw new Error('Course not found');
+        }
+  
+        const courseData = courseDoc.data();
+        const hasPermission = 
+          courseData.instructorId === messageData.senderId || 
+          courseData.students?.some(student => student.uid === messageData.senderId) ||
+          courseData.assistants?.some(assistant => assistant.uid === messageData.senderId);
+  
+        if (!hasPermission) {
+          throw new Error('Not authorized to send messages in this course');
+        }
+  
+        const newMessage = {
+          ...baseMessage,
+          ...messageData
+        };
+  
+        const messageRef = await addDoc(collection(db, 'messages'), newMessage);
+  
+        // Create notifications for course messages
+        let recipients = [];
+          let notificationType = 'new_message';
+          let notificationMessage = messageData.text.substring(0, 50);
 
-      const newMessage = {
-        ...baseMessage,
-        ...messageData
-      };
-
-      console.log('MessageService - Attempting to create message:', newMessage);
-      const messageRef = await addDoc(collection(db, 'messages'), newMessage);
-      console.log('MessageService - Message created with ID:', messageRef.id);
-
-      // Create notification for recipients
-      const recipients = chatData.activeParticipants
-        .filter(id => id !== messageData.senderId);
-      console.log('MessageService - Notifying recipients:', recipients);
-
-      // Create notifications for all recipients
-      await Promise.all(recipients.map(recipientId => 
-        addDoc(collection(db, 'notifications'), {
-          type: 'new_message',
-          fromUser: messageData.senderId,
-          fromUserName: senderName,
-          toUser: recipientId,
-          chatId: messageData.chatId,
-          messageId: messageRef.id,
-          messagePreview: messageData.text.substring(0, 50),
-          timestamp: serverTimestamp(),
-          read: false
-        })
-      ));
-
-      if (messageData.type === 'direct' || messageData.type === 'group') {
-        console.log('MessageService - Updating chat with last message');
-        await updateDoc(doc(db, 'chats', messageData.chatId), {
-          lastMessageAt: serverTimestamp(),
-          lastMessage: {
-            text: messageData.text,
-            senderId: messageData.senderId,
-            senderName
+          if (messageData.type === MessageTypes.COURSE_BROADCAST) {
+            // For broadcasts, notify all course members
+            recipients = [
+              ...(courseData.students?.map(s => s.uid) || []),
+              ...(courseData.assistants?.map(a => a.uid) || [])
+            ].filter(id => id !== messageData.senderId);
+          } else if (messageData.recipientId) {
+            // For direct messages, notify only the recipient
+            recipients = [messageData.recipientId];
+            
+            // If this is a student responding to an announcement, make it clear in the notification
+            if (!messageData.type.includes('broadcast') && 
+                courseData.students?.some(s => s.uid === messageData.senderId)) {
+              notificationType = 'course_response';
+              notificationMessage = `Response to announcement: ${messageData.text.substring(0, 50)}`;
+            }
           }
-        });
-      }
 
-      console.log('MessageService - All operations completed successfully');
-      return { id: messageRef.id, ...newMessage };
+          await Promise.all(recipients.map(recipientId => 
+            addDoc(collection(db, 'notifications'), {
+              type: notificationType,
+              fromUser: messageData.senderId,
+              fromUserName: senderName,
+              toUser: recipientId,
+              courseId: messageData.courseId,
+              messageId: messageRef.id,
+              messagePreview: notificationMessage,
+              timestamp: serverTimestamp(),
+              read: false,
+              isAnnouncementResponse: notificationType === 'course_response'
+            })
+          ));
+  
+        return { id: messageRef.id, ...newMessage };
+      } else {
+        // Regular chat message logic
+        console.log('MessageService - Checking Chat:', messageData.chatId);
+        const chatDoc = await getDoc(doc(db, 'chats', messageData.chatId));
+        if (!chatDoc.exists()) {
+          throw new Error('Chat not found');
+        }
+        
+        const chatData = chatDoc.data();
+        const newMessage = {
+          ...baseMessage,
+          ...messageData
+        };
+  
+        const messageRef = await addDoc(collection(db, 'messages'), newMessage);
+  
+        const recipients = chatData.activeParticipants
+          .filter(id => id !== messageData.senderId);
+  
+        await Promise.all(recipients.map(recipientId => 
+          addDoc(collection(db, 'notifications'), {
+            type: 'new_message',
+            fromUser: messageData.senderId,
+            fromUserName: senderName,
+            toUser: recipientId,
+            chatId: messageData.chatId,
+            messageId: messageRef.id,
+            messagePreview: messageData.text.substring(0, 50),
+            timestamp: serverTimestamp(),
+            read: false
+          })
+        ));
+  
+        if (messageData.type === 'direct' || messageData.type === 'group') {
+          await updateDoc(doc(db, 'chats', messageData.chatId), {
+            lastMessageAt: serverTimestamp(),
+            lastMessage: {
+              text: messageData.text,
+              senderId: messageData.senderId,
+              senderName
+            }
+          });
+        }
+  
+        return { id: messageRef.id, ...newMessage };
+      }
     } catch (error) {
       console.error('MessageService - Detailed error:', error);
       console.error('MessageService - Error stack:', error.stack);
       throw new Error('Failed to send message');
     }
-}
+  }
 
   // Mark message as read
   static async markAsRead(messageId, userId) {

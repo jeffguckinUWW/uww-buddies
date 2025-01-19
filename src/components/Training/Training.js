@@ -412,18 +412,44 @@ const Training = () => {
                   </div>
                 ) : (
                   <div className="p-4">
-                    <CourseMessaging 
-                      course={{
-                        id: training.courseId,
-                        name: training.courseName,
-                        instructor: {
-                          id: details.instructor?.uid,
-                          displayName: details.instructor?.displayName,
-                          email: details.instructor?.email
-                        },
-                        instructorId: details.instructorId
-                      }}
-                    />
+                    {details.instructorId === user.uid ? (
+                      // Instructor view - full messaging interface
+                      <CourseMessaging 
+                        course={{
+                          id: training.courseId,
+                          name: training.courseName,
+                          instructor: {
+                            id: details.instructor?.uid,
+                            displayName: details.instructor?.displayName,
+                            email: details.instructor?.email
+                          },
+                          instructorId: details.instructorId,
+                          students: details.students,
+                          assistants: details.assistants
+                        }}
+                        isOpen={true}
+                        onClose={() => setActiveTab('details')}
+                      />
+                    ) : (
+                      // Student view with combined messaging
+                      <CourseMessaging 
+                        course={{
+                          id: training.courseId,
+                          name: training.courseName,
+                          instructor: {
+                            id: details.instructor?.uid,
+                            displayName: details.instructor?.displayName,
+                            email: details.instructor?.email
+                          },
+                          instructorId: details.instructorId,
+                          students: details.students,
+                          assistants: details.assistants
+                        }}
+                        isOpen={true}
+                        onClose={() => setActiveTab('details')}
+                        defaultView="combined"  // New prop to indicate combined view
+                      />
+                    )}
                   </div>
                 )}
               </div>

@@ -82,11 +82,7 @@ function MainContent() {
           <Route path="/buddy/:userId" element={<BuddyProfile />} />
           <Route path="/logbook" element={<Logbook />} />
           <Route path="/training" element={<Training />} />
-          <Route path="/messages" element={
-            <MessageProvider>
-              <ChatPage />
-            </MessageProvider>
-          } />
+          <Route path="/messages" element={<ChatPage />} />
           <Route path="/buddies" element={<BuddyList />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route
@@ -106,9 +102,11 @@ function MainContent() {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <MainContent />
-      </Router>
+      <MessageProvider>
+        <Router>
+          <MainContent />
+        </Router>
+      </MessageProvider>
     </AuthProvider>
   );
 }

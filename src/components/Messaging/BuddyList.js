@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   collection, 
-  getDocs, 
-  updateDoc, 
+  getDocs,  
   doc, 
   getDoc, 
   addDoc, 
@@ -22,6 +21,44 @@ export const BuddyList = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Search users - Defined before it's used
+  const searchUsers = useCallback(async () => {
+    if (!searchQuery || searchQuery.length < 2) return;
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      const profilesRef = collection(db, 'profiles');
+      const querySnapshot = await getDocs(profilesRef);
+      const users = [];
+  
+      for (const doc of querySnapshot.docs) {
+        if (doc.id !== user.uid) {
+          const profileData = doc.data();
+          
+          const searchLower = searchQuery.toLowerCase();
+          const nameMatch = profileData.name?.toLowerCase().includes(searchLower);
+          const emailMatch = profileData.email?.toLowerCase().includes(searchLower);
+          
+          if (nameMatch || emailMatch) {
+            users.push({ 
+              id: doc.id,
+              ...profileData
+            });
+          }
+        }
+      }
+  
+      setFilteredUsers(users);
+    } catch (err) {
+      console.error('Error searching users:', err);
+      setError('Failed to search users');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, user?.uid]);
+
   // Fetch user's buddy list
   useEffect(() => {
     if (user) {
@@ -38,9 +75,9 @@ export const BuddyList = () => {
         setFilteredUsers([]);
       }
     }, 300);
-
+  
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, searchUsers]);
 
   const fetchBuddies = async (userId) => {
     try {
@@ -101,135 +138,100 @@ export const BuddyList = () => {
     }
   };
 
-  // Search users
-  const searchUsers = async () => {
-    if (!searchQuery || searchQuery.length < 2) return;
+  const sendBuddyRequest = async (buddyId) => {
+    if (!user) return;
     
     try {
       setLoading(true);
       setError('');
       
-      // Search in profiles collection
-      const profilesRef = collection(db, 'profiles');
-      const querySnapshot = await getDocs(profilesRef);
-      const users = [];
-
-      for (const doc of querySnapshot.docs) {
-        // Don't include current user in search results
-        if (doc.id !== user.uid) {
-          const profileData = doc.data();
-          
-          // Check if name or email contains search query (case insensitive)
-          const searchLower = searchQuery.toLowerCase();
-          const nameMatch = profileData.name?.toLowerCase().includes(searchLower);
-          const emailMatch = profileData.email?.toLowerCase().includes(searchLower);
-          
-          if (nameMatch || emailMatch) {
-            users.push({ 
-              id: doc.id,
-              ...profileData
-            });
-          }
-        }
+      // Get current user's profile
+      const userProfileDoc = await getDoc(doc(db, 'profiles', user.uid));
+      const userProfile = userProfileDoc.data();
+      
+      // Check if request already exists
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const buddyList = userDoc.data()?.buddyList || {};
+      
+      if (buddyList[buddyId]) {
+        setError('Buddy request already sent or exists');
+        return;
       }
 
-      setFilteredUsers(users);
+      const batch = writeBatch(db);
+
+      // Update sender's buddy list
+      const senderRef = doc(db, 'users', user.uid);
+      batch.update(senderRef, {
+        [`buddyList.${buddyId}`]: {
+          status: 'pending',
+          timestamp: serverTimestamp(),
+          initiator: true
+        }
+      });
+
+      // Update recipient's buddy list
+      const recipientRef = doc(db, 'users', buddyId);
+      batch.update(recipientRef, {
+        [`buddyList.${user.uid}`]: {
+          status: 'pending',
+          timestamp: serverTimestamp(),
+          initiator: false
+        }
+      });
+
+      // Create notification with profile info
+      const notificationRef = collection(db, 'notifications');
+      batch.set(doc(notificationRef), {
+        type: 'buddy_request',
+        fromUser: user.uid,
+        fromUserName: userProfile?.name || user.displayName || user.email,
+        fromUserProfile: {
+          certificationLevel: userProfile?.certificationLevel || null,
+          numberOfDives: userProfile?.numberOfDives || 0,
+          location: userProfile?.location || null,
+          specialties: userProfile?.specialties || [],
+          email: userProfile?.hideEmail ? null : userProfile?.email
+        },
+        toUser: buddyId,
+        timestamp: serverTimestamp(),
+        read: false
+      });
+
+      await batch.commit();
+      setFilteredUsers(users => users.filter(u => u.id !== buddyId));
     } catch (err) {
-      console.error('Error searching users:', err);
-      setError('Failed to search users');
+      console.error('Error sending buddy request:', err);
+      setError('Failed to send buddy request');
     } finally {
       setLoading(false);
     }
   };
 
-  // In BuddyList.js - Update the sendBuddyRequest function
-
-const sendBuddyRequest = async (buddyId) => {
-  if (!user) return;
-  
-  try {
-    setLoading(true);
-    setError('');
-    
-    // Get current user's profile
-    const userProfileDoc = await getDoc(doc(db, 'profiles', user.uid));
-    const userProfile = userProfileDoc.data();
-    
-    // Check if request already exists
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    const buddyList = userDoc.data()?.buddyList || {};
-    
-    if (buddyList[buddyId]) {
-      setError('Buddy request already sent or exists');
-      return;
-    }
-
-    const batch = writeBatch(db);
-
-    // Update sender's buddy list
-    const senderRef = doc(db, 'users', user.uid);
-    batch.update(senderRef, {
-      [`buddyList.${buddyId}`]: {
-        status: 'pending',
-        timestamp: serverTimestamp(),
-        initiator: true
-      }
-    });
-
-    // Update recipient's buddy list
-    const recipientRef = doc(db, 'users', buddyId);
-    batch.update(recipientRef, {
-      [`buddyList.${user.uid}`]: {
-        status: 'pending',
-        timestamp: serverTimestamp(),
-        initiator: false
-      }
-    });
-
-    // Create notification with profile info
-    const notificationRef = collection(db, 'notifications');
-    batch.set(doc(notificationRef), {
-      type: 'buddy_request',
-      fromUser: user.uid,
-      fromUserName: userProfile?.name || user.displayName || user.email,
-      fromUserProfile: {
-        certificationLevel: userProfile?.certificationLevel || null,
-        numberOfDives: userProfile?.numberOfDives || 0,
-        location: userProfile?.location || null,
-        specialties: userProfile?.specialties || [],
-        email: userProfile?.hideEmail ? null : userProfile?.email
-      },
-      toUser: buddyId,
-      timestamp: serverTimestamp(),
-      read: false
-    });
-
-    await batch.commit();
-    setFilteredUsers(users => users.filter(u => u.id !== buddyId));
-  } catch (err) {
-    console.error('Error sending buddy request:', err);
-    setError('Failed to send buddy request');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Start chat with buddy
   const startChat = async (buddyId) => {
     try {
       setLoading(true);
       
-      const chatRef = await addDoc(collection(db, 'messages'), {
+      const chatRef = await addDoc(collection(db, 'chats'), {
         type: 'direct',
         participants: {
-          [user.uid]: { joined: serverTimestamp(), active: true },
-          [buddyId]: { joined: serverTimestamp(), active: true }
+          [user.uid]: { 
+            joined: serverTimestamp(), 
+            active: true,
+            displayName: user.displayName || 'Unknown User'
+          },
+          [buddyId]: { 
+            joined: serverTimestamp(), 
+            active: true,
+            displayName: buddies.find(b => b.id === buddyId)?.name || 'Unknown User'
+          }
         },
+        activeParticipants: [user.uid, buddyId],
         createdAt: serverTimestamp(),
         createdBy: user.uid,
-        updatedAt: serverTimestamp()
+        lastMessageAt: serverTimestamp()
       });
-
+  
       navigate('/messages', { state: { chatId: chatRef.id } });
     } catch (err) {
       console.error('Error starting chat:', err);
@@ -261,7 +263,6 @@ const sendBuddyRequest = async (buddyId) => {
         )}
       </div>
 
-      {/* Search Results */}
       {loading && (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
@@ -301,14 +302,12 @@ const sendBuddyRequest = async (buddyId) => {
         </div>
       )}
 
-      {/* No Results Message */}
       {!loading && searchQuery.length >= 2 && filteredUsers.length === 0 && (
         <div className="text-center py-4 text-gray-500">
           No users found matching your search
         </div>
       )}
 
-      {/* Buddy List */}
       <div>
         <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
         {loading && buddies.length === 0 ? (

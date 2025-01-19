@@ -19,12 +19,16 @@ const InstructorDashboard = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [newCourse, setNewCourse] = useState({
     name: "",
     location: "",
     startDate: "",
     endDate: "",
+  });
+  const [messageModalState, setMessageModalState] = useState({
+    isOpen: false,
+    course: null,
+    recipient: null
   });
 
   useEffect(() => {
@@ -468,13 +472,16 @@ const InstructorDashboard = () => {
                           </button>
                           <button
                             onClick={() => {
-                              setSelectedCourse(course);
-                              setIsMessageModalOpen(true);
-                            }}
-                            className="text-sm text-gray-600 hover:text-blue-600"
-                          >
-                            Message Course
-                          </button>
+                            setMessageModalState({
+                              isOpen: true,
+                              course: course,
+                              recipient: null  // null means broadcast to all
+                            });
+                          }}
+                          className="text-sm text-gray-600 hover:text-blue-600"
+                        >
+                          Message Course
+                        </button>
                         </div>
                         <button 
                           onClick={() => handleCompleteCourse(course.id)}
@@ -634,11 +641,14 @@ const InstructorDashboard = () => {
                               <div className="text-sm text-gray-600">{assistant.email}</div>
                             </div>
                             <div className="flex gap-2">
-                              <button
+                            <button
                                 onClick={() => {
-                                  setSelectedCourse({...selectedCourse, messageRecipient: assistant});
+                                  setMessageModalState({
+                                    isOpen: true,
+                                    course: selectedCourse,
+                                    recipient: assistant
+                                  });
                                   setIsManageModalOpen(false);
-                                  setIsMessageModalOpen(true);
                                 }}
                                 className="text-blue-600 hover:text-blue-700 text-sm"
                               >
@@ -684,9 +694,12 @@ const InstructorDashboard = () => {
 
                               <button
                                 onClick={() => {
-                                  setSelectedCourse({...selectedCourse, messageRecipient: student});
+                                  setMessageModalState({
+                                    isOpen: true,
+                                    course: selectedCourse,
+                                    recipient: student
+                                  });
                                   setIsManageModalOpen(false);
-                                  setIsMessageModalOpen(true);
                                 }}
                                 className="text-blue-600 hover:text-blue-700 text-sm"
                               >
@@ -712,16 +725,19 @@ const InstructorDashboard = () => {
                 
                 {/* Course Actions */}
                 <div className="border-t pt-4 space-y-2">
-                  <button
+                <button
                     onClick={() => {
+                      setMessageModalState({
+                        isOpen: true,
+                        course: selectedCourse,
+                        recipient: null
+                      });
                       setIsManageModalOpen(false);
-                      setIsMessageModalOpen(true);
                     }}
                     className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
                   >
                     Message Course
                   </button>
-
                   <button
                     onClick={() => handleDeleteCourse(selectedCourse.id)}
                     className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700"
@@ -759,21 +775,20 @@ const InstructorDashboard = () => {
         </div>
 
         {/* Course Messaging Modal */}
-        {selectedCourse && (
-          <CourseMessaging
-            course={selectedCourse}
-            isOpen={isMessageModalOpen}
-            onClose={() => {
-              setIsMessageModalOpen(false);
-              if (selectedCourse.messageRecipient) {
-                setSelectedCourse({
-                  ...selectedCourse,
-                  messageRecipient: undefined
-                });
-              }
-            }}
-          />
-        )}
+        {messageModalState.course && (
+              <CourseMessaging
+                course={messageModalState.course}
+                isOpen={messageModalState.isOpen}
+                messageRecipient={messageModalState.recipient}
+                onClose={() => {
+                  setMessageModalState({
+                    isOpen: false,
+                    course: null,
+                    recipient: null
+                  });
+                }}
+              />
+            )}
       </div>
     </div>
   );
