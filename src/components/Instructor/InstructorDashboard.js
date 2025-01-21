@@ -4,6 +4,9 @@ import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, } from 'firebase/firestore';
 import InstructorPinSetup from './InstructorPinSetup';
 import CourseMessaging from '/Users/jeffguckin/uww-buddies/src/components/Messaging/course/CourseMessaging.jsx';
+import TrainingRecordSelector from '../Training/TrainingRecordSelector';
+import StudentTrainingRecord from '../Training/StudentTrainingRecord';
+
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
@@ -30,6 +33,35 @@ const InstructorDashboard = () => {
     course: null,
     recipient: null
   });
+  const [isTrainingRecordSelectorOpen, setIsTrainingRecordSelectorOpen] = useState(false);
+  const [selectedTrainingRecord, setSelectedTrainingRecord] = useState(null);
+  const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const calculateStudentProgress = (student, course) => {
+    if (!course.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
+      return 0;
+    }
+  
+    const progress = course.studentRecords[student.uid].progress;
+    let totalSkills = 0;
+    let completedSkills = 0;
+  
+    course.trainingRecord.sections.forEach(section => {
+      if (section.subsections) {
+        // Handle sections with subsections
+        section.subsections.forEach(subsection => {
+          totalSkills += subsection.skills.length;
+          completedSkills += Object.keys(progress[subsection.title] || {}).length;
+        });
+      } else {
+        // Handle regular sections
+        totalSkills += section.skills.length;
+        completedSkills += Object.keys(progress[section.title] || {}).length;
+      }
+    });
+  
+    return totalSkills > 0 ? Math.round((completedSkills / totalSkills) * 100) : 0;
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -237,10 +269,19 @@ const InstructorDashboard = () => {
         students: [],
         assistants: [],
         createdAt: new Date(),
+        trainingRecord: selectedTrainingRecord,
+        studentRecords: {}
       };
+  
+      // Add this console.log
+      console.log('Creating course with data:', courseData);
   
       const docRef = await addDoc(collection(db, 'courses'), courseData);
       const newCourseWithId = { id: docRef.id, ...courseData };
+      
+      // Add this console.log
+      console.log('Course created:', newCourseWithId);
+  
       setCourses([...courses, newCourseWithId]);
       setIsNewCourseModalOpen(false);
       setNewCourse({ 
@@ -249,6 +290,7 @@ const InstructorDashboard = () => {
         startDate: "", 
         endDate: "",
       });
+      setSelectedTrainingRecord(null);
     } catch (err) {
       console.error('Error creating course:', err);
       setError('Failed to create course');
@@ -384,7 +426,7 @@ const InstructorDashboard = () => {
         </div>
 
         {/* New Course Modal */}
-        {isNewCourseModalOpen && (
+{isNewCourseModalOpen && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
     <div className="bg-white rounded-lg p-6 w-full max-w-md">
       <div className="flex justify-between items-center mb-4">
@@ -398,6 +440,7 @@ const InstructorDashboard = () => {
           </svg>
         </button>
       </div>
+      
       <div className="space-y-4">
         <input
           type="text"
@@ -427,6 +470,30 @@ const InstructorDashboard = () => {
             onChange={(e) => setNewCourse({...newCourse, endDate: e.target.value})}
           />
         </div>
+
+        {/* Training Record Selection */}
+        <div className="border rounded p-4">
+          <h4 className="text-sm font-medium mb-2">Training Record</h4>
+          {selectedTrainingRecord ? (
+            <div className="flex justify-between items-center">
+              <span>{selectedTrainingRecord.name}</span>
+              <button
+                onClick={() => setIsTrainingRecordSelectorOpen(true)}
+                className="text-blue-600 text-sm"
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsTrainingRecordSelectorOpen(true)}
+              className="w-full text-center text-blue-600 p-2 border border-dashed rounded hover:bg-blue-50"
+            >
+              Select Training Record
+            </button>
+          )}
+        </div>
+
         <button
           onClick={handleCreateCourse}
           className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
@@ -435,6 +502,16 @@ const InstructorDashboard = () => {
         </button>
       </div>
     </div>
+    
+    {/* Add the TrainingRecordSelector component */}
+    <TrainingRecordSelector
+      isOpen={isTrainingRecordSelectorOpen}
+      onClose={() => setIsTrainingRecordSelectorOpen(false)}
+      onSelect={(recordType) => {
+        setSelectedTrainingRecord(recordType);
+        setIsTrainingRecordSelectorOpen(false);
+      }}
+    />
   </div>
 )}
 
@@ -554,17 +631,76 @@ const InstructorDashboard = () => {
               <div className="space-y-6">
                 {/* Course Info Section */}
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-medium mb-2">Course Information</h4>
-                  <p className="text-sm text-gray-600">
-                    Location: {selectedCourse.location}<br />
-                    Start Date: {new Date(selectedCourse.startDate).toLocaleDateString()}<br />
-                    End Date: {new Date(selectedCourse.endDate).toLocaleDateString()}<br />
-                    Instructor: {selectedCourse.instructor?.displayName || instructorProfile?.name || 'Unknown'} 
-                    ({selectedCourse.instructor?.email || instructorProfile?.email || 'No email'})<br />
-                    Students: {selectedCourse.students?.length || 0}<br />
-                    Assistants: {selectedCourse.assistants?.length || 0}
-                  </p>
-                </div>
+                    <h4 className="font-medium mb-2">Course Information</h4>
+                    <p className="text-sm text-gray-600">
+                      Location: {selectedCourse.location}<br />
+                      Start Date: {new Date(selectedCourse.startDate).toLocaleDateString()}<br />
+                      End Date: {new Date(selectedCourse.endDate).toLocaleDateString()}<br />
+                      Instructor: {selectedCourse.instructor?.displayName || instructorProfile?.name || 'Unknown'} 
+                      ({selectedCourse.instructor?.email || instructorProfile?.email || 'No email'})<br />
+                      Students: {selectedCourse.students?.length || 0}<br />
+                      Assistants: {selectedCourse.assistants?.length || 0}<br />
+                      {/* Add this line */}
+                      Training Record: {selectedCourse.trainingRecord?.name || 'None'}<br />
+                    </p>
+                  </div>
+
+                {/* Add this after the Course Info Section */}
+                  <div className="border-t pt-4">
+                    <h4 className="text-md font-semibold mb-4">Training Record</h4>
+                    <div className="bg-white border rounded p-4">
+                      {selectedCourse.trainingRecord ? (
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">{selectedCourse.trainingRecord.name}</p>
+                            <p className="text-sm text-gray-600">{selectedCourse.trainingRecord.description}</p>
+                          </div>
+                          <button
+                            onClick={() => setIsTrainingRecordSelectorOpen(true)}
+                            className="text-blue-600 text-sm"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setIsTrainingRecordSelectorOpen(true)}
+                          className="w-full text-center text-blue-600 p-2 border border-dashed rounded hover:bg-blue-50"
+                        >
+                          Add Training Record
+                        </button>
+                      )}
+                    </div>
+                    
+                    <TrainingRecordSelector
+                      isOpen={isTrainingRecordSelectorOpen}
+                      onClose={() => setIsTrainingRecordSelectorOpen(false)}
+                      onSelect={async (recordType) => {
+                        try {
+                          const courseRef = doc(db, 'courses', selectedCourse.id);
+                          await updateDoc(courseRef, {
+                            trainingRecord: recordType
+                          });
+                          
+                          setSelectedCourse({
+                            ...selectedCourse,
+                            trainingRecord: recordType
+                          });
+                          
+                          setCourses(courses.map(course => 
+                            course.id === selectedCourse.id 
+                              ? { ...course, trainingRecord: recordType }
+                              : course
+                          ));
+                          
+                          setIsTrainingRecordSelectorOpen(false);
+                        } catch (err) {
+                          console.error('Error updating training record:', err);
+                          setError('Failed to update training record');
+                        }
+                      }}
+                    />
+                  </div>
 
                 {/* User Management Section */}
                 <div className="border-t pt-4">
@@ -679,19 +815,34 @@ const InstructorDashboard = () => {
                         selectedCourse.students.map(student => (
                           <div 
                             key={student.uid}
-                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                            className="p-2 hover:bg-gray-50 flex justify-between items-start border-b last:border-b-0"
                           >
                             <div>
                               <div className="font-medium">{student.displayName}</div>
-                              <div className="text-sm text-gray-600">
+                              <div className="text-sm text-gray-600 mt-1">
                                 {student.email}
                                 {student.phone && (
                                   <div className="text-gray-500">Phone: {student.phone}</div>
                                 )}
                               </div>
+                              {selectedCourse.trainingRecord && (
+                                <div className="text-sm font-medium text-gray-900 mt-1">
+                                  Progress: {calculateStudentProgress(student, selectedCourse)}% Complete
+                                </div>
+                              )}
                             </div>
                             <div className="flex gap-2">
-
+                              {selectedCourse.trainingRecord && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedStudent(student);
+                                    setIsTrainingRecordModalOpen(true);
+                                  }}
+                                  className="text-green-600 hover:text-green-700 text-sm"
+                                >
+                                  Training Record
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setMessageModalState({
@@ -776,16 +927,38 @@ const InstructorDashboard = () => {
 
         {/* Course Messaging Modal */}
         {messageModalState.course && (
-              <CourseMessaging
-                course={messageModalState.course}
-                isOpen={messageModalState.isOpen}
-                messageRecipient={messageModalState.recipient}
+          <CourseMessaging
+            course={messageModalState.course}
+            isOpen={messageModalState.isOpen}
+            messageRecipient={messageModalState.recipient}
+            onClose={() => {
+              setMessageModalState({
+                isOpen: false,
+                course: null,
+                recipient: null
+              });
+            }}
+          />
+        )}
+
+        {/* Training Record Modal */}
+        {isTrainingRecordModalOpen && selectedStudent && (
+              <StudentTrainingRecord
+                isOpen={isTrainingRecordModalOpen}
                 onClose={() => {
-                  setMessageModalState({
-                    isOpen: false,
-                    course: null,
-                    recipient: null
-                  });
+                  setIsTrainingRecordModalOpen(false);
+                  setSelectedStudent(null);
+                }}
+                student={selectedStudent}
+                course={selectedCourse}
+                trainingRecord={selectedCourse.trainingRecord}
+                instructorProfile={instructorProfile}
+                onProgressUpdate={(updatedCourse) => {
+                  // Update both the selectedCourse and courses states
+                  setSelectedCourse(updatedCourse);
+                  setCourses(courses.map(c => 
+                    c.id === updatedCourse.id ? updatedCourse : c
+                  ));
                 }}
               />
             )}
