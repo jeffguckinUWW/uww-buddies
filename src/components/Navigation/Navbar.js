@@ -83,6 +83,10 @@ function Navbar() {
         >
           Messages
         </Link>
+
+        <Link to="/profile" className={`${isMobile ? mobileClasses : ''} ${baseClasses}`} onClick={() => setIsMenuOpen(false)}>
+          Profile
+        </Link>
         
         <NotificationBell />
       </div>
@@ -126,7 +130,6 @@ function Navbar() {
               <Link to="/logbook" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Logbook</Link>
               <Link to="/training" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Training</Link>
               {messageItems()}
-              <Link to="/profile" className="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Profile</Link>
             </div>
             {/* Instructor and Admin Links - Desktop */}
             <div className="flex items-center space-x-4">
@@ -175,13 +178,6 @@ function Navbar() {
                 Training
               </Link>
               {messageItems(true)}
-              <Link 
-                to="/profile" 
-                className="block px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-700"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Profile
-              </Link>
               <div className="border-t border-blue-700 mt-2 pt-2">
                 <Link 
                   to="/instructor" 

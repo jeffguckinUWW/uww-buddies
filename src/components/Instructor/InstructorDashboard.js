@@ -37,8 +37,12 @@ const InstructorDashboard = () => {
   const [selectedTrainingRecord, setSelectedTrainingRecord] = useState(null);
   const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  useEffect(() => {
+    console.log('Current instructorProfile:', instructorProfile);
+  }, [instructorProfile]);
+
   const calculateStudentProgress = (student, course) => {
-    if (!course.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
+    if (!student || !course || !course?.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
       return 0;
     }
   
@@ -71,14 +75,18 @@ const InstructorDashboard = () => {
           const profileSnap = await getDoc(profileRef);
           
           if (profileSnap.exists()) {
-            const profileData = profileSnap.data();
-            setInstructorProfile(profileData);
-            setHasPin(!!profileData.instructorPin?.pin);
+                const profileData = profileSnap.data();
+                setInstructorProfile({
+                  ...profileData,
+                  uid: user.uid  // Add this explicitly
+                });
+                setHasPin(!!profileData.instructorPin?.pin);
             
             if (profileData.instructorPin?.pin && (!profileData.role || profileData.role !== 'instructor')) {
               await updateDoc(profileRef, { role: 'instructor' });
             }
           }
+          
 
           const coursesRef = collection(db, 'courses');
           const q = query(coursesRef, where('instructorId', '==', user.uid));
@@ -619,6 +627,8 @@ const InstructorDashboard = () => {
                     setSearchResults([]);
                     setStudentSearch('');
                     setUserRole('student');
+                    setIsTrainingRecordModalOpen(false); // Add this
+                    setSelectedStudent(null); // Add this
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -832,17 +842,18 @@ const InstructorDashboard = () => {
                               )}
                             </div>
                             <div className="flex gap-2">
-                              {selectedCourse.trainingRecord && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedStudent(student);
-                                    setIsTrainingRecordModalOpen(true);
-                                  }}
-                                  className="text-green-600 hover:text-green-700 text-sm"
-                                >
-                                  Training Record
-                                </button>
-                              )}
+                            {selectedCourse && selectedCourse.trainingRecord && (
+                                  <button
+                                    onClick={() => {
+                                      console.log('Opening training record with instructor:', instructorProfile);
+                                      setSelectedStudent(student);
+                                      setIsTrainingRecordModalOpen(true);
+                                    }}
+                                    className="text-green-600 hover:text-green-700 text-sm"
+                                  >
+                                    Training Record
+                                  </button>
+                                )}
                               <button
                                 onClick={() => {
                                   setMessageModalState({
@@ -940,28 +951,27 @@ const InstructorDashboard = () => {
             }}
           />
         )}
-
         {/* Training Record Modal */}
-        {isTrainingRecordModalOpen && selectedStudent && (
-              <StudentTrainingRecord
-                isOpen={isTrainingRecordModalOpen}
-                onClose={() => {
-                  setIsTrainingRecordModalOpen(false);
-                  setSelectedStudent(null);
-                }}
-                student={selectedStudent}
-                course={selectedCourse}
-                trainingRecord={selectedCourse.trainingRecord}
-                instructorProfile={instructorProfile}
-                onProgressUpdate={(updatedCourse) => {
-                  // Update both the selectedCourse and courses states
-                  setSelectedCourse(updatedCourse);
-                  setCourses(courses.map(c => 
-                    c.id === updatedCourse.id ? updatedCourse : c
-                  ));
-                }}
-              />
-            )}
+          {isTrainingRecordModalOpen && selectedStudent && (
+            <StudentTrainingRecord
+              isOpen={isTrainingRecordModalOpen}
+              onClose={() => {
+                setIsTrainingRecordModalOpen(false);
+                setSelectedStudent(null);
+              }}
+              student={selectedStudent}
+              course={selectedCourse}
+              trainingRecord={selectedCourse.trainingRecord}
+              instructorProfile={instructorProfile}  // Make sure this is being passed
+              onProgressUpdate={(updatedCourse) => {
+                // Update both the selectedCourse and courses states
+                setSelectedCourse(updatedCourse);
+                setCourses(courses.map(c => 
+                  c.id === updatedCourse.id ? updatedCourse : c
+                ));
+              }}
+            />
+          )}
       </div>
     </div>
   );
