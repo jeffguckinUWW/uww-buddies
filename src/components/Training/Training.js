@@ -91,87 +91,71 @@ const Training = () => {
       setDetailsLoading(true);
       setDetailsError('');
   
-      console.log('Fetching details for course:', courseId);
       const courseRef = doc(db, 'courses', courseId);
+      const courseSnap = await getDoc(courseRef);
       
-      try {
-        const courseSnap = await getDoc(courseRef);
-        console.log('Course snapshot exists:', courseSnap.exists());
+      if (courseSnap.exists()) {
+        const data = courseSnap.data();
+        let instructorData = data.instructor || {};
         
-        if (courseSnap.exists()) {
-          const data = courseSnap.data();
-          console.log('Course data retrieved:', {
-            id: courseId,
-            students: data.students?.length || 0,
-            instructorId: data.instructorId,
-            status: data.status
-          });
-          
-          // Check if user is enrolled
-          const isStudent = data.students?.some(student => student.uid === user.uid);
-          const isAssistant = data.assistants?.some(assistant => assistant.uid === user.uid);
-          
-          console.log('Access check:', {
-            isStudent,
-            isAssistant,
-            userId: user.uid
-          });
+        const isStudent = data.students?.some(student => student.uid === user.uid);
+        const isAssistant = data.assistants?.some(assistant => assistant.uid === user.uid);
   
-          if (isStudent || isAssistant) {
-            // Fetch instructor details if needed
-            let instructorData = data.instructor;
-            if (!instructorData && data.instructorId) {
-              console.log('Fetching instructor details');
-              try {
-                const instructorRef = doc(db, 'profiles', data.instructorId);
-                const instructorSnap = await getDoc(instructorRef);
-                if (instructorSnap.exists()) {
-                  instructorData = {
-                    uid: data.instructorId,
-                    email: instructorSnap.data().email,
-                    displayName: instructorSnap.data().name || instructorSnap.data().displayName,
-                    photoURL: instructorSnap.data().photoURL
-                  };
-                }
-              } catch (instructorErr) {
-                console.warn('Failed to fetch instructor details:', instructorErr);
-                // Continue without instructor details
+        if (isStudent || isAssistant) {
+          if (data.instructorId) {
+            try {
+              const instructorRef = doc(db, 'profiles', data.instructorId);
+              const instructorSnap = await getDoc(instructorRef);
+              if (instructorSnap.exists()) {
+                const instructorProfile = instructorSnap.data();
+                // Log instructor data to see what we're getting
+                console.log('Instructor Profile:', instructorProfile);
+                
+                instructorData = {
+                  ...instructorData,
+                  uid: data.instructorId,
+                  name: instructorProfile.name,
+                  email: instructorProfile.email,
+                  displayName: instructorProfile.name || instructorProfile.displayName,
+                  photoURL: instructorProfile.photoURL,
+                  certifications: instructorProfile.instructorCertifications?.map(cert => 
+                    `${cert.agency} #${cert.number}`
+                  ).join(', '),
+                  certText: instructorProfile.instructorCertifications?.map(cert => 
+                    `${cert.agency} Instructor #${cert.number}`
+                  ).join('\n')
+                };
+          
+                console.log('Processed instructor data:', instructorData);
               }
+            } catch (instructorErr) {
+              console.warn('Failed to fetch instructor details:', instructorErr);
             }
+          }
   
-            setCourseDetails({
-              ...data,
-              id: courseId,
-              instructor: instructorData,
-              instructorId: data.instructorId,
-              trainingRecord: data.trainingRecord,
-              studentRecords: data.studentRecor
-            });
-          } else {
-            console.log('User not enrolled in course');
-            setDetailsError('You are not enrolled in this course.');
-          }
+          setCourseDetails({
+            ...data,
+            id: courseId,
+            instructor: instructorData,
+            instructorId: data.instructorId,
+            trainingRecord: data.trainingRecord,
+            studentRecords: data.studentRecords
+          });
         } else {
-          console.log('Course not found, cleaning up training data');
-          const userRef = doc(db, 'profiles', user.uid);
-          const userSnap = await getDoc(userRef);
-          
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
-            await updateDoc(userRef, { training: updatedTraining });
-            setTrainings(updatedTraining);
-          }
-          
-          setDetailsError('This course has been deleted. It has been removed from your training history.');
+          setDetailsError('You are not enrolled in this course.');
         }
-      } catch (err) {
-        console.error('Error fetching course:', {
-          courseId,
-          error: err.message,
-          code: err.code
-        });
-        throw err;
+      } else {
+        const userRef = doc(db, 'profiles', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
+          await updateDoc(userRef, { training: updatedTraining });
+          setTrainings(updatedTraining);
+        }
+        
+        setDetailsError('This course has been deleted. It has been removed from your training history.');
       }
     } catch (err) {
       console.error('Error in fetchCourseDetails:', err);
@@ -469,20 +453,29 @@ const Training = () => {
         ) : activeTab === 'training' && details?.trainingRecord && (
           <div className="p-4">
             <div className="flex justify-end mb-4">
-              <button
-                onClick={() => generateTrainingRecordPDF(
-                  details,
-                  { uid: user.uid, displayName: details.students?.find(s => s.uid === user.uid)?.displayName, email: details.students?.find(s => s.uid === user.uid)?.email },
-                  details.trainingRecord,
-                  details.studentRecords?.[user.uid]?.progress || {},
-                  details.studentRecords?.[user.uid]?.signOff,
-                  details.studentRecords?.[user.uid]?.notes
-                )}
-                variant="outline"
-              >
-                Export Record
-              </button>
-            </div>
+  <button
+    onClick={() => generateTrainingRecordPDF(
+      details,
+      { 
+        uid: user.uid, 
+        displayName: details.students?.find(s => s.uid === user.uid)?.displayName, 
+        email: details.students?.find(s => s.uid === user.uid)?.email 
+      },
+      details.trainingRecord,
+      details.studentRecords?.[user.uid]?.progress || {},
+      details.studentRecords?.[user.uid]?.signOff,
+      details.studentRecords?.[user.uid]?.notes,
+      {
+        name: details.instructor?.name || details.instructor?.displayName,
+        displayName: details.instructor?.displayName,
+        instructorCertifications: details.instructor?.instructorCertifications || []
+      }
+    )}
+    variant="outline"
+  >
+    Export Record
+  </button>
+</div>
             <StudentTrainingRecord
               isOpen={activeTab === 'training'}
               onClose={() => setActiveTab('details')}

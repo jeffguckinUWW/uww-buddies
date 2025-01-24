@@ -12,7 +12,6 @@ import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { generateTrainingRecordPDF } from '../../services/ExportService';
 
-
 const StudentTrainingRecord = ({ 
     isOpen, 
     onClose, 
@@ -23,12 +22,6 @@ const StudentTrainingRecord = ({
     onProgressUpdate,
     readOnly = false
   }) => {
-    console.log('StudentTrainingRecord received props:', {
-      student,
-      course,
-      instructorProfile
-    });
-
   const [progress, setProgress] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,6 +31,7 @@ const StudentTrainingRecord = ({
   const [instructorPin, setInstructorPin] = useState('');
   const [isRecordLocked, setIsRecordLocked] = useState(false);
   const [signOffData, setSignOffData] = useState(null);
+  const [courseData, setCourseData] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -48,17 +42,39 @@ const StudentTrainingRecord = ({
       }
   
       try {
-        console.log('Loading data for:', { courseId: course.id, studentId: student.uid });
         const courseRef = doc(db, 'courses', course.id);
         const courseDoc = await getDoc(courseRef);
+        
         if (courseDoc.exists()) {
           const courseData = courseDoc.data();
+  
+          // Fetch instructor profile data including certifications
+          if (courseData.instructorId) {
+            const instructorRef = doc(db, 'profiles', courseData.instructorId);
+            const instructorDoc = await getDoc(instructorRef);
+            
+            if (instructorDoc.exists()) {
+              const instructorProfile = instructorDoc.data();
+              console.log('Loaded instructor profile:', instructorProfile);
+              
+              // Update course data with full instructor profile
+              courseData.instructor = {
+                ...courseData.instructor,
+                ...instructorProfile,
+                uid: courseData.instructorId,
+                name: instructorProfile.name,
+                displayName: instructorProfile.name || instructorProfile.displayName,
+                instructorCertifications: instructorProfile.instructorCertifications || []
+              };
+            }
+          }
+  
           const studentRecord = courseData.studentRecords?.[student.uid];
-          console.log('Loaded student record:', studentRecord);
           setProgress(studentRecord?.progress || {});
           setLocalNotes(studentRecord?.notes || '');
           setIsRecordLocked(!!studentRecord?.signOff?.locked);
           setSignOffData(studentRecord?.signOff);
+          setCourseData(courseData);
         }
         setLoading(false);
       } catch (err) {
@@ -71,7 +87,7 @@ const StudentTrainingRecord = ({
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, course, student?.uid]); // Updated dependency array
+  }, [isOpen, course, student?.uid]);
 
   const handleSkillToggle = async (sectionTitle, skillName) => {
     if (readOnly) return;
@@ -204,31 +220,11 @@ const StudentTrainingRecord = ({
 
   const handleSignOff = async () => {
     try {
-      // Validate required data first
       if (!instructorProfile?.uid) {
-        console.error('Missing instructor profile UID');
         setError('Missing instructor information');
         return;
       }
-      if (!course?.id) {
-        console.error('Missing course ID');
-        setError('Missing course information');
-        return;
-      }
-      if (!student?.uid) {
-        console.error('Missing student UID');
-        setError('Missing student information');
-        return;
-      }
   
-      // Log the data we're working with
-      console.log('Sign off attempt with:', {
-        instructorId: instructorProfile.uid,
-        courseId: course.id,
-        studentId: student.uid
-      });
-  
-      // Create document references using string literals
       const instructorRef = doc(db, 'profiles', String(instructorProfile.uid));
       const instructorDoc = await getDoc(instructorRef);
       
@@ -246,21 +242,17 @@ const StudentTrainingRecord = ({
         verificationText: "I certify that I have completed the training or verified the completion of the training on this record and that the student has performed all the skills listed to a satisfactory level."
       };
   
-      // Create course reference using string literals
       const courseRef = doc(db, `courses/${String(course.id)}`);
       const updateData = {
         [`studentRecords.${String(student.uid)}.signOff`]: signOffInfo,
         [`studentRecords.${String(student.uid)}.lastModified`]: currentDate
       };
   
-      console.log('Updating course with data:', updateData);
       await updateDoc(courseRef, updateData);
   
-      // Update local state
       setSignOffData(signOffInfo);
       setIsRecordLocked(true);
   
-      // Update parent component
       onProgressUpdate({
         ...course,
         studentRecords: {
@@ -278,11 +270,7 @@ const StudentTrainingRecord = ({
       setError(null);
   
     } catch (err) {
-      console.error('Error in handleSignOff:', err, {
-        instructorProfile,
-        course,
-        student
-      });
+      console.error('Error in handleSignOff:', err);
       setError('Failed to sign off record. Please try again.');
     }
   };
@@ -431,13 +419,13 @@ const StudentTrainingRecord = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
         <div className="bg-white">
-        <DialogHeader className="bg-white border-b pb-4">
+          <DialogHeader className="bg-white border-b pb-4">
             <DialogTitle className="text-2xl font-bold text-gray-900">Training Record</DialogTitle>
             <DialogDescription className="mt-2 space-y-1">
-                <span className="text-lg font-semibold text-gray-900 block">{trainingRecord?.name}</span>
-                <span className="text-sm text-gray-500 block">{course?.name}</span>
+              <span className="text-lg font-semibold text-gray-900 block">{trainingRecord?.name}</span>
+              <span className="text-sm text-gray-500 block">{course?.name}</span>
             </DialogDescription>
-        </DialogHeader>
+          </DialogHeader>
 
           <div className="space-y-6 py-4">
             {/* Student Information Card */}
@@ -533,60 +521,73 @@ const StudentTrainingRecord = ({
               Close
             </Button>
             <Button 
-  onClick={() => generateTrainingRecordPDF(
-    course,
-    student,
-    trainingRecord,
-    progress,
-    signOffData,
-    localNotes
-  )} 
-  variant="outline" 
-  className="bg-white"
->
-  Export Record
-</Button>
+              onClick={() => {
+                console.log('Exporting with course data:', courseData);
+                console.log('Instructor certifications:', courseData?.instructor?.instructorCertifications);
+                
+                generateTrainingRecordPDF(
+                  courseData || course,
+                  student,
+                  trainingRecord,
+                  progress,
+                  signOffData,
+                  localNotes, 
+                  {
+                    name: courseData?.instructor?.name || course?.instructor?.name,
+                    displayName: courseData?.instructor?.displayName || course?.instructor?.displayName,
+                    instructorCertifications: courseData?.instructor?.instructorCertifications || [],
+                    certText: courseData?.instructor?.instructorCertifications?.map(cert => 
+                      `${cert.agency} Instructor #${cert.number}`
+                    ).join('\n') || ''
+                  }
+                );
+              }} 
+              variant="outline" 
+              className="bg-white"
+            >
+              Export Record
+            </Button>
           </div>
         </div>
       </DialogContent>
 
       {/* Sign Off/Unlock Modal */}
-<Dialog open={isSignOffModalOpen} onOpenChange={setIsSignOffModalOpen}>
-  <DialogContent className="sm:max-w-[425px]">
-    <DialogHeader>
-      <DialogTitle>
-        {isRecordLocked ? 'Unlock Record' : 'Instructor Sign Off'}
-      </DialogTitle>
-      <DialogDescription>
-        {isRecordLocked 
-          ? "Enter your instructor PIN to unlock this student's training record. Once unlocked, you can make changes to the record."
-          : "Enter your instructor PIN to sign off on this student's training record. This will lock the record from further changes."
-        }
-      </DialogDescription>
-    </DialogHeader>
-    <div className="grid gap-4 py-4">
-      <input
-        type="password"
-        placeholder="Enter PIN"
-        value={instructorPin}
-        onChange={(e) => setInstructorPin(e.target.value)}
-        className="w-full p-2 border rounded"
-      />
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-    </div>
-    <DialogFooter>
-      <Button onClick={() => setIsSignOffModalOpen(false)} variant="outline">
-        Cancel
-      </Button>
-      <Button 
-        onClick={isRecordLocked ? handleUnlock : handleSignOff}
-        className={isRecordLocked ? "bg-yellow-600" : "bg-green-600"}
-      >
-        {isRecordLocked ? 'Unlock Record' : 'Sign Off'}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+      <Dialog open={isSignOffModalOpen} onOpenChange={setIsSignOffModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {isRecordLocked ? 'Unlock Record' : 'Instructor Sign Off'}
+            </DialogTitle>
+            <DialogDescription>
+              {isRecordLocked 
+                ? "Enter your instructor PIN to unlock this student's training record. Once unlocked, you can make changes to the record."
+                : "Enter your instructor PIN to sign off on this student's training record. This will lock the record from further changes."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <input
+              type="password"
+              placeholder="Enter PIN"
+              value={instructorPin}
+              onChange={(e) => setInstructorPin(e.target.value)}
+              className="w-full p-2 border rounded"
+            />
+            {error && <p className="text-red-600 text-sm">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsSignOffModalOpen(false)} variant="outline">
+              Cancel
+            </Button>
+            <Button 
+              onClick={isRecordLocked ? handleUnlock : handleSignOff}
+              className={isRecordLocked ? "bg-yellow-600" : "bg-green-600"}
+            >
+              {isRecordLocked ? 'Unlock Record' : 'Sign Off'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
