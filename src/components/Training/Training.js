@@ -85,9 +85,15 @@ const Training = () => {
   }, [user?.uid]);
 
   const fetchCourseDetails = async (courseId) => {
-    if (!courseId) return;
+    if (!courseId) {
+      console.log('No courseId provided');
+      setDetailsError('Invalid course ID');
+      setDetailsLoading(false);
+      return;
+    }
     
     try {
+      console.log('Starting course fetch:', { courseId, userId: user?.uid });
       setDetailsLoading(true);
       setDetailsError('');
   
@@ -96,73 +102,92 @@ const Training = () => {
       
       if (courseSnap.exists()) {
         const data = courseSnap.data();
-        let instructorData = data.instructor || {};
         
+        // Check if user is a student in the course
         const isStudent = data.students?.some(student => student.uid === user.uid);
         const isAssistant = data.assistants?.some(assistant => assistant.uid === user.uid);
+        const isInstructor = data.instructorId === user.uid;
   
-        if (isStudent || isAssistant) {
+        console.log('Access check:', {
+          isStudent,
+          isAssistant,
+          isInstructor,
+          userId: user.uid
+        });
+  
+        if (isStudent || isAssistant || isInstructor) {
+          // Get the student's training record if they're a student
+          const studentRecord = isStudent ? data.studentRecords?.[user.uid] : null;
+          
+          // Get instructor profile if needed
+          let instructorProfile = data.instructor || {};
           if (data.instructorId) {
             try {
               const instructorRef = doc(db, 'profiles', data.instructorId);
               const instructorSnap = await getDoc(instructorRef);
+              
               if (instructorSnap.exists()) {
-                const instructorProfile = instructorSnap.data();
-                // Log instructor data to see what we're getting
-                console.log('Instructor Profile:', instructorProfile);
-                
-                instructorData = {
+                const instructorData = instructorSnap.data();
+                instructorProfile = {
+                  ...data.instructor,
                   ...instructorData,
                   uid: data.instructorId,
-                  name: instructorProfile.name,
-                  email: instructorProfile.email,
-                  displayName: instructorProfile.name || instructorProfile.displayName,
-                  photoURL: instructorProfile.photoURL,
-                  certifications: instructorProfile.instructorCertifications?.map(cert => 
-                    `${cert.agency} #${cert.number}`
-                  ).join(', '),
-                  certText: instructorProfile.instructorCertifications?.map(cert => 
-                    `${cert.agency} Instructor #${cert.number}`
-                  ).join('\n')
+                  name: instructorData.name || data.instructor.displayName,
+                  displayName: instructorData.name || data.instructor.displayName,
+                  instructorCertifications: instructorData.instructorCertifications || [],
                 };
-          
-                console.log('Processed instructor data:', instructorData);
               }
-            } catch (instructorErr) {
-              console.warn('Failed to fetch instructor details:', instructorErr);
+            } catch (err) {
+              console.warn('Failed to fetch instructor profile:', err);
             }
           }
   
-          setCourseDetails({
+          // Construct the complete course data
+          const courseData = {
             ...data,
             id: courseId,
-            instructor: instructorData,
-            instructorId: data.instructorId,
-            trainingRecord: data.trainingRecord,
-            studentRecords: data.studentRecords
+            instructor: instructorProfile,
+            studentRecords: data.studentRecords || {},
+            trainingRecord: data.trainingRecord
+          };
+  
+          console.log('Course data prepared:', {
+            hasTrainingRecord: !!courseData.trainingRecord,
+            hasStudentRecords: !!courseData.studentRecords,
+            studentRecordExists: !!studentRecord,
           });
+  
+          setCourseDetails(courseData);
+          setDetailsError('');
         } else {
-          setDetailsError('You are not enrolled in this course.');
+          setDetailsError('You do not have access to this course.');
         }
       } else {
-        const userRef = doc(db, 'profiles', user.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
-          await updateDoc(userRef, { training: updatedTraining });
-          setTrainings(updatedTraining);
+        // Handle deleted course cleanup
+        try {
+          const userRef = doc(db, 'profiles', user.uid);
+          const userSnap = await getDoc(userRef);
+          
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            const updatedTraining = userData.training?.filter(t => t.courseId !== courseId) || [];
+            await updateDoc(userRef, { training: updatedTraining });
+            setTrainings(updatedTraining);
+          }
+          
+          setDetailsError('This course has been deleted and removed from your training history.');
+        } catch (err) {
+          console.error('Error cleaning up deleted course:', err);
+          setDetailsError('This course no longer exists.');
         }
-        
-        setDetailsError('This course has been deleted. It has been removed from your training history.');
       }
     } catch (err) {
-      console.error('Error in fetchCourseDetails:', err);
+      console.error('Error fetching course details:', err);
+      
       if (err.code === 'permission-denied') {
-        setDetailsError('Unable to access course details. Please try again in a moment.');
+        setDetailsError('You do not have permission to view this course.');
       } else {
-        setDetailsError('Failed to load course details. Please try again later.');
+        setDetailsError('Failed to load course details. Please try again.');
       }
     } finally {
       setDetailsLoading(false);

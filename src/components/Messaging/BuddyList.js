@@ -6,16 +6,18 @@ import {
   doc, 
   getDoc, 
   addDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  writeBatch 
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { writeBatch } from 'firebase/firestore';
 
 export const BuddyList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [buddies, setBuddies] = useState([]);
+  const [pendingOutgoing, setPendingOutgoing] = useState([]);
+  const [pendingIncoming, setPendingIncoming] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [error, setError] = useState('');
@@ -92,17 +94,13 @@ export const BuddyList = () => {
   
       const buddyList = userDoc.data()?.buddyList || {};
       
-      // Only fetch accepted buddies
-      const acceptedBuddies = Object.entries(buddyList)
-        .filter(([_, data]) => data.status === 'accepted');
-      
-      if (acceptedBuddies.length === 0) {
-        setBuddies([]);
-        return;
-      }
-  
-      // Fetch full user data for each buddy
-      const buddyPromises = acceptedBuddies.map(async ([buddyId]) => {
+      // Separate buddies into accepted, outgoing, and incoming
+      const accepted = [];
+      const outgoing = [];
+      const incoming = [];
+
+      // Process all buddy relationships
+      const buddyPromises = Object.entries(buddyList).map(async ([buddyId, data]) => {
         try {
           // Get user and profile data
           const [userDoc, profileDoc] = await Promise.all([
@@ -111,13 +109,25 @@ export const BuddyList = () => {
           ]);
   
           if (userDoc.exists() && profileDoc.exists()) {
-            return {
+            const buddyData = {
               id: buddyId,
               ...userDoc.data(),
-              ...profileDoc.data()
+              ...profileDoc.data(),
+              requestStatus: data.status,
+              initiator: data.initiator
             };
+
+            // Sort into appropriate arrays
+            if (data.status === 'accepted') {
+              accepted.push(buddyData);
+            } else if (data.status === 'pending') {
+              if (data.initiator) {
+                outgoing.push(buddyData);
+              } else {
+                incoming.push(buddyData);
+              }
+            }
           }
-          console.warn(`Buddy ${buddyId} documents not found`);
           return null;
         } catch (err) {
           console.error(`Error fetching buddy ${buddyId}:`, err);
@@ -125,14 +135,63 @@ export const BuddyList = () => {
         }
       });
   
-      const buddyData = (await Promise.all(buddyPromises))
-        .filter(Boolean)
-        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      await Promise.all(buddyPromises);
   
-      setBuddies(buddyData);
+      // Sort arrays by name
+      const sortByName = (a, b) => (a.name || '').localeCompare(b.name || '');
+      setBuddies(accepted.sort(sortByName));
+      setPendingOutgoing(outgoing.sort(sortByName));
+      setPendingIncoming(incoming.sort(sortByName));
     } catch (err) {
       console.error('Error fetching buddies:', err);
       setError('Failed to load buddy list');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBuddyRequest = async (buddyId, accept) => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      const batch = writeBatch(db);
+
+      if (accept) {
+        // Update both users' buddy lists to accepted status
+        const userRef = doc(db, 'users', user.uid);
+        const buddyRef = doc(db, 'users', buddyId);
+        
+        batch.update(userRef, {
+          [`buddyList.${buddyId}.status`]: 'accepted'
+        });
+        
+        batch.update(buddyRef, {
+          [`buddyList.${user.uid}.status`]: 'accepted'
+        });
+      } else {
+        // Remove buddy entries for both users
+        const userRef = doc(db, 'users', user.uid);
+        const buddyRef = doc(db, 'users', buddyId);
+        
+        batch.update(userRef, {
+          [`buddyList.${buddyId}`]: null
+        });
+        
+        batch.update(buddyRef, {
+          [`buddyList.${user.uid}`]: null
+        });
+      }
+
+      await batch.commit();
+      
+      // Refresh buddy lists
+      fetchBuddies(user.uid);
+    } catch (err) {
+      console.error('Error handling buddy request:', err);
+      setError('Failed to process buddy request');
     } finally {
       setLoading(false);
     }
@@ -200,6 +259,9 @@ export const BuddyList = () => {
 
       await batch.commit();
       setFilteredUsers(users => users.filter(u => u.id !== buddyId));
+      
+      // Refresh buddy lists to show the new pending request
+      fetchBuddies(user.uid);
     } catch (err) {
       console.error('Error sending buddy request:', err);
       setError('Failed to send buddy request');
@@ -308,6 +370,73 @@ export const BuddyList = () => {
         </div>
       )}
 
+      {/* Incoming Buddy Requests Section */}
+      {pendingIncoming.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-2">Incoming Buddy Requests</h3>
+          {pendingIncoming.map(buddy => (
+            <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+              <div>
+                <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+                {!buddy.hideEmail && buddy.email && (
+                  <p className="text-sm text-gray-600">{buddy.email}</p>
+                )}
+                {buddy.certificationLevel && (
+                  <p className="text-sm text-gray-600">
+                    Certification: {buddy.certificationLevel}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleBuddyRequest(buddy.id, true)}
+                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                  disabled={loading}
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleBuddyRequest(buddy.id, false)}
+                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  disabled={loading}
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pending Outgoing Requests Section */}
+      {pendingOutgoing.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-2">Pending Requests</h3>
+          {pendingOutgoing.map(buddy => (
+            <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+              <div>
+                <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+                {!buddy.hideEmail && buddy.email && (
+                  <p className="text-sm text-gray-600">{buddy.email}</p>
+                )}
+                {buddy.certificationLevel && (
+                  <p className="text-gray-600">
+                    Certification: {buddy.certificationLevel}
+                  </p>
+                )}
+                {buddy.numberOfDives > 0 && (
+                  <p className="text-sm text-gray-600">
+                    Dives: {buddy.numberOfDives}
+                  </p>
+                )}
+              </div>
+              <div className="text-sm text-gray-500 italic">Awaiting Response</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Accepted Buddies Section */}
       <div>
         <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
         {loading && buddies.length === 0 ? (
