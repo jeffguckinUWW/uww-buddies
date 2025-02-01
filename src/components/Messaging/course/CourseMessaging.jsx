@@ -30,23 +30,63 @@ const CourseMessaging = ({
   useEffect(() => {
     if (!course?.id || !user?.uid) return;
 
-    // Determine user's role and permissions
+    console.log('Message subscription debug:', {
+      courseData: {
+        id: course.id,
+        instructorId: course.instructorId,
+        students: course.students,
+        assistants: course.assistants
+      },
+      userData: {
+        uid: user.uid,
+        isInStudents: course.students?.some(s => s.uid === user.uid),
+        isInAssistants: course.assistants?.some(a => a.uid === user.uid),
+        isInstructor: course.instructorId === user.uid
+      }
+    });
+  
+    // Get the user roles explicitly
     const isStudent = course.students?.some(student => student.uid === user.uid);
     const isAssistant = course.assistants?.some(assistant => assistant.uid === user.uid);
     const isInstructor = course.instructorId === user.uid;
-
+    
+    console.log('Message subscription attempt:', {
+      course: {
+        id: course.id,
+        instructorId: course.instructorId,
+        studentsCount: course.students?.length || 0,
+        assistantsCount: course.assistants?.length || 0
+      },
+      user: {
+        uid: user.uid,
+        isStudent,
+        isAssistant,
+        isInstructor
+      },
+      studentsList: course.students?.map(s => ({
+        uid: s.uid,
+        matches: s.uid === user.uid
+      }))
+    });
+  
     // Check permissions
     const hasPermission = isInstructor || isStudent || isAssistant;
     if (!hasPermission) {
-      console.error("User isn't a member of this course");
+      console.error("User isn't a member of this course", {
+        reason: {
+          notInstructor: !isInstructor,
+          notStudent: !isStudent,
+          notAssistant: !isAssistant
+        }
+      });
       return;
     }
-
+  
     const unsubscribe = subscribeToMessages({
       type: 'course',
       courseId: course.id
     });
-
+  
     return () => unsubscribe();
   }, [course, user, subscribeToMessages]);
 
