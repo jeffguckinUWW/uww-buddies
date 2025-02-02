@@ -26,30 +26,25 @@ const MessageInput = ({
   };
 
   return (
-    <form 
-      onSubmit={handleSubmit} 
-      className={`flex items-center gap-2 p-2 ${className}`}
-    >
-      <input
-        type="text"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled || isSubmitting}
-        className="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-      />
-      <button
-        type="submit"
-        disabled={disabled || isSubmitting || !message.trim()}
-        className="p-2 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:bg-blue-300 transition-colors"
-      >
-        {isSubmitting ? (
-          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-        ) : (
-          <Send size={20} />
-        )}
-      </button>
-    </form>
+    <div className="p-4 bg-white border-t">
+      <div className="flex gap-2 items-center bg-gray-50 rounded-full px-4 py-2">
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled || isSubmitting}
+          className="flex-1 bg-transparent border-0 focus:outline-none text-gray-600 placeholder-gray-500"
+        />
+        <button
+          onClick={handleSubmit}
+          disabled={disabled || isSubmitting || !message.trim()}
+          className="text-blue-500 hover:text-blue-600 disabled:text-gray-400 p-1"
+        >
+          <Send className="w-5 h-5 rotate-45" />
+        </button>
+      </div>
+    </div>
   );
 };
 

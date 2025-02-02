@@ -11,15 +11,6 @@ const MessageList = ({
 }) => {
   const messagesEndRef = useRef(null);
 
-  // Add debugging useEffect
-  useEffect(() => {
-    console.log('MessageList - Messages received:', messages.map(m => ({
-      id: m.id,
-      timestamp: m.timestamp,
-      uniqueKey: `${m.id}_${m.timestamp?.toMillis?.() || Date.now()}`
-    })));
-  }, [messages]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -38,8 +29,10 @@ const MessageList = ({
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-red-500">{error}</p>
+      <div className="flex items-center justify-center h-full text-red-500 p-4">
+        <div className="bg-red-50 p-4 rounded-lg">
+          {error}
+        </div>
       </div>
     );
   }
@@ -47,32 +40,57 @@ const MessageList = ({
   if (!messages.length) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-500">No messages yet</p>
+        <div className="text-center text-gray-500">
+          <div className="mb-2">👋</div>
+          <p>No messages yet</p>
+        </div>
       </div>
     );
   }
 
-  // Updated key generation function
-  const getUniqueMessageKey = (message) => {
-    if (!message.id) {
-      console.warn('Message missing ID:', message);
-      return Date.now() + Math.random();
+  const groupedMessages = messages.reduce((groups, message) => {
+    const date = message.timestamp?.toDate?.() || new Date(message.timestamp);
+    const dateStr = date.toLocaleDateString();
+    
+    if (!groups[dateStr]) {
+      groups[dateStr] = [];
     }
-    return message.id;  // Just use the message ID if it exists
-  };
+    groups[dateStr].push(message);
+    return groups;
+  }, {});
 
   return (
-    <div className={`flex flex-col space-y-4 p-4 overflow-y-auto ${className}`}>
-      {messages.map((message) => (
-        <MessageBubble
-          key={getUniqueMessageKey(message)}
-          message={message}
-          isCurrentUser={message.senderId === currentUserId}
-          onDelete={onDeleteMessage}
-          isBroadcast={message.type === 'course_broadcast'}
-        />
-      ))}
-      <div ref={messagesEndRef} />
+    <div className="flex flex-col h-full overflow-hidden bg-white">
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4">
+          {Object.entries(groupedMessages).map(([date, dateMessages]) => (
+            <div key={date} className="mb-6">
+              <div className="text-center mb-4">
+                <span className="text-sm text-gray-500">
+                  {new Date(date).toLocaleDateString(undefined, { 
+                    weekday: 'long', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </span>
+              </div>
+              
+              <div className="space-y-3">
+                {dateMessages.map((message) => (
+                  <MessageBubble
+                    key={message.id || Date.now() + Math.random()}
+                    message={message}
+                    isCurrentUser={message.senderId === currentUserId}
+                    onDelete={onDeleteMessage}
+                    isBroadcast={message.type === 'course_broadcast'}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          <div ref={messagesEndRef} className="h-4" />
+        </div>
+      </div>
     </div>
   );
 };

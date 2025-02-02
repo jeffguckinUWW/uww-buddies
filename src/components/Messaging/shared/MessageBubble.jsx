@@ -11,11 +11,9 @@ const MessageBubble = ({
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return '';
     
-    // Check if timestamp is a Firestore Timestamp
     if (timestamp.toDate) {
       timestamp = timestamp.toDate();
     }
-    // Make sure we have a valid Date object
     if (!(timestamp instanceof Date)) {
       return '';
     }
@@ -26,14 +24,29 @@ const MessageBubble = ({
     });
   };
 
+  const getInitials = (name) => {
+    return name
+      ?.split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '??';
+  };
+
   return (
-    <div className={`flex gap-2 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
-      <div className="max-w-[70%] group">
+    <div className={`flex items-start ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+      {!isCurrentUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-2">
+          <span className="text-sm font-medium text-gray-600">
+            {getInitials(message.senderName)}
+          </span>
+        </div>
+      )}
+      
+      <div className="group max-w-[70%]">
         {showSender && !isCurrentUser && (
-          <div className="ml-2 mb-1">
-            <span className="text-sm font-medium text-gray-700">
-              {message.senderName}
-            </span>
+          <div className="font-medium text-sm text-gray-600 mb-1 px-1">
+            {message.senderName}
             {isBroadcast && (
               <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
                 Broadcast
@@ -43,31 +56,28 @@ const MessageBubble = ({
         )}
         
         <div className={`
-          relative p-3 rounded-lg
+          relative p-3
           ${isCurrentUser 
-            ? 'bg-blue-500 text-white rounded-br-none' 
+            ? 'bg-blue-600 text-white rounded-2xl rounded-tr-lg' 
             : isBroadcast
-              ? 'bg-green-50 text-gray-800 rounded-bl-none'
-              : 'bg-gray-100 text-gray-800 rounded-bl-none'
+              ? 'bg-green-50 text-gray-800 rounded-2xl rounded-tl-lg'
+              : 'bg-gray-100 text-gray-800 rounded-2xl rounded-tl-lg'
           }`}
         >
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
-          <div className="flex items-center justify-end mt-1 space-x-2">
-            <span className="text-xs opacity-75">
-              {formatTimestamp(message.timestamp)}
-            </span>
+          <div className={`mt-1 text-xs ${
+            isCurrentUser ? 'text-blue-100' : 'text-gray-500'
+          }`}>
+            {formatTimestamp(message.timestamp)}
           </div>
 
           {isCurrentUser && onDelete && (
             <button
               onClick={() => onDelete(message.id)}
-              className="absolute -right-6 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute -left-8 top-2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
               aria-label="Delete message"
             >
-              <Trash2 
-                size={16} 
-                className="text-red-500 hover:text-red-600"
-              />
+              <Trash2 size={16} className="text-red-500 hover:text-red-600" />
             </button>
           )}
         </div>

@@ -1,4 +1,3 @@
-// src/services/MessageService.js
 import { db } from '../firebase/config';
 import { 
   collection, 
@@ -17,14 +16,12 @@ import {
 } from 'firebase/firestore';
 
 export const MessageTypes = {
-  DIRECT: 'direct',
-  GROUP: 'group',
-  COURSE: 'course',
-  COURSE_BROADCAST: 'course_broadcast'
+  CHAT: 'chat',
+  COURSE_DISCUSSION: 'course_discussion',
+  COURSE_PRIVATE: 'course_private'
 };
 
 class MessageService {
-  // Subscribe to messages for a specific context (course/chat)
   static subscribeToMessages(params, callback) {
     console.log('Subscribing to messages with params:', params);
     
@@ -49,20 +46,11 @@ class MessageService {
         const messages = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
-            id: doc.id,  // Ensure we have the document ID
+            id: doc.id,
             ...data,
             timestamp: data.timestamp?.toDate() || new Date()
           };
         });
-        
-        // Check for duplicate IDs
-        const ids = messages.map(m => m.id);
-        const uniqueIds = new Set(ids);
-        if (ids.length !== uniqueIds.size) {
-          console.warn('Duplicate message IDs detected:', 
-            ids.filter((id, index) => ids.indexOf(id) !== index)
-          );
-        }
         
         callback({ messages });
       },
@@ -71,12 +59,10 @@ class MessageService {
         callback({ error: 'Failed to load messages' });
       }
     );
-}
+  }
 
-  // Send a new message
   static async sendMessage(messageData) {
     try {
-      // Get sender's profile data
       const senderProfile = await getDoc(doc(db, 'profiles', messageData.senderId));
       const senderName = senderProfile.exists() ? 
         senderProfile.data().name || 'Unknown User' : 
@@ -89,22 +75,22 @@ class MessageService {
         senderName
       };
   
-      // Check if it's a course message or chat message
       if (messageData.courseId) {
-        // Course message - verify course exists and user has permission
         const courseDoc = await getDoc(doc(db, 'courses', messageData.courseId));
         if (!courseDoc.exists()) {
           throw new Error('Course not found');
         }
   
         const courseData = courseDoc.data();
-        const hasPermission = 
-          courseData.instructorId === messageData.senderId || 
-          courseData.students?.some(student => student.uid === messageData.senderId) ||
-          courseData.assistants?.some(assistant => assistant.uid === messageData.senderId);
+        const isCourseInstructor = courseData.instructorId === messageData.senderId;
+        const isCourseStudent = courseData.students?.some(s => s.uid === messageData.senderId);
   
-        if (!hasPermission) {
+        if (!isCourseInstructor && !isCourseStudent) {
           throw new Error('Not authorized to send messages in this course');
+        }
+
+        if (messageData.type === MessageTypes.COURSE_DISCUSSION && !isCourseInstructor) {
+          throw new Error('Only instructors can send course discussions');
         }
   
         const newMessage = {
@@ -114,47 +100,34 @@ class MessageService {
   
         const messageRef = await addDoc(collection(db, 'messages'), newMessage);
   
-        // Create notifications for course messages
         let recipients = [];
-          let notificationType = 'new_message';
-          let notificationMessage = messageData.text.substring(0, 50);
+        let notificationType = 'course_message';
 
-          if (messageData.type === MessageTypes.COURSE_BROADCAST) {
-            // For broadcasts, notify all course members
-            recipients = [
-              ...(courseData.students?.map(s => s.uid) || []),
-              ...(courseData.assistants?.map(a => a.uid) || [])
-            ].filter(id => id !== messageData.senderId);
-          } else if (messageData.recipientId) {
-            // For direct messages, notify only the recipient
-            recipients = [messageData.recipientId];
-            
-            // If this is a student responding to an announcement, make it clear in the notification
-            if (!messageData.type.includes('broadcast') && 
-                courseData.students?.some(s => s.uid === messageData.senderId)) {
-              notificationType = 'course_response';
-              notificationMessage = `Response to announcement: ${messageData.text.substring(0, 50)}`;
-            }
-          }
+        if (messageData.type === MessageTypes.COURSE_DISCUSSION) {
+          recipients = [
+            ...(courseData.students?.map(s => s.uid) || []),
+            ...(courseData.assistants?.map(a => a.uid) || [])
+          ].filter(id => id !== messageData.senderId);
+        } else if (messageData.recipientId) {
+          recipients = [messageData.recipientId];
+        }
 
-          await Promise.all(recipients.map(recipientId => 
-            addDoc(collection(db, 'notifications'), {
-              type: notificationType,
-              fromUser: messageData.senderId,
-              fromUserName: senderName,
-              toUser: recipientId,
-              courseId: messageData.courseId,
-              messageId: messageRef.id,
-              messagePreview: notificationMessage,
-              timestamp: serverTimestamp(),
-              read: false,
-              isAnnouncementResponse: notificationType === 'course_response'
-            })
-          ));
+        await Promise.all(recipients.map(recipientId => 
+          addDoc(collection(db, 'notifications'), {
+            type: notificationType,
+            fromUser: messageData.senderId,
+            fromUserName: senderName,
+            toUser: recipientId,
+            courseId: messageData.courseId,
+            messageId: messageRef.id,
+            messagePreview: messageData.text.substring(0, 50),
+            timestamp: serverTimestamp(),
+            read: false
+          })
+        ));
   
         return { id: messageRef.id, ...newMessage };
       } else {
-        // Regular chat message logic
         console.log('MessageService - Checking Chat:', messageData.chatId);
         const chatDoc = await getDoc(doc(db, 'chats', messageData.chatId));
         if (!chatDoc.exists()) {
@@ -206,7 +179,6 @@ class MessageService {
     }
   }
 
-  // Mark message as read
   static async markAsRead(messageId, userId) {
     try {
       const messageRef = doc(db, 'messages', messageId);
@@ -219,7 +191,6 @@ class MessageService {
     }
   }
 
-  // Delete message (soft delete)
   static async deleteMessage(messageId, userId) {
     try {
       const messageRef = doc(db, 'messages', messageId);
@@ -232,64 +203,57 @@ class MessageService {
     }
   }
 
-  // Delete chat for user
   static async deleteChat(chatId, userId) {
     try {
-        const chatDoc = await getDoc(doc(db, 'chats', chatId));
-        if (!chatDoc.exists()) {
-            throw new Error('Chat not found');
-        }
+      const chatDoc = await getDoc(doc(db, 'chats', chatId));
+      if (!chatDoc.exists()) {
+        throw new Error('Chat not found');
+      }
 
-        const chatData = chatDoc.data();
-        if (!chatData.activeParticipants.includes(userId)) {
-            throw new Error('Not authorized to access this chat');
-        }
+      const chatData = chatDoc.data();
+      if (!chatData.activeParticipants.includes(userId)) {
+        throw new Error('Not authorized to access this chat');
+      }
 
-        const batch = writeBatch(db);
-        const chatRef = doc(db, 'chats', chatId);
+      const batch = writeBatch(db);
+      const chatRef = doc(db, 'chats', chatId);
 
-        // Remove current user from activeParticipants
-        const updatedParticipants = chatData.activeParticipants.filter(id => id !== userId);
+      const updatedParticipants = chatData.activeParticipants.filter(id => id !== userId);
 
-        // If this was the last participant, delete the chat and its messages
-        if (updatedParticipants.length === 0) {
-            // Delete chat document
-            batch.delete(chatRef);
+      if (updatedParticipants.length === 0) {
+        batch.delete(chatRef);
 
-            // Delete all messages
-            const messagesQuery = query(
-                collection(db, 'messages'),
-                where('chatId', '==', chatId)
-            );
-            const messages = await getDocs(messagesQuery);
-            messages.forEach(message => {
-                batch.delete(doc(db, 'messages', message.id));
-            });
-        } else {
-            // Otherwise just update activeParticipants
-            batch.update(chatRef, {
-                activeParticipants: updatedParticipants
-            });
+        const messagesQuery = query(
+          collection(db, 'messages'),
+          where('chatId', '==', chatId)
+        );
+        const messages = await getDocs(messagesQuery);
+        messages.forEach(message => {
+          batch.delete(doc(db, 'messages', message.id));
+        });
+      } else {
+        batch.update(chatRef, {
+          activeParticipants: updatedParticipants
+        });
 
-            // Mark messages as deleted for this user
-            const messagesQuery = query(
-                collection(db, 'messages'),
-                where('chatId', '==', chatId)
-            );
-            const messages = await getDocs(messagesQuery);
-            messages.forEach(message => {
-                batch.update(doc(db, 'messages', message.id), {
-                    deletedFor: arrayUnion(userId)
-                });
-            });
-        }
+        const messagesQuery = query(
+          collection(db, 'messages'),
+          where('chatId', '==', chatId)
+        );
+        const messages = await getDocs(messagesQuery);
+        messages.forEach(message => {
+          batch.update(doc(db, 'messages', message.id), {
+            deletedFor: arrayUnion(userId)
+          });
+        });
+      }
 
-        await batch.commit();
+      await batch.commit();
     } catch (error) {
-        console.error('Error deleting chat:', error);
-        throw new Error('Failed to delete chat');
+      console.error('Error deleting chat:', error);
+      throw new Error('Failed to delete chat');
     }
-}
+  }
 }
 
 export default MessageService;
