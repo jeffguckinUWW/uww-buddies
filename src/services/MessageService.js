@@ -88,10 +88,6 @@ class MessageService {
         if (!isCourseInstructor && !isCourseStudent) {
           throw new Error('Not authorized to send messages in this course');
         }
-
-        if (messageData.type === MessageTypes.COURSE_DISCUSSION && !isCourseInstructor) {
-          throw new Error('Only instructors can send course discussions');
-        }
   
         const newMessage = {
           ...baseMessage,
@@ -128,6 +124,7 @@ class MessageService {
   
         return { id: messageRef.id, ...newMessage };
       } else {
+        // Handle chat messages (existing code remains the same)
         console.log('MessageService - Checking Chat:', messageData.chatId);
         const chatDoc = await getDoc(doc(db, 'chats', messageData.chatId));
         if (!chatDoc.exists()) {

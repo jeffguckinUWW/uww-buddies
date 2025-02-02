@@ -121,12 +121,12 @@ const CourseMessaging = ({ course, isOpen, onClose }) => {
                     error={error}
                   />
                 </div>
-                {isInstructor && (
+                <div className="flex-shrink-0">
                   <MessageInput
                     onSend={(text) => handleSendMessage(text, 'course_discussion')}
-                    placeholder="Post an announcement or start a discussion..."
+                    placeholder={isInstructor ? "Post an announcement or start a discussion..." : "Type a message..."}
                   />
-                )}
+                </div>
               </div>
             ) : (
               <div className="flex-1 flex overflow-hidden">
