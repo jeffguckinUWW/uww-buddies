@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, writeBatch, query, where, getDocs, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
 import CourseMessaging from '../Messaging/course/CourseMessaging';
 import StudentTrainingRecord from './StudentTrainingRecord';
 import { generateTrainingRecordPDF } from '../../services/ExportService';
@@ -322,14 +322,76 @@ const Training = () => {
 
   const CourseCard = ({ training, isExpanded, onToggle, details, isLoading, error }) => {
     const [activeTab, setActiveTab] = useState('details');
+    const [unreadCount, setUnreadCount] = useState(0);
     const { user } = useAuth();
+
+    const markNotificationsAsRead = useCallback(async () => {
+      if (!training.courseId || !user) return;
+
+      try {
+        // Query for unread notifications for this course
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('toUser', '==', user.uid),
+          where('courseId', '==', training.courseId),
+          where('type', '==', 'course_message'),
+          where('read', '==', false)
+        );
+
+        // Get all unread notifications
+        const snapshot = await getDocs(notificationsQuery);
+        
+        // Update each notification to mark as read
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { read: true });
+        });
+
+        await batch.commit();
+      } catch (err) {
+        console.error('Error marking notifications as read:', err);
+      }
+    }, [training.courseId, user]);
+
+    // Mark notifications as read when Messages tab is opened
+    useEffect(() => {
+      if (activeTab === 'messages') {
+        markNotificationsAsRead();
+      }
+    }, [activeTab, markNotificationsAsRead]);
+
+    // Listen for unread messages
+    useEffect(() => {
+      if (!training.courseId || !user) return;
+
+      const q = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', user.uid),
+        where('courseId', '==', training.courseId),
+        where('type', '==', 'course_message'),
+        where('read', '==', false)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        setUnreadCount(snapshot.size);
+      });
+
+      return () => unsubscribe();
+    }, [training.courseId, user]);
     
     return (
       <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
         {/* Course Header */}
         <div className="p-4">
           <div className="mb-2">
-            <h4 className="text-lg font-semibold">{training.courseName}</h4>
+            <div className="flex items-start gap-2">
+              <h4 className="text-lg font-semibold">{training.courseName}</h4>
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded-full">
+                  {unreadCount} new
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-600">
               {training.location} • {new Date(training.startDate).toLocaleDateString()} - {new Date(training.endDate).toLocaleDateString()}
             </p>
@@ -359,168 +421,156 @@ const Training = () => {
         </div>
 
         {/* Expandable Section */}
-{isExpanded && (
-  <div className="border-t bg-gray-50">
-    {isLoading ? (
-      <div className="p-4 text-center text-gray-600">Loading...</div>
-    ) : error ? (
-      <div className="p-4 text-center text-red-600">{error}</div>
-    ) : details ? (
-      <div>
-        {/* Tabs */}
-        <div className="border-b">
-          <nav className="flex">
-            <button
-              onClick={() => setActiveTab('details')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 ${
-                activeTab === 'details'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Details
-            </button>
-            {details?.trainingRecord && (
-              <button
-                onClick={() => setActiveTab('training')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 ${
-                  activeTab === 'training'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Training Record
-              </button>
-            )}
-            <button
-              onClick={() => setActiveTab('messages')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 ${
-                activeTab === 'messages'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Messages
-            </button>
-          </nav>
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === 'details' ? (
-          <div className="p-4 space-y-4">
-            {/* Instructor Info */}
-            <div>
-              <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
-              {details.instructor ? (
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    {details.instructor.photoURL ? (
-                      <img 
-                        src={details.instructor.photoURL} 
-                        alt={details.instructor.displayName}
-                        className="w-full h-full rounded-full"
-                      />
-                    ) : (
-                      <span className="text-gray-600">
-                        {details.instructor.displayName?.charAt(0)}
-                      </span>
+        {isExpanded && (
+          <div className="border-t bg-gray-50">
+            {isLoading ? (
+              <div className="p-4 text-center text-gray-600">Loading...</div>
+            ) : error ? (
+              <div className="p-4 text-center text-red-600">{error}</div>
+            ) : details ? (
+              <div>
+                {/* Tabs */}
+                <div className="border-b">
+                  <nav className="flex">
+                    <button
+                      onClick={() => setActiveTab('details')}
+                      className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                        activeTab === 'details'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Details
+                    </button>
+                    {details?.trainingRecord && (
+                      <button
+                        onClick={() => setActiveTab('training')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                          activeTab === 'training'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        Training Record
+                      </button>
                     )}
-                  </div>
-                  <div>
-                    <p className="font-medium">{details.instructor.displayName}</p>
-                    <p className="text-sm text-gray-600">{details.instructor.email}</p>
-                  </div>
+                    <div className="relative">
+                      <button
+                        onClick={() => setActiveTab('messages')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                          activeTab === 'messages'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        Messages
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  </nav>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-600">Instructor information not available</p>
-              )}
-            </div>
-          </div>
-        ) : activeTab === 'messages' ? (
-          <div className="p-4">
-            {details.instructorId === user.uid ? (
-              <CourseMessaging 
-                course={{
-                  id: training.courseId,
-                  name: training.courseName,
-                  instructor: {
-                    id: details.instructor?.uid,
-                    displayName: details.instructor?.displayName,
-                    email: details.instructor?.email
-                  },
-                  instructorId: details.instructorId,
-                  students: details.students,
-                  assistants: details.assistants
-                }}
-                isOpen={true}
-                onClose={() => setActiveTab('details')}
-              />
+
+                {/* Tab Content */}
+                {activeTab === 'details' ? (
+                  <div className="p-4 space-y-4">
+                    {/* Instructor Info */}
+                    <div>
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
+                      {details.instructor ? (
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                            {details.instructor.photoURL ? (
+                              <img 
+                                src={details.instructor.photoURL} 
+                                alt={details.instructor.displayName}
+                                className="w-full h-full rounded-full"
+                              />
+                            ) : (
+                              <span className="text-gray-600">
+                                {details.instructor.displayName?.charAt(0)}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium">{details.instructor.displayName}</p>
+                            <p className="text-sm text-gray-600">{details.instructor.email}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">Instructor information not available</p>
+                      )}
+                    </div>
+                  </div>
+                ) : activeTab === 'messages' ? (
+                  <div className="p-4">
+                    <CourseMessaging 
+                      course={{
+                        id: training.courseId,
+                        name: training.courseName,
+                        instructor: {
+                          id: details.instructor?.uid,
+                          displayName: details.instructor?.displayName,
+                          email: details.instructor?.email
+                        },
+                        instructorId: details.instructorId,
+                        students: details.students,
+                        assistants: details.assistants
+                      }}
+                      isOpen={true}
+                      onClose={() => setActiveTab('details')}
+                      defaultView={details.instructorId === user.uid ? undefined : "combined"}
+                    />
+                  </div>
+                ) : activeTab === 'training' && details?.trainingRecord && (
+                  <div className="p-4">
+                    <div className="flex justify-end mb-4">
+                      <button
+                        onClick={() => generateTrainingRecordPDF(
+                          details,
+                          { 
+                            uid: user.uid, 
+                            displayName: details.students?.find(s => s.uid === user.uid)?.displayName, 
+                            email: details.students?.find(s => s.uid === user.uid)?.email 
+                          },
+                          details.trainingRecord,
+                          details.studentRecords?.[user.uid]?.progress || {},
+                          details.studentRecords?.[user.uid]?.signOff,
+                          details.studentRecords?.[user.uid]?.notes,
+                          {
+                            name: details.instructor?.name || details.instructor?.displayName,
+                            displayName: details.instructor?.displayName,
+                            instructorCertifications: details.instructor?.instructorCertifications || []
+                          }
+                        )}
+                        variant="outline"
+                      >
+                        Export Record
+                      </button>
+                    </div>
+                    <StudentTrainingRecord
+                      isOpen={activeTab === 'training'}
+                      onClose={() => setActiveTab('details')}
+                      student={{ 
+                        uid: user.uid,
+                        displayName: details.students?.find(s => s.uid === user.uid)?.displayName,
+                        email: details.students?.find(s => s.uid === user.uid)?.email
+                      }}
+                      course={details}
+                      trainingRecord={details.trainingRecord}
+                      readOnly={true}
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
-              <CourseMessaging 
-                course={{
-                  id: training.courseId,
-                  name: training.courseName,
-                  instructor: {
-                    id: details.instructor?.uid,
-                    displayName: details.instructor?.displayName,
-                    email: details.instructor?.email
-                  },
-                  instructorId: details.instructorId,
-                  students: details.students,
-                  assistants: details.assistants
-                }}
-                isOpen={true}
-                onClose={() => setActiveTab('details')}
-                defaultView="combined"
-              />
+              <div className="p-4 text-center text-gray-600">No details available</div>
             )}
-          </div>
-        ) : activeTab === 'training' && details?.trainingRecord && (
-          <div className="p-4">
-            <div className="flex justify-end mb-4">
-  <button
-    onClick={() => generateTrainingRecordPDF(
-      details,
-      { 
-        uid: user.uid, 
-        displayName: details.students?.find(s => s.uid === user.uid)?.displayName, 
-        email: details.students?.find(s => s.uid === user.uid)?.email 
-      },
-      details.trainingRecord,
-      details.studentRecords?.[user.uid]?.progress || {},
-      details.studentRecords?.[user.uid]?.signOff,
-      details.studentRecords?.[user.uid]?.notes,
-      {
-        name: details.instructor?.name || details.instructor?.displayName,
-        displayName: details.instructor?.displayName,
-        instructorCertifications: details.instructor?.instructorCertifications || []
-      }
-    )}
-    variant="outline"
-  >
-    Export Record
-  </button>
-</div>
-            <StudentTrainingRecord
-              isOpen={activeTab === 'training'}
-              onClose={() => setActiveTab('details')}
-              student={{ 
-                uid: user.uid,
-                displayName: details.students?.find(s => s.uid === user.uid)?.displayName,
-                email: details.students?.find(s => s.uid === user.uid)?.email
-              }}
-              course={details}
-              trainingRecord={details.trainingRecord}
-              readOnly={true}
-            />
           </div>
         )}
-      </div>
-    ) : (
-      <div className="p-4 text-center text-gray-600">No details available</div>
-    )}
-  </div>
-)}
       </div>
     );
   };
