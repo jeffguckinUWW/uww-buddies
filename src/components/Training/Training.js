@@ -102,6 +102,15 @@ const Training = () => {
       
       if (courseSnap.exists()) {
         const data = courseSnap.data();
+        console.log('FULL COURSE DATA:', JSON.stringify(data, null, 2));
+
+        console.log('Access Check Details:', {
+          courseId,
+          userId: user.uid,
+          isUserInStudents: data.students?.map(s => s.uid),
+          studentCount: data.students?.length,
+          firstStudent: data.students?.[0],
+        });
         
         // Check if user is a student in the course
         const isStudent = data.students?.some(student => student.uid === user.uid);

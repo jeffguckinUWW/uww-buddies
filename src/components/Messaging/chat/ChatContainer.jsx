@@ -21,7 +21,7 @@ const ChatContainer = () => {
     subscribeToMessages, 
     sendMessage,
     deleteMessage,
-    deleteChat  // Fixed capitalization
+    deleteChat
   } = useMessages();
 
   // Handle navigation from notifications or buddy profiles
@@ -53,7 +53,7 @@ const ChatContainer = () => {
         senderId: user.uid,
         senderName: user.displayName || 'Unknown User',
         text: text.trim(),
-        type: MessageTypes.DIRECT,
+        type: MessageTypes.CHAT,  // Changed from MessageTypes.DIRECT to MessageTypes.CHAT
         readBy: [user.uid]
       };
 
@@ -77,7 +77,7 @@ const ChatContainer = () => {
   const handleDeleteChat = async () => {
     try {
       await deleteChat(selectedChat, user.uid);
-      setSelectedChat(null);  // Clear selection after successful deletion
+      setSelectedChat(null);
     } catch (err) {
       console.error('Error deleting chat:', err);
     }
@@ -85,7 +85,6 @@ const ChatContainer = () => {
 
   return (
     <div className="h-[calc(100vh-4rem)] flex bg-white rounded-lg shadow-md overflow-hidden">
-      {/* Left Sidebar - Chat List */}
       <div className="w-1/3 border-r flex flex-col bg-gray-50">
         <ChatSidebar
           selectedChatId={selectedChat}
@@ -94,13 +93,12 @@ const ChatContainer = () => {
         />
       </div>
 
-      {/* Right Side - Chat Window */}
       <div className="flex-1 flex flex-col bg-white">
         {selectedChat ? (
           <>
             <ChatHeader 
               chatId={selectedChat}
-              onDeleteChat={handleDeleteChat}  // Now using the proper handler
+              onDeleteChat={handleDeleteChat}
             />
             
             <MessageList
@@ -135,7 +133,6 @@ const ChatContainer = () => {
         )}
       </div>
 
-      {/* New Chat Modal */}
       {showNewChatModal && (
         <NewChatModal
           isOpen={showNewChatModal}
