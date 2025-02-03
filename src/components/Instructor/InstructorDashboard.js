@@ -828,11 +828,13 @@ const InstructorDashboard = () => {
                             className="p-2 hover:bg-gray-50 flex justify-between items-start border-b last:border-b-0"
                           >
                             <div>
-                              <div className="font-medium">{student.displayName}</div>
+                            <div className="font-medium">{student.displayName}</div>
                               <div className="text-sm text-gray-600 mt-1">
-                                {student.email}
+                                {student.email && (
+                                  <div>{student.email}{student.hideEmail && " (Hidden from other students)"}</div>
+                                )}
                                 {student.phone && (
-                                  <div className="text-gray-500">Phone: {student.phone}</div>
+                                  <div>Phone: {student.phone}{student.hidePhone && " (Hidden from other students)"}</div>
                                 )}
                               </div>
                               {selectedCourse.trainingRecord && (
