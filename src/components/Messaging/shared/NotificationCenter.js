@@ -158,8 +158,35 @@ const NotificationCenter = ({ onClose }) => {
         icon: getNotificationIcon(type),
         time: formatTimestamp(timestamp)
       };
-
+    
       switch (type) {
+        case 'course_enrollment':
+          return {
+            ...base,
+            title: 'Course Enrollment',
+            preview: `${fromUserName} has added you to ${courseName}`,
+            badge: 'Course',
+            badgeColor: 'bg-green-100 text-green-800'
+          };
+    
+        case 'course_removal':
+          return {
+            ...base,
+            title: 'Course Removal',
+            preview: `${fromUserName} has removed you from ${courseName}`,
+            badge: 'Course',
+            badgeColor: 'bg-red-100 text-red-800'
+          };
+    
+        case 'course_completed':
+          return {
+            ...base,
+            title: 'Course Completed',
+            preview: `${courseName} has been marked as completed`,
+            badge: 'Course',
+            badgeColor: 'bg-blue-100 text-blue-800'
+          };
+    
         case 'course_message':
           return {
             ...base,
@@ -177,7 +204,7 @@ const NotificationCenter = ({ onClose }) => {
             badge: 'Direct Message',
             badgeColor: 'bg-blue-100 text-blue-800'
           };
-
+    
         case 'course_response':
           return {
             ...base,
@@ -186,7 +213,7 @@ const NotificationCenter = ({ onClose }) => {
             badge: 'Course Response',
             badgeColor: 'bg-orange-100 text-orange-800'
           };
-
+    
         case 'buddy_request':
           return {
             ...base,
@@ -195,7 +222,7 @@ const NotificationCenter = ({ onClose }) => {
             badge: 'Buddy Request',
             badgeColor: 'bg-green-100 text-green-800'
           };
-
+    
         default:
           return {
             ...base,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
-import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import InstructorPinSetup from './InstructorPinSetup';
 import CourseMessaging from '/Users/jeffguckin/uww-buddies/src/components/Messaging/course/CourseMessaging.jsx';
 import TrainingRecordSelector from '../Training/TrainingRecordSelector';
@@ -210,6 +210,17 @@ const InstructorDashboard = () => {
   
           await updateDoc(profileRef, profileUpdate);
   
+          // Add notification for the new user
+          await addDoc(collection(db, 'notifications'), {
+            type: 'course_enrollment',
+            toUser: user.uid,
+            fromUser: instructorProfile.uid,
+            fromUserName: instructorProfile.name || 'Unknown Instructor',
+            courseName: selectedCourse.name,
+            timestamp: serverTimestamp(),
+            read: false
+          });
+  
         } catch (err) {
           console.error('Error updating training array:', err);
           throw err;
@@ -226,7 +237,7 @@ const InstructorDashboard = () => {
       try {
         const courseRef = doc(db, 'courses', selectedCourse.id);
         let updatedCourse;
-
+  
         if (role === 'assistant') {
           const updatedAssistants = selectedCourse.assistants.filter(
             assistant => assistant.uid !== userToRemove.uid
@@ -240,7 +251,7 @@ const InstructorDashboard = () => {
           updatedCourse = { ...selectedCourse, students: updatedStudents };
           await updateDoc(courseRef, { students: updatedStudents });
         }
-
+  
         setCourses(courses.map(course => 
           course.id === selectedCourse.id ? updatedCourse : course
         ));
@@ -256,6 +267,17 @@ const InstructorDashboard = () => {
           });
           
           await updateDoc(userRef, { training: updatedTraining });
+  
+          // Add notification for the removed user
+          await addDoc(collection(db, 'notifications'), {
+            type: 'course_removal',
+            toUser: userToRemove.uid,
+            fromUser: instructorProfile.uid,
+            fromUserName: instructorProfile.name || 'Unknown Instructor',
+            courseName: selectedCourse.name,
+            timestamp: serverTimestamp(),
+            read: false
+          });
         }
       } catch (err) {
         console.error(`Error removing ${role} from course:`, err);
@@ -263,6 +285,7 @@ const InstructorDashboard = () => {
       }
     }
   };
+
   const handleCreateCourse = async () => {
     try {
       const courseData = {
@@ -367,24 +390,100 @@ const InstructorDashboard = () => {
     setIsManageModalOpen(true);
   };
 
-  const handleCompleteCourse = async (courseId) => {
-    try {
-      const courseRef = doc(db, 'courses', courseId);
-      await updateDoc(courseRef, {
-        status: 'completed',
-        completedAt: new Date()
+  const handleCompleteCourse = async (courseId, setActive = false) => {
+  try {
+    const currentCourse = courses.find(c => c.id === courseId);
+    const completedAt = new Date();
+    
+    if (!setActive) {
+      const hasUnlockedRecords = currentCourse.students.some(student => {
+        const studentRecord = currentCourse.studentRecords?.[student.uid];
+        return !studentRecord?.signOff?.locked;
       });
 
-      setCourses(courses.map(course => 
-        course.id === courseId 
-          ? { ...course, status: 'completed', completedAt: new Date() }
-          : course
-      ));
-    } catch (err) {
-      console.error('Error completing course:', err);
-      setError('Failed to complete course');
+      if (hasUnlockedRecords) {
+        alert('All student training records must be locked before completing the course.');
+        return;
+      }
     }
-  };
+
+    // Update course status
+    const courseRef = doc(db, 'courses', courseId);
+    
+    // Update enrolled students' training arrays
+    const updatePromises = currentCourse.students.map(async (student) => {
+      const studentRef = doc(db, 'profiles', student.uid);
+      const studentSnap = await getDoc(studentRef);
+      
+      if (studentSnap.exists()) {
+        const studentData = studentSnap.data();
+        const updatedTraining = studentData.training.map(t => 
+          t.courseId === courseId 
+            ? { ...t, status: setActive ? 'active' : 'completed', completedAt: setActive ? null : completedAt } 
+            : t
+        );
+        
+        return updateDoc(studentRef, { training: updatedTraining });
+      }
+    });
+
+    // Update assistants' training arrays
+    if (currentCourse.assistants) {
+      const assistantPromises = currentCourse.assistants.map(async (assistant) => {
+        const assistantRef = doc(db, 'profiles', assistant.uid);
+        const assistantSnap = await getDoc(assistantRef);
+        
+        if (assistantSnap.exists()) {
+          const assistantData = assistantSnap.data();
+          const updatedTraining = assistantData.training.map(t => 
+            t.courseId === courseId 
+              ? { ...t, status: setActive ? 'active' : 'completed', completedAt: setActive ? null : completedAt } 
+              : t
+          );
+          
+          return updateDoc(assistantRef, { training: updatedTraining });
+        }
+      });
+      
+      updatePromises.push(...assistantPromises);
+    }
+
+    // Add notifications for all enrolled users
+    const notificationPromises = [...(currentCourse.students || []), ...(currentCourse.assistants || [])].map(user =>
+      addDoc(collection(db, 'notifications'), {
+        type: 'course_completed',
+        toUser: user.uid,
+        fromUser: instructorProfile.uid,
+        fromUserName: instructorProfile.name || 'Unknown Instructor',
+        courseName: currentCourse.name,
+        timestamp: serverTimestamp(),
+        read: false
+      })
+    );
+
+    await Promise.all([
+      updateDoc(courseRef, {
+        status: setActive ? 'active' : 'completed',
+        completedAt: setActive ? null : completedAt
+      }),
+      ...updatePromises,
+      ...notificationPromises
+    ]);
+
+    setCourses(courses.map(course => 
+      course.id === courseId 
+        ? { 
+            ...course, 
+            status: setActive ? 'active' : 'completed', 
+            completedAt: setActive ? null : completedAt 
+          } 
+        : course
+    ));
+  } catch (err) {
+    console.error('Error updating course status:', err);
+    setError('Failed to update course status');
+  }
+};
 
   if (loading) {
     return (
@@ -606,6 +705,16 @@ const InstructorDashboard = () => {
                           className="text-sm text-gray-600 hover:text-blue-600"
                         >
                           View Details
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to reactivate this course?')) {
+                              handleCompleteCourse(course.id, true);
+                            }
+                          }}
+                          className="text-sm text-green-600 hover:text-green-700"
+                        >
+                          Reactivate Course
                         </button>
                       </div>
                     </div>
