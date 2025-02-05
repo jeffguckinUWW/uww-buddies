@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc, addDoc, collection, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-
+import Badges from '../../components/Profile/Badges';
 export const BuddyProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -139,24 +139,33 @@ export const BuddyProfile = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         {/* Profile Header */}
         <div className="text-center">
-          {profile?.photoURL ? (
-            <img
-              src={profile.photoURL}
-              alt={profile.name}
-              className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
-            />
-          ) : (
-            <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
-              <span className="text-4xl text-blue-500">
-                {profile?.name ? profile.name[0].toUpperCase() : '?'}
-              </span>
-            </div>
-          )}
-          <h2 className="text-2xl font-bold text-gray-900">{profile?.name}</h2>
-          {profile?.certificationLevel && (
-            <p className="text-blue-600 mt-1">{profile.certificationLevel}</p>
-          )}
-        </div>
+  {profile?.photoURL ? (
+    <img
+      src={profile.photoURL}
+      alt={profile.name}
+      className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
+    />
+  ) : (
+    <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
+      <span className="text-4xl text-blue-500">
+        {profile?.name ? profile.name[0].toUpperCase() : '?'}
+      </span>
+    </div>
+  )}
+  <h2 className="text-2xl font-bold text-gray-900">{profile?.name}</h2>
+  {profile?.certificationLevel && (
+    <p className="text-blue-600 mt-1">{profile.certificationLevel}</p>
+  )}
+  <div className="mt-2">
+    <Badges
+      certificationLevel={profile?.certificationLevel}
+      specialties={profile?.specialties}
+      numberOfDives={profile?.numberOfDives}
+      size="large"
+      showSections={true}
+    />
+  </div>
+</div>
 
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center space-x-4">

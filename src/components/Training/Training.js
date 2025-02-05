@@ -5,7 +5,7 @@ import { doc, getDoc, addDoc, collection, updateDoc, serverTimestamp, writeBatch
 import CourseMessaging from '../Messaging/course/CourseMessaging';
 import StudentTrainingRecord from './StudentTrainingRecord';
 import { generateTrainingRecordPDF } from '../../services/ExportService';
-
+import Badges from '../../components/Profile/Badges';
 
 const Training = () => {
   const { user } = useAuth();
@@ -693,64 +693,71 @@ const Training = () => {
 
                   {/* Fellow Students */}
                   {details.students?.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Fellow Students</h5>
-                      <div className="border rounded max-h-60 overflow-y-auto">
-                        {details.students
-                          .filter(student => student.uid !== user.uid)
-                          .map(student => (
-                            <div 
-                              key={student.uid}
-                              className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                  {student.photoURL ? (
-                                    <img 
-                                      src={student.photoURL} 
-                                      alt={student.displayName}
-                                      className="w-full h-full rounded-full"
-                                    />
-                                  ) : (
-                                    <span className="text-gray-600">
-                                      {student.displayName?.charAt(0)}
-                                    </span>
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="font-medium">{student.displayName}</div>
-                                  {!student.hideEmail && student.email && (
-                                    <div className="text-sm text-gray-600">{student.email}</div>
-                                  )}
-                                  {!student.hidePhone && student.phone && (
-                                    <div className="text-sm text-gray-600">Phone: {student.phone}</div>
-                                  )}
-                                </div>
-                              </div>
-                              {buddyStatuses[student.uid]?.status === 'accepted' ? (
-                              <button
-                                onClick={() => setActiveTab('messages')}
-                                className="text-blue-600 hover:text-blue-700 text-sm"
-                              >
-                                Message Buddy
-                              </button>
-                            ) : buddyStatuses[student.uid]?.status === 'pending' ? (
-                              <span className="text-sm text-gray-500 italic">
-                                Buddy Request Pending
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => sendBuddyRequest(student)}
-                                className="text-blue-600 hover:text-blue-700 text-sm"
-                              >
-                                Add Buddy
-                              </button>
-                            )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
+  <div>
+    <h5 className="text-sm font-semibold text-gray-700 mb-2">Fellow Students</h5>
+    <div className="border rounded max-h-60 overflow-y-auto">
+      {details.students
+        .filter(student => student.uid !== user.uid)
+        .map(student => (
+          <div 
+            key={student.uid} 
+            className="p-2 hover:bg-gray-50 flex justify-between items-start border-b last:border-b-0"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                {student.photoURL ? (
+                  <img 
+                    src={student.photoURL} 
+                    alt={student.displayName}
+                    className="w-full h-full rounded-full"
+                  />
+                ) : (
+                  <span className="text-gray-600">
+                    {student.displayName?.charAt(0)}
+                  </span>
+                )}
+              </div>
+              <div>
+                <div className="font-medium">{student.displayName}</div>
+                <Badges
+                  certificationLevel={student.certificationLevel}
+                  specialties={student.specialties}
+                  numberOfDives={student.numberOfDives}
+                  size="small"
+                  showSections={false}
+                />
+                {!student.hideEmail && student.email && (
+                  <div className="text-sm text-gray-600">{student.email}</div>
+                )}
+                {!student.hidePhone && student.phone && (
+                  <div className="text-sm text-gray-600">Phone: {student.phone}</div>
+                )}
+              </div>
+            </div>
+            {buddyStatuses[student.uid]?.status === 'accepted' ? (
+              <button
+                onClick={() => setActiveTab('messages')}
+                className="text-blue-600 hover:text-blue-700 text-sm"
+              >
+                Message Buddy
+              </button>
+            ) : buddyStatuses[student.uid]?.status === 'pending' ? (
+              <span className="text-sm text-gray-500 italic">
+                Buddy Request Pending
+              </span>
+            ) : (
+              <button
+                onClick={() => sendBuddyRequest(student)}
+                className="text-blue-600 hover:text-blue-700 text-sm"
+              >
+                Add Buddy
+              </button>
+            )}
+          </div>
+        ))}
+    </div>
+  </div>
+)}
                   </div>
                 ) : activeTab === 'messages' ? (
                   <div className="p-4">

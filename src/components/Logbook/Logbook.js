@@ -5,7 +5,8 @@ import LogbookEntry from './LogbookEntry';
 import { 
   collection, 
   addDoc, 
-  getDocs, 
+  getDocs,
+  getDoc, 
   doc, 
   setDoc, 
   deleteDoc, 
@@ -105,6 +106,25 @@ const Logbook = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [isLoading, setIsLoading] = useState(initialLoadingState);
   const [error, setError] = useState('');
+  const updateProfileDiveCount = async (userId, diveCount) => {
+    try {
+      const profileRef = doc(db, 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      
+      if (profileSnap.exists()) {
+        const profileData = profileSnap.data();
+        if (profileData.numberOfDives !== diveCount) {
+          await setDoc(profileRef, {
+            ...profileData,
+            numberOfDives: diveCount,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error updating profile dive count:', error);
+    }
+  };
   const renderTypeOrEquipment = (items) => {
     if (!items) return 'Not specified';
     
@@ -377,12 +397,10 @@ const Logbook = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setIsLoading(prev => ({ ...prev, submission: true }));
-    
     try {
       validateFormData(formData);
-
+  
       const logData = {
         diveNumber: parseInt(formData.diveNumber),
         diveDate: Timestamp.fromDate(new Date(formData.diveDate)),
@@ -417,7 +435,7 @@ const Logbook = () => {
           certificationLevel: formData.signature.certificationLevel
         } : null
       };
-
+  
       if (editingLog) {
         await setDoc(
           doc(db, `profiles/${user.uid}/logbook/${editingLog.id}`), 
@@ -429,10 +447,18 @@ const Logbook = () => {
           logData
         );
       }
-
+  
       setEditingLog(null);
       resetForm();
       await fetchLogs();
+      
+      // Update profile dive count after adding/editing log
+      const highestDiveNumber = Math.max(
+        ...logs.map(log => log.diveNumber),
+        parseInt(formData.diveNumber)
+      );
+      await updateProfileDiveCount(user.uid, highestDiveNumber);
+      
       setActiveTab(TABS.LOGBOOK);
     } catch (error) {
       console.error('Error saving log:', error);
@@ -446,13 +472,20 @@ const Logbook = () => {
     if (!window.confirm('Are you sure you want to delete this log entry?')) {
       return;
     }
-
+  
     setIsLoading(prev => ({ ...prev, delete: true }));
     setError('');
-
+  
     try {
       await deleteDoc(doc(db, `profiles/${user.uid}/logbook/${logId}`));
       await fetchLogs();
+      
+      // Update profile dive count after deletion
+      const remainingLogs = logs.filter(log => log.id !== logId);
+      const highestDiveNumber = remainingLogs.length > 0 
+        ? Math.max(...remainingLogs.map(log => log.diveNumber))
+        : 0;
+      await updateProfileDiveCount(user.uid, highestDiveNumber);
     } catch (error) {
       console.error('Error deleting log:', error);
       setError('Failed to delete dive log. Please try again.');

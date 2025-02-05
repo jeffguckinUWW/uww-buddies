@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
+import Badges from '../../components/Profile/Badges';
 
 export const BuddyList = () => {
   const { user } = useAuth();
@@ -336,30 +337,37 @@ export const BuddyList = () => {
           <h3 className="text-lg font-semibold mb-2">Search Results</h3>
           {filteredUsers.map(user => (
             <div key={user.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-              <div>
-                <p className="font-medium">{user.name || 'Unnamed User'}</p>
-                {!user.hideEmail && user.email && (
-                  <p className="text-sm text-gray-600">{user.email}</p>
-                )}
-                {user.certificationLevel && (
-                  <p className="text-sm text-gray-600">
-                    Certification: {user.certificationLevel}
-                  </p>
-                )}
-                {user.numberOfDives > 0 && (
-                  <p className="text-sm text-gray-600">
-                    Dives: {user.numberOfDives}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={() => sendBuddyRequest(user.id)}
-                className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
-                disabled={loading}
-              >
-                Add Buddy
-              </button>
+            <div>
+              <p className="font-medium">{user.name || 'Unnamed User'}</p>
+              <Badges
+                certificationLevel={user.certificationLevel}
+                specialties={user.specialties}
+                numberOfDives={user.numberOfDives}
+                size="small"
+                showSections={false}
+              />
+              {!user.hideEmail && user.email && (
+                <p className="text-sm text-gray-600">{user.email}</p>
+              )}
+              {user.certificationLevel && (
+                <p className="text-sm text-gray-600">
+                  Certification: {user.certificationLevel}
+                </p>
+              )}
+              {user.numberOfDives > 0 && (
+                <p className="text-sm text-gray-600">
+                  Dives: {user.numberOfDives}
+                </p>
+              )}
             </div>
+            <button
+              onClick={() => sendBuddyRequest(user.id)}
+              className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
+              disabled={loading}
+            >
+              Add Buddy
+            </button>
+          </div>
           ))}
         </div>
       )}
@@ -378,6 +386,13 @@ export const BuddyList = () => {
             <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
               <div>
                 <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+                <Badges
+                  certificationLevel={buddy.certificationLevel}
+                  specialties={buddy.specialties}
+                  numberOfDives={buddy.numberOfDives}
+                  size="small"
+                  showSections={false}
+                />
                 {!buddy.hideEmail && buddy.email && (
                   <p className="text-sm text-gray-600">{buddy.email}</p>
                 )}
@@ -388,20 +403,20 @@ export const BuddyList = () => {
                 )}
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => handleBuddyRequest(buddy.id, true)}
-                  className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-                  disabled={loading}
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => handleBuddyRequest(buddy.id, false)}
-                  className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                  disabled={loading}
-                >
-                  Decline
-                </button>
+              <button
+                onClick={() => handleBuddyRequest(buddy.id, true)}
+                className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                disabled={loading}
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => handleBuddyRequest(buddy.id, false)}
+                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                disabled={loading}
+              >
+                Decline
+              </button>
               </div>
             </div>
           ))}
@@ -413,66 +428,68 @@ export const BuddyList = () => {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Pending Requests</h3>
           {pendingOutgoing.map(buddy => (
-            <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-              <div>
-                <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-                {!buddy.hideEmail && buddy.email && (
-                  <p className="text-sm text-gray-600">{buddy.email}</p>
-                )}
-                {buddy.certificationLevel && (
-                  <p className="text-gray-600">
-                    Certification: {buddy.certificationLevel}
-                  </p>
-                )}
-                {buddy.numberOfDives > 0 && (
-                  <p className="text-sm text-gray-600">
-                    Dives: {buddy.numberOfDives}
-                  </p>
-                )}
-              </div>
-              <div className="text-sm text-gray-500 italic">Awaiting Response</div>
+          <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+            <div>
+              <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+              <Badges
+                certificationLevel={buddy.certificationLevel}
+                specialties={buddy.specialties}
+                numberOfDives={buddy.numberOfDives}
+                size="small"
+                showSections={false}
+              />
+              {/* Rest of your existing buddy info */}
             </div>
-          ))}
+            <div className="text-sm text-gray-500 italic">Awaiting Response</div>
+          </div>
+        ))} 
         </div>
       )}
 
       {/* Accepted Buddies Section */}
       <div>
-        <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
-        {loading && buddies.length === 0 ? (
-          <p className="text-gray-500">Loading buddies...</p>
-        ) : buddies.length === 0 ? (
-          <p className="text-gray-500">No buddies yet</p>
-        ) : (
-          buddies.map(buddy => (
-            <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-              <div>
-                <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-                {!buddy.hideEmail && buddy.email && (
-                  <p className="text-sm text-gray-600">{buddy.email}</p>
-                )}
-                {buddy.certificationLevel && (
-                  <p className="text-sm text-gray-600">
-                    Certification: {buddy.certificationLevel}
-                  </p>
-                )}
-                {buddy.numberOfDives > 0 && (
-                  <p className="text-sm text-gray-600">
-                    Dives: {buddy.numberOfDives}
-                  </p>
-                )}
+          <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
+          {loading && buddies.length === 0 ? (
+            <p className="text-gray-500">Loading buddies...</p>
+          ) : buddies.length === 0 ? (
+            <p className="text-gray-500">No buddies yet</p>
+          ) : (
+            buddies.map(buddy => (
+              <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+                <div>
+                  <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+                  <Badges
+                    certificationLevel={buddy.certificationLevel}
+                    specialties={buddy.specialties}
+                    numberOfDives={buddy.numberOfDives}
+                    size="small"
+                    showSections={false}
+                  />
+                  {!buddy.hideEmail && buddy.email && (
+                    <p className="text-sm text-gray-600">{buddy.email}</p>
+                  )}
+                  {buddy.certificationLevel && (
+                    <p className="text-sm text-gray-600">
+                      Certification: {buddy.certificationLevel}
+                    </p>
+                  )}
+                  {buddy.numberOfDives > 0 && (
+                    <p className="text-sm text-gray-600">
+                      Dives: {buddy.numberOfDives}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => startChat(buddy.id)}
+                  className="px-3 py-1 bg-blue-500 text-white rounded disabled:bg-blue-300 hover:bg-blue-600"
+                  disabled={loading}
+                >
+                  Message
+                </button>
               </div>
-              <button
-                onClick={() => startChat(buddy.id)}
-                className="px-3 py-1 bg-blue-500 text-white rounded disabled:bg-blue-300 hover:bg-blue-600"
-                disabled={loading}
-              >
-                Message
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
     </div>
   );
 };

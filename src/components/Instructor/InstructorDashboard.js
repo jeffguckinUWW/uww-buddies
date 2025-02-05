@@ -6,6 +6,7 @@ import InstructorPinSetup from './InstructorPinSetup';
 import CourseMessaging from '/Users/jeffguckin/uww-buddies/src/components/Messaging/course/CourseMessaging.jsx';
 import TrainingRecordSelector from '../Training/TrainingRecordSelector';
 import StudentTrainingRecord from '../Training/StudentTrainingRecord';
+import CourseEndReport from './CourseEndReport';
 
 
 const InstructorDashboard = () => {
@@ -33,6 +34,8 @@ const InstructorDashboard = () => {
     course: null,
     recipient: null
   });
+  const [showCourseEndReport, setShowCourseEndReport] = useState(false);
+  const [courseToComplete, setCourseToComplete] = useState(null);
   const [isTrainingRecordSelectorOpen, setIsTrainingRecordSelectorOpen] = useState(false);
   const [selectedTrainingRecord, setSelectedTrainingRecord] = useState(null);
   const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
@@ -391,99 +394,176 @@ const InstructorDashboard = () => {
   };
 
   const handleCompleteCourse = async (courseId, setActive = false) => {
-  try {
-    const currentCourse = courses.find(c => c.id === courseId);
-    const completedAt = new Date();
-    
-    if (!setActive) {
-      const hasUnlockedRecords = currentCourse.students.some(student => {
-        const studentRecord = currentCourse.studentRecords?.[student.uid];
-        return !studentRecord?.signOff?.locked;
-      });
+    try {
+      const currentCourse = courses.find(c => c.id === courseId);
+      
+      if (!setActive) {
+        const hasUnlockedRecords = currentCourse.students.some(student => {
+          const studentRecord = currentCourse.studentRecords?.[student.uid];
+          return !studentRecord?.signOff?.locked;
+        });
 
-      if (hasUnlockedRecords) {
-        alert('All student training records must be locked before completing the course.');
+        if (hasUnlockedRecords) {
+          alert('All student training records must be locked before completing the course.');
+          return;
+        }
+
+        // Show the Course End Report instead of completing immediately
+        setCourseToComplete(currentCourse);
+        setShowCourseEndReport(true);
         return;
       }
-    }
 
-    // Update course status
-    const courseRef = doc(db, 'courses', courseId);
-    
-    // Update enrolled students' training arrays
-    const updatePromises = currentCourse.students.map(async (student) => {
-      const studentRef = doc(db, 'profiles', student.uid);
-      const studentSnap = await getDoc(studentRef);
+      const completedAt = new Date();
       
-      if (studentSnap.exists()) {
-        const studentData = studentSnap.data();
-        const updatedTraining = studentData.training.map(t => 
-          t.courseId === courseId 
-            ? { ...t, status: setActive ? 'active' : 'completed', completedAt: setActive ? null : completedAt } 
-            : t
-        );
+      // Update course status
+      const courseRef = doc(db, 'courses', courseId);
+      
+      // Update enrolled students' training arrays
+      const updatePromises = currentCourse.students.map(async (student) => {
+        const studentRef = doc(db, 'profiles', student.uid);
+        const studentSnap = await getDoc(studentRef);
         
-        return updateDoc(studentRef, { training: updatedTraining });
-      }
-    });
-
-    // Update assistants' training arrays
-    if (currentCourse.assistants) {
-      const assistantPromises = currentCourse.assistants.map(async (assistant) => {
-        const assistantRef = doc(db, 'profiles', assistant.uid);
-        const assistantSnap = await getDoc(assistantRef);
-        
-        if (assistantSnap.exists()) {
-          const assistantData = assistantSnap.data();
-          const updatedTraining = assistantData.training.map(t => 
+        if (studentSnap.exists()) {
+          const studentData = studentSnap.data();
+          const updatedTraining = studentData.training.map(t => 
             t.courseId === courseId 
               ? { ...t, status: setActive ? 'active' : 'completed', completedAt: setActive ? null : completedAt } 
               : t
           );
           
-          return updateDoc(assistantRef, { training: updatedTraining });
+          return updateDoc(studentRef, { training: updatedTraining });
         }
       });
-      
-      updatePromises.push(...assistantPromises);
+
+      // Update assistants' training arrays
+      if (currentCourse.assistants) {
+        const assistantPromises = currentCourse.assistants.map(async (assistant) => {
+          const assistantRef = doc(db, 'profiles', assistant.uid);
+          const assistantSnap = await getDoc(assistantRef);
+          
+          if (assistantSnap.exists()) {
+            const assistantData = assistantSnap.data();
+            const updatedTraining = assistantData.training.map(t => 
+              t.courseId === courseId 
+                ? { ...t, status: setActive ? 'active' : 'completed', completedAt: setActive ? null : completedAt } 
+                : t
+            );
+            
+            return updateDoc(assistantRef, { training: updatedTraining });
+          }
+        });
+        
+        updatePromises.push(...assistantPromises);
+      }
+
+      // Add notifications for all enrolled users
+      const notificationPromises = [...(currentCourse.students || []), ...(currentCourse.assistants || [])].map(user =>
+        addDoc(collection(db, 'notifications'), {
+          type: 'course_completed',
+          toUser: user.uid,
+          fromUser: instructorProfile.uid,
+          fromUserName: instructorProfile.name || 'Unknown Instructor',
+          courseName: currentCourse.name,
+          timestamp: serverTimestamp(),
+          read: false
+        })
+      );
+
+      await Promise.all([
+        updateDoc(courseRef, {
+          status: setActive ? 'active' : 'completed',
+          completedAt: setActive ? null : completedAt
+        }),
+        ...updatePromises,
+        ...notificationPromises
+      ]);
+
+      setCourses(courses.map(course => 
+        course.id === courseId 
+          ? { 
+              ...course, 
+              status: setActive ? 'active' : 'completed', 
+              completedAt: setActive ? null : completedAt 
+            } 
+          : course
+      ));
+    } catch (err) {
+      console.error('Error updating course status:', err);
+      setError('Failed to update course status');
     }
+  };
 
-    // Add notifications for all enrolled users
-    const notificationPromises = [...(currentCourse.students || []), ...(currentCourse.assistants || [])].map(user =>
-      addDoc(collection(db, 'notifications'), {
-        type: 'course_completed',
-        toUser: user.uid,
-        fromUser: instructorProfile.uid,
-        fromUserName: instructorProfile.name || 'Unknown Instructor',
-        courseName: currentCourse.name,
-        timestamp: serverTimestamp(),
-        read: false
-      })
-    );
+  const handleCourseEndReportSubmit = async (reportData) => {
+    try {
+      const courseId = courseToComplete.id;
+      const completedAt = new Date();
 
-    await Promise.all([
-      updateDoc(courseRef, {
-        status: setActive ? 'active' : 'completed',
-        completedAt: setActive ? null : completedAt
-      }),
-      ...updatePromises,
-      ...notificationPromises
-    ]);
+      const courseRef = doc(db, 'courses', courseId);
+      
+      // Update enrolled students' training arrays
+      const updatePromises = courseToComplete.students.map(async (student) => {
+        const studentRef = doc(db, 'profiles', student.uid);
+        const studentSnap = await getDoc(studentRef);
+        
+        if (studentSnap.exists()) {
+          const studentData = studentSnap.data();
+          const updatedTraining = studentData.training.map(t => 
+            t.courseId === courseId 
+              ? { ...t, status: 'completed', completedAt: completedAt } 
+              : t
+          );
+          return updateDoc(studentRef, { training: updatedTraining });
+        }
+      });
 
-    setCourses(courses.map(course => 
-      course.id === courseId 
-        ? { 
-            ...course, 
-            status: setActive ? 'active' : 'completed', 
-            completedAt: setActive ? null : completedAt 
-          } 
-        : course
-    ));
-  } catch (err) {
-    console.error('Error updating course status:', err);
-    setError('Failed to update course status');
-  }
-};
+      // Update assistants' training arrays
+      if (courseToComplete.assistants) {
+        const assistantPromises = courseToComplete.assistants.map(async (assistant) => {
+          const assistantRef = doc(db, 'profiles', assistant.uid);
+          const assistantSnap = await getDoc(assistantRef);
+          
+          if (assistantSnap.exists()) {
+            const assistantData = assistantSnap.data();
+            const updatedTraining = assistantData.training.map(t => 
+              t.courseId === courseId 
+                ? { ...t, status: 'completed', completedAt: completedAt } 
+                : t
+            );
+            return updateDoc(assistantRef, { training: updatedTraining });
+          }
+        });
+        updatePromises.push(...assistantPromises);
+      }
+
+      // Add the course end report data
+      await updateDoc(courseRef, {
+        status: 'completed',
+        completedAt: completedAt,
+        courseEndReport: reportData
+      });
+
+      setCourses(courses.map(course => 
+        course.id === courseId 
+          ? { 
+              ...course, 
+              status: 'completed', 
+              completedAt: completedAt,
+              courseEndReport: reportData
+            } 
+          : course
+      ));
+
+      setShowCourseEndReport(false);
+      setCourseToComplete(null);
+      setIsManageModalOpen(false);
+      setSelectedCourse(null);
+
+    } catch (err) {
+      console.error('Error completing course:', err);
+      setError('Failed to complete course');
+    }
+  };
 
   if (loading) {
     return (
@@ -1083,6 +1163,21 @@ const InstructorDashboard = () => {
               }}
             />
           )}
+          {/* Course End Report Modal */}
+        {showCourseEndReport && courseToComplete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+              <CourseEndReport 
+                course={courseToComplete}
+                onSubmit={handleCourseEndReportSubmit}
+                onCancel={() => {
+                  setShowCourseEndReport(false);
+                  setCourseToComplete(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
