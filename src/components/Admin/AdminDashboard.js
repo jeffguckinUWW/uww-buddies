@@ -13,6 +13,32 @@ const AdminDashboard = () => {
   const [showReportsModal, setShowReportsModal] = useState(false);
   const { user } = useAuth();
 
+  const calculateStudentProgress = (student, course) => {
+    if (!student || !course || !course?.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
+      return 0;
+    }
+  
+    const progress = course.studentRecords[student.uid].progress;
+    let totalSkills = 0;
+    let completedSkills = 0;
+  
+    course.trainingRecord.sections.forEach(section => {
+      if (section.subsections) {
+        // Handle sections with subsections
+        section.subsections.forEach(subsection => {
+          totalSkills += subsection.skills.length;
+          completedSkills += Object.keys(progress[subsection.title] || {}).length;
+        });
+      } else {
+        // Handle regular sections
+        totalSkills += section.skills.length;
+        completedSkills += Object.keys(progress[section.title] || {}).length;
+      }
+    });
+  
+    return totalSkills > 0 ? Math.round((completedSkills / totalSkills) * 100) : 0;
+  };
+
   // Fetch all users and their course end reports
   useEffect(() => {
     const fetchUsers = async () => {
@@ -255,92 +281,91 @@ const AdminDashboard = () => {
 
       {/* Course End Reports Modal */}
 <Dialog open={showReportsModal} onOpenChange={setShowReportsModal}>
-  <DialogContent className="max-w-3xl">
-    <DialogHeader>
-      <DialogTitle>
+  <DialogContent className="max-w-3xl bg-white p-0 rounded-lg">
+    <div className="border-b p-4 bg-white rounded-t-lg">
+      <DialogTitle className="text-xl font-semibold">
         Course End Reports - {selectedInstructor?.name}
       </DialogTitle>
-    </DialogHeader>
-    <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+    </div>
+    <div className="p-6 bg-white space-y-4 max-h-[60vh] overflow-y-auto">
       {selectedInstructor?.courseEndReports.map((course) => (
         <div 
           key={course.courseId}
-          className="border rounded-lg p-4 bg-white"
+          className="border rounded-lg p-6 shadow-sm"
         >
-          <div className="space-y-3">
-            {/* Course Info */}
-            <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start">
+            <div className="space-y-4 w-full">
               <div>
-                <h4 className="font-medium text-lg">{course.name}</h4>
-                <div className="text-sm text-gray-600 space-y-1">
+                <h4 className="text-2xl font-semibold mb-2">{course.name}</h4>
+                <div className="grid gap-2 text-gray-600">
                   <p>Location: {course.location}</p>
                   <p>Start Date: {new Date(course.startDate).toLocaleDateString()}</p>
                   <p>End Date: {new Date(course.endDate).toLocaleDateString()}</p>
-                  <p>Completed: {course.completedAt ? new Date(course.completedAt).toLocaleDateString() : 'Date not available'}</p>
+                  <p>Completed: {course.completedAt ? 
+                    new Date(course.completedAt.seconds * 1000).toLocaleDateString() : 
+                    'Not completed'}</p>
                 </div>
               </div>
-              {!course.courseEndReport?.finalized ? (
-                <Button
-                  onClick={() => handleFinalizeReport(course.courseId, selectedInstructor.id)}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  Mark as Paid & Finalize
-                </Button>
-              ) : (
-                <div className="text-sm text-gray-600">
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                    Finalized
-                  </span>
-                  <p className="mt-1">
-                    {course.courseEndReport.finalizedAt?.toDate().toLocaleDateString()}
-                  </p>
-                  <p>By: {course.courseEndReport.finalizedBy}</p>
+
+              <div>
+                <h5 className="font-semibold mb-2">Students:</h5>
+                <div className="space-y-2 bg-gray-50 p-4 rounded-md">
+                  {course.students?.map((student, index) => (
+                    <div key={index} className="flex justify-between">
+                      <span>{student.displayName}</span>
+                      <span>
+                        {calculateStudentProgress(student, course)}% Complete
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {course.courseEndReport?.creditAllocations?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2">Credit Allocations:</h5>
+                  <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                    {course.courseEndReport.creditAllocations.map((allocation, index) => (
+                      <div key={index} className="flex justify-between">
+                        <span>{allocation.name}</span>
+                        <span>{allocation.percentage}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {course.courseEndReport?.additionalNotes && (
+                <div>
+                  <h5 className="font-semibold mb-2">Additional Notes:</h5>
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    {course.courseEndReport.additionalNotes}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Students Section */}
-            <div className="mt-4">
-              <h5 className="font-medium text-sm mb-2">Students:</h5>
-              <div className="space-y-1">
-                {course.students?.map((student, index) => (
-                  <div key={index} className="text-sm flex justify-between">
-                    <span>{student.displayName}</span>
-                    <span className="text-gray-600">
-                      {course.studentRecords?.[student.uid]?.signOff?.locked 
-                        ? "Complete" 
-                        : "Incomplete"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Credit Allocations */}
-            {course.courseEndReport?.creditAllocations?.length > 0 && (
-              <div className="mt-4">
-                <h5 className="font-medium text-sm mb-2">Credit Allocations:</h5>
-                <div className="bg-gray-50 p-3 rounded-md space-y-1">
-                  {course.courseEndReport.creditAllocations.map((allocation, index) => (
-                    <p key={index} className="text-sm">
-                      <span className="font-medium">{allocation.name}:</span> {allocation.percentage}%
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Additional Notes */}
-            {course.courseEndReport?.additionalNotes && (
-              <div className="mt-4">
-                <h5 className="font-medium text-sm mb-2">Additional Notes:</h5>
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <p className="text-sm text-gray-600">
-                    {course.courseEndReport.additionalNotes}
+            <div className="ml-4">
+              {!course.courseEndReport?.finalized ? (
+                <Button
+                  onClick={() => handleFinalizeReport(course.courseId, selectedInstructor.id)}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
+                >
+                  Mark as Paid & Finalize
+                </Button>
+              ) : (
+                <div className="text-sm">
+                  <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full">
+                    Finalized
+                  </span>
+                  <p className="mt-2 text-gray-600">
+                    {course.courseEndReport.finalizedAt?.toDate().toLocaleDateString()}
+                    <br />
+                    By: {course.courseEndReport.finalizedBy}
                   </p>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       ))}
