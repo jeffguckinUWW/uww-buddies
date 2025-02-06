@@ -5,7 +5,8 @@ import { doc, getDoc, addDoc, collection, updateDoc, serverTimestamp } from 'fir
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import Badges from '../../components/Profile/Badges';
-export const BuddyProfile = () => {
+
+const BuddyProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -139,33 +140,33 @@ export const BuddyProfile = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         {/* Profile Header */}
         <div className="text-center">
-  {profile?.photoURL ? (
-    <img
-      src={profile.photoURL}
-      alt={profile.name}
-      className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
-    />
-  ) : (
-    <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
-      <span className="text-4xl text-blue-500">
-        {profile?.name ? profile.name[0].toUpperCase() : '?'}
-      </span>
-    </div>
-  )}
-  <h2 className="text-2xl font-bold text-gray-900">{profile?.name}</h2>
-  {profile?.certificationLevel && (
-    <p className="text-blue-600 mt-1">{profile.certificationLevel}</p>
-  )}
-  <div className="mt-2">
-    <Badges
-      certificationLevel={profile?.certificationLevel}
-      specialties={profile?.specialties}
-      numberOfDives={profile?.numberOfDives}
-      size="large"
-      showSections={true}
-    />
-  </div>
-</div>
+          {profile?.photoURL ? (
+            <img
+              src={profile.photoURL}
+              alt={profile.name}
+              className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
+            />
+          ) : (
+            <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
+              <span className="text-4xl text-blue-500">
+                {profile?.name ? profile.name[0].toUpperCase() : '?'}
+              </span>
+            </div>
+          )}
+          <h2 className="text-2xl font-bold text-gray-900">{profile?.name}</h2>
+          {profile?.certificationLevel && (
+            <p className="text-blue-600 mt-1">{profile.certificationLevel}</p>
+          )}
+          <div className="mt-2">
+            <Badges
+              certificationLevel={profile?.certificationLevel}
+              specialties={profile?.specialties}
+              numberOfDives={profile?.numberOfDives}
+              size="large"
+              showSections={true}
+            />
+          </div>
+        </div>
 
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center space-x-4">
@@ -197,22 +198,54 @@ export const BuddyProfile = () => {
             This profile is private
           </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-6">
             {/* Contact Information */}
-            {!profile?.hideEmail && profile?.email && (
-              <p className="text-gray-600">
-                <span className="font-medium">Email:</span> {profile.email}
-              </p>
+            <div className="space-y-2">
+              {!profile?.hideEmail && profile?.email && (
+                <p className="text-gray-600">
+                  <span className="font-medium">Email:</span> {profile.email}
+                </p>
+              )}
+              {!profile?.hidePhone && profile?.phone && (
+                <p className="text-gray-600">
+                  <span className="font-medium">Phone:</span> {profile.phone}
+                </p>
+              )}
+              {!profile?.hideLocation && (profile?.city || profile?.state) && (
+                <p className="text-gray-600">
+                  <span className="font-medium">Location:</span> {[profile.city, profile.state].filter(Boolean).join(', ')}
+                </p>
+              )}
+            </div>
+
+            {/* Diving Stats */}
+            {!profile?.hideStats && profile?.divingStats && (
+              <div>
+                <h3 className="font-medium text-gray-900 mb-3">Diving Statistics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{profile.divingStats.totalDives || 0}</div>
+                    <div className="text-sm text-gray-600">Total Dives</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{profile.divingStats.maxDepth || 0}ft</div>
+                    <div className="text-sm text-gray-600">Max Depth</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{profile.divingStats.totalTime || 0}h</div>
+                    <div className="text-sm text-gray-600">Bottom Time</div>
+                  </div>
+                </div>
+              </div>
             )}
-            {!profile?.hidePhone && profile?.phone && (
-              <p className="text-gray-600">
-                <span className="font-medium">Phone:</span> {profile.phone}
-              </p>
+
+            {/* Bio */}
+            {profile?.bio && (
+              <div>
+                <h3 className="font-medium text-gray-900 mb-2">About Me</h3>
+                <p className="text-gray-600">{profile.bio}</p>
+              </div>
             )}
-            
-            <p className="text-gray-600">
-              <span className="font-medium">Total Dives:</span> {profile?.numberOfDives || 0}
-            </p>
 
             {/* Instructor Certifications */}
             {profile?.certificationLevel === "Instructor" && profile?.instructorCertifications?.length > 0 && (
@@ -244,6 +277,56 @@ export const BuddyProfile = () => {
                 </div>
               </div>
             )}
+
+            {/* Dive Trips */}
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Dive Trips</h3>
+              <div className="space-y-2 text-gray-600">
+                {profile?.favoritePlace && (
+                  <p>
+                    <span className="font-medium">Favorite Place:</span> {profile.favoritePlace}
+                    {profile.favoriteDivesite && ` - ${profile.favoriteDivesite}`}
+                  </p>
+                )}
+                {profile?.diveTrips?.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-gray-700 mb-1">Trip History:</p>
+                    <div className="space-y-1">
+                      {profile.diveTrips
+                        .sort((a, b) => b.year - a.year)
+                        .map((trip, index) => (
+                          <p key={index} className="text-sm">
+                            {trip.year}: {trip.location}
+                          </p>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Social Links */}
+            {!profile?.privacySettings?.hideSocial && profile?.socialLinks && 
+             Object.values(profile.socialLinks).some(Boolean) && (
+              <div>
+                <h3 className="font-medium text-gray-900 mb-2">Connect</h3>
+                <div className="flex space-x-4">
+                  {Object.entries(profile.socialLinks).map(([platform, url]) => (
+                    url && (
+                      <a
+                        key={platform}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                      </a>
+                    )
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -260,3 +343,5 @@ export const BuddyProfile = () => {
     </div>
   );
 };
+
+export { BuddyProfile };

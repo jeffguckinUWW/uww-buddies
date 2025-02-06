@@ -150,7 +150,6 @@ export const BuddyList = () => {
       setLoading(false);
     }
   };
-
   const handleBuddyRequest = async (buddyId, accept) => {
     if (!user) return;
     
@@ -240,7 +239,7 @@ export const BuddyList = () => {
         }
       });
 
-      // Create notification with profile info
+      // Create notification
       const notificationRef = collection(db, 'notifications');
       batch.set(doc(notificationRef), {
         type: 'buddy_request',
@@ -261,7 +260,7 @@ export const BuddyList = () => {
       await batch.commit();
       setFilteredUsers(users => users.filter(u => u.id !== buddyId));
       
-      // Refresh buddy lists to show the new pending request
+      // Refresh buddy lists
       fetchBuddies(user.uid);
     } catch (err) {
       console.error('Error sending buddy request:', err);
@@ -303,13 +302,51 @@ export const BuddyList = () => {
       setLoading(false);
     }
   };
+  // Helper function to render a buddy card with consistent layout
+  const renderBuddyCard = (buddy, buttons) => (
+    <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+      <div 
+        className="flex-grow cursor-pointer"
+        onClick={() => navigate(`/buddy/${buddy.id}`)}
+      >
+        <p className="font-medium">{buddy.name || 'Unknown User'}</p>
+        <Badges
+          certificationLevel={buddy.certificationLevel}
+          specialties={buddy.specialties}
+          numberOfDives={buddy.numberOfDives}
+          size="small"
+          showSections={false}
+        />
+        {!buddy.hideEmail && buddy.email && (
+          <p className="text-sm text-gray-600">{buddy.email}</p>
+        )}
+        {buddy.certificationLevel && (
+          <p className="text-sm text-gray-600">
+            Certification: {buddy.certificationLevel}
+          </p>
+        )}
+        {buddy.numberOfDives > 0 && (
+          <p className="text-sm text-gray-600">
+            Dives: {buddy.numberOfDives}
+          </p>
+        )}
+      </div>
+      <div className="flex gap-2">
+              <button
+          onClick={() => navigate(`/buddy/${buddy.id}`)}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          View Profile
+        </button>
+        {buttons}
+      </div>
+    </div>
+  );
 
   return (
     <div className="p-4">
       {error && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">
-          {error}
-        </div>
+        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">{error}</div>
       )}
 
       <div className="mb-4">
@@ -328,38 +365,15 @@ export const BuddyList = () => {
 
       {loading && (
         <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
         </div>
       )}
 
+      {/* Search Results */}
       {!loading && filteredUsers.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Search Results</h3>
-          {filteredUsers.map(user => (
-            <div key={user.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-            <div>
-              <p className="font-medium">{user.name || 'Unnamed User'}</p>
-              <Badges
-                certificationLevel={user.certificationLevel}
-                specialties={user.specialties}
-                numberOfDives={user.numberOfDives}
-                size="small"
-                showSections={false}
-              />
-              {!user.hideEmail && user.email && (
-                <p className="text-sm text-gray-600">{user.email}</p>
-              )}
-              {user.certificationLevel && (
-                <p className="text-sm text-gray-600">
-                  Certification: {user.certificationLevel}
-                </p>
-              )}
-              {user.numberOfDives > 0 && (
-                <p className="text-sm text-gray-600">
-                  Dives: {user.numberOfDives}
-                </p>
-              )}
-            </div>
+          {filteredUsers.map(user => renderBuddyCard(user, (
             <button
               onClick={() => sendBuddyRequest(user.id)}
               className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
@@ -367,8 +381,7 @@ export const BuddyList = () => {
             >
               Add Buddy
             </button>
-          </div>
-          ))}
+          )))}
         </div>
       )}
 
@@ -378,31 +391,12 @@ export const BuddyList = () => {
         </div>
       )}
 
-      {/* Incoming Buddy Requests Section */}
+      {/* Incoming Buddy Requests */}
       {pendingIncoming.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Incoming Buddy Requests</h3>
-          {pendingIncoming.map(buddy => (
-            <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-              <div>
-                <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-                <Badges
-                  certificationLevel={buddy.certificationLevel}
-                  specialties={buddy.specialties}
-                  numberOfDives={buddy.numberOfDives}
-                  size="small"
-                  showSections={false}
-                />
-                {!buddy.hideEmail && buddy.email && (
-                  <p className="text-sm text-gray-600">{buddy.email}</p>
-                )}
-                {buddy.certificationLevel && (
-                  <p className="text-sm text-gray-600">
-                    Certification: {buddy.certificationLevel}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2">
+          {pendingIncoming.map(buddy => renderBuddyCard(buddy, (
+            <>
               <button
                 onClick={() => handleBuddyRequest(buddy.id, true)}
                 className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
@@ -417,79 +411,44 @@ export const BuddyList = () => {
               >
                 Decline
               </button>
-              </div>
-            </div>
-          ))}
+            </>
+          )))}
         </div>
       )}
 
-      {/* Pending Outgoing Requests Section */}
+      {/* Pending Outgoing Requests */}
       {pendingOutgoing.length > 0 && (
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-2">Pending Requests</h3>
-          {pendingOutgoing.map(buddy => (
-          <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-            <div>
-              <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-              <Badges
-                certificationLevel={buddy.certificationLevel}
-                specialties={buddy.specialties}
-                numberOfDives={buddy.numberOfDives}
-                size="small"
-                showSections={false}
-              />
-              {/* Rest of your existing buddy info */}
+          {pendingOutgoing.map(buddy => renderBuddyCard(buddy, (
+            <div className="px-3 py-1 bg-gray-100 text-gray-600 rounded">
+              Awaiting Response
             </div>
-            <div className="text-sm text-gray-500 italic">Awaiting Response</div>
-          </div>
-        ))} 
+          )))}
         </div>
       )}
 
-      {/* Accepted Buddies Section */}
+      {/* Accepted Buddies */}
       <div>
-          <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
-          {loading && buddies.length === 0 ? (
-            <p className="text-gray-500">Loading buddies...</p>
-          ) : buddies.length === 0 ? (
-            <p className="text-gray-500">No buddies yet</p>
-          ) : (
-            buddies.map(buddy => (
-              <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
-                <div>
-                  <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-                  <Badges
-                    certificationLevel={buddy.certificationLevel}
-                    specialties={buddy.specialties}
-                    numberOfDives={buddy.numberOfDives}
-                    size="small"
-                    showSections={false}
-                  />
-                  {!buddy.hideEmail && buddy.email && (
-                    <p className="text-sm text-gray-600">{buddy.email}</p>
-                  )}
-                  {buddy.certificationLevel && (
-                    <p className="text-sm text-gray-600">
-                      Certification: {buddy.certificationLevel}
-                    </p>
-                  )}
-                  {buddy.numberOfDives > 0 && (
-                    <p className="text-sm text-gray-600">
-                      Dives: {buddy.numberOfDives}
-                    </p>
-                  )}
-                </div>
-                <button
-                  onClick={() => startChat(buddy.id)}
-                  className="px-3 py-1 bg-blue-500 text-white rounded disabled:bg-blue-300 hover:bg-blue-600"
-                  disabled={loading}
-                >
-                  Message
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+        <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
+        {loading && buddies.length === 0 ? (
+          <p className="text-gray-500">Loading buddies...</p>
+        ) : buddies.length === 0 ? (
+          <p className="text-gray-500">No buddies yet</p>
+        ) : (
+          buddies.map(buddy => renderBuddyCard(buddy, (
+            <button
+              onClick={() => startChat(buddy.id)}
+              className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
+              disabled={loading}
+            >
+              Message
+            </button>
+          )))
+        )}
+      </div>
     </div>
   );
 };
+
+export default BuddyList;
