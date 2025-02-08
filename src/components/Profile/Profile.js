@@ -12,6 +12,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { AlertTriangle, MapPin } from 'lucide-react';
 import Badges from './Badges';
 import { Alert, AlertDescription } from '../../components/ui/alert';
+import MembershipCard from '../Loyalty/MembershipCard';
 
 const ProfileCompletionIndicator = ({ profile }) => {
   const calculateCompletion = () => {
@@ -646,6 +647,25 @@ const EditForm = ({
     </div>
   </form>
 );
+
+
+const TIER_LEVELS = {
+  OCEANIC_SILVER: { min: 0, max: 9999, multiplier: 1.0, name: 'Oceanic Silver' },
+  MARINER_GOLD: { min: 10000, max: 19999, multiplier: 1.2, name: 'Mariner Gold' },
+  NAUTILUS_PLATINUM: { min: 20000, max: 49999, multiplier: 1.5, name: 'Nautilus Platinum' },
+  TRIDENT_ELITE: { min: 50000, max: 99999, multiplier: 2.0, name: 'Trident Elite' },
+  LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
+};
+
+const calculateTier = (lifetimePoints) => {
+  return Object.entries(TIER_LEVELS).reduce((acc, [tier, details]) => {
+    if (lifetimePoints >= details.min && lifetimePoints <= details.max) {
+      return { tier, ...details };
+    }
+    return acc;
+  }, TIER_LEVELS.OCEANIC_SILVER);
+};
+
 function Profile() {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
@@ -691,6 +711,14 @@ function Profile() {
       maxDepth: 0,
       totalTime: 0
     }
+  });
+
+  const [loyaltyData, setLoyaltyData] = useState({
+    lifetimePoints: 0,
+    redeemablePoints: 0,
+    currentTier: null,
+    transactions: [],
+    joinDate: null
   });
 
   const [profile, setProfile] = useState({ ...formData });
@@ -764,6 +792,22 @@ function Profile() {
           const docRef = doc(db, 'profiles', user.uid);
           const docSnap = await getDoc(docRef);
           const profileData = docSnap.exists() ? docSnap.data() : {};
+
+          if (docSnap.exists()) {
+            const loyaltyInfo = {
+              lifetimePoints: profileData.lifetimePoints || 0,
+              redeemablePoints: profileData.redeemablePoints || 0,
+              transactions: profileData.transactions || [],
+              joinDate: profileData.joinDate || profileData.createdAt || new Date().toISOString()
+            };
+            
+            // Calculate current tier
+            const currentTier = calculateTier(loyaltyInfo.lifetimePoints);
+            setLoyaltyData({
+              ...loyaltyInfo,
+              currentTier
+            });
+          }
   
           if (profileData.syncWithLogbook) {
             const logbookStats = await fetchDiveStats();
@@ -961,6 +1005,12 @@ function Profile() {
         ...formData,
         photoURL,
         divingStats,
+        // Loyalty data
+        lifetimePoints: loyaltyData.lifetimePoints,
+        redeemablePoints: loyaltyData.redeemablePoints,
+        transactions: loyaltyData.transactions,
+        joinDate: loyaltyData.joinDate,
+        // Only include updatedAt once
         updatedAt: new Date().toISOString()
       };
   
@@ -1132,6 +1182,60 @@ function Profile() {
     </div>
   </div>
 )}
+
+{/* Membership Card Section */}
+<div className="mt-8 border-t pt-6">
+  <h3 className="font-medium text-gray-900 mb-4">Membership & Rewards</h3>
+  
+  <div className="space-y-6">
+    <MembershipCard 
+      tier={loyaltyData.currentTier?.tier}
+      memberName={profile.name}
+      memberId={user?.uid?.slice(-6)}
+      joinDate={loyaltyData.joinDate}
+    />
+    
+    <div className="grid grid-cols-2 gap-4">
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <p className="text-sm text-gray-600">Available Points</p>
+        <p className="text-2xl font-bold text-gray-900">
+          {loyaltyData.redeemablePoints.toLocaleString()}
+        </p>
+      </div>
+      <div className="bg-gray-50 p-4 rounded-lg">
+        <p className="text-sm text-gray-600">Lifetime Points</p>
+        <p className="text-2xl font-bold text-gray-900">
+          {loyaltyData.lifetimePoints.toLocaleString()}
+        </p>
+      </div>
+    </div>
+
+    {loyaltyData.transactions?.length > 0 && (
+      <div>
+        <h4 className="font-medium text-gray-900 mb-2">Recent Transactions</h4>
+        <div className="space-y-2">
+          {loyaltyData.transactions.slice(0, 3).map((transaction, index) => (
+            <div key={index} className="bg-white border rounded-lg p-3">
+              <div className="flex justify-between">
+                <span className="text-gray-600">
+                  {transaction.type === 'earn' ? 'Points Earned' : 'Points Redeemed'}
+                </span>
+                <span className={`font-medium ${
+                  transaction.type === 'earn' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {transaction.type === 'earn' ? '+' : '-'}{transaction.points}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500">
+                {new Date(transaction.date?.seconds * 1000).toLocaleDateString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</div>
 
     {/* Edit Button */}
     <button

@@ -13,6 +13,7 @@ function Navbar() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const { user } = useAuth();
+  console.log("Navbar user:", user);
 
   // Admin check function
   const isAdmin = user?.email === 'test@test.com';
@@ -132,23 +133,31 @@ function Navbar() {
               {messageItems()}
             </div>
             {/* Instructor and Admin Links - Desktop */}
-            <div className="flex items-center space-x-4">
-              <Link 
-                to="/instructor" 
-                className="text-gray-300 text-sm hover:text-white px-3 py-2 rounded-md transition-colors duration-150"
-              >
-                Instructor Portal
-              </Link>
-              {isAdmin && (
+              <div className="flex items-center space-x-4">
                 <Link 
-                  to="/admin" 
+                  to="/instructor" 
                   className="text-gray-300 text-sm hover:text-white px-3 py-2 rounded-md transition-colors duration-150"
                 >
-                  Admin
+                  Instructor Portal
                 </Link>
-              )}
-              <LogoutButton />
-            </div>
+                {user?.loyaltyAccess?.hasAccess && (
+                  <Link 
+                    to="/loyalty" 
+                    className="text-gray-300 text-sm hover:text-white px-3 py-2 rounded-md transition-colors duration-150"
+                  >
+                    Loyalty Program
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link 
+                    to="/admin" 
+                    className="text-gray-300 text-sm hover:text-white px-3 py-2 rounded-md transition-colors duration-150"
+                  >
+                    Admin
+                  </Link>
+                )}
+                <LogoutButton />
+              </div>
           </div>
         </div>
 
@@ -179,26 +188,35 @@ function Navbar() {
               </Link>
               {messageItems(true)}
               <div className="border-t border-blue-700 mt-2 pt-2">
+              <Link 
+                to="/instructor" 
+                className="block px-3 py-2 text-gray-300 hover:text-white text-sm"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Instructor Portal
+              </Link>
+              {user?.loyaltyAccess?.hasAccess && (
                 <Link 
-                  to="/instructor" 
+                  to="/loyalty" 
                   className="block px-3 py-2 text-gray-300 hover:text-white text-sm"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  Instructor Portal
+                  Loyalty Program
                 </Link>
-                {isAdmin && (
-                  <Link 
-                    to="/admin" 
-                    className="block px-3 py-2 text-gray-300 hover:text-white text-sm"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Admin
-                  </Link>
-                )}
-                <div className="mt-2">
-                  <LogoutButton className="w-full justify-center" />
-                </div>
+              )}
+              {isAdmin && (
+                <Link 
+                  to="/admin" 
+                  className="block px-3 py-2 text-gray-300 hover:text-white text-sm"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Admin
+                </Link>
+              )}
+              <div className="mt-2">
+                <LogoutButton className="w-full justify-center" />
               </div>
+            </div>
             </div>
           </div>
         )}

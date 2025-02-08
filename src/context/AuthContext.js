@@ -19,11 +19,24 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log("Auth state changed:", user?.uid); // Debug log
+      console.log("Auth state changed:", user?.uid);
       if (user) {
-        await checkAndCreateUserDocuments(user);
+        // Get the profile data
+        const profileRef = doc(db, 'profiles', user.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          // Combine auth user with profile data
+          setUser({
+            ...user,
+            ...profileSnap.data()
+          });
+        } else {
+          await checkAndCreateUserDocuments(user);
+          setUser(user);
+        }
+      } else {
+        setUser(null);
       }
-      setUser(user);
       setLoading(false);
     }, (error) => {
       console.error("Auth state change error:", error);

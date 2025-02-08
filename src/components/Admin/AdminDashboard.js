@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/config';
 import { collection, getDocs, doc, updateDoc, Timestamp, query, where } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 
 const AdminDashboard = () => {
@@ -12,6 +13,8 @@ const AdminDashboard = () => {
   const [selectedInstructor, setSelectedInstructor] = useState(null);
   const [showReportsModal, setShowReportsModal] = useState(false);
   const { user } = useAuth();
+  console.log("AdminDashboard user:", user);
+  const navigate = useNavigate();
 
   const calculateStudentProgress = (student, course) => {
     if (!student || !course || !course?.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
@@ -95,6 +98,60 @@ const AdminDashboard = () => {
 
     fetchUsers();
   }, []);
+
+  const toggleLoyaltyAccess = async (userId, currentAccess) => {
+    if (!window.confirm(
+      currentAccess 
+        ? 'Are you sure you want to revoke loyalty program access?' 
+        : 'Are you sure you want to grant loyalty program access?'
+    )) return;
+  
+    try {
+      const userRef = doc(db, 'profiles', userId);
+      let updateData; // Declare the variable first
+  
+      if (currentAccess) {
+        // Removing access
+        updateData = {
+          loyaltyAccess: null
+        };
+      } else {
+        // Granting access - initialize loyalty profile
+        updateData = {
+          loyaltyAccess: {
+            hasAccess: true,
+            grantedAt: Timestamp.now(),
+            grantedBy: user.email
+          },
+          // Add loyalty program initialization data
+          joinDate: Timestamp.now(),
+          lifetimePoints: 0,
+          redeemablePoints: 0,
+          lastExpirationCheck: Timestamp.now(),
+          yearlyPointsEarned: {
+            [new Date().getFullYear()]: 0
+          }
+        };
+      }
+  
+      await updateDoc(userRef, updateData);
+  
+      setUsers(users.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            ...updateData
+          };
+        }
+        return u;
+      }));
+    } catch (err) {
+      setError('Error updating loyalty program access');
+      console.error('Error:', err);
+    }
+  };
+
+  
 
   const toggleInstructorAccess = async (userId, currentAccess) => {
     if (!window.confirm(
@@ -198,7 +255,20 @@ const AdminDashboard = () => {
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Admin Dashboard</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Admin Dashboard</h2>
+        <div className="flex space-x-4">
+          {user?.loyaltyAccess?.hasAccess && (
+            <Button
+              onClick={() => navigate('/loyalty')}
+              variant="outline"
+              className="flex items-center space-x-2"
+            >
+              <span>Loyalty Program</span>
+            </Button>
+          )}
+        </div>
+      </div>
         
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -212,6 +282,9 @@ const AdminDashboard = () => {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Certification Level
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Loyalty Access
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Instructor Access
@@ -238,6 +311,19 @@ const AdminDashboard = () => {
                     <div className="text-sm text-gray-500">
                       {user.certificationLevel || 'Not set'}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={!!user.loyaltyAccess?.hasAccess}
+                        onChange={() => toggleLoyaltyAccess(user.id, user.loyaltyAccess?.hasAccess)}
+                        className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      />
+                      <span className="ml-2 text-sm text-gray-600">
+                        {user.loyaltyAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </label>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <label className="inline-flex items-center">

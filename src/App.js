@@ -15,6 +15,9 @@ import AdBlock from './components/AdBlock/AdBlock';
 import ChatPage from './pages/ChatPage';
 import { BuddyList } from './components/Messaging/BuddyList';
 import { BuddyProfile } from './components/Messaging/BuddyProfile';
+import LoyaltyDashboard from './components/Loyalty/LoyaltyDashboard';
+import RequireLoyaltyAccess from './components/Loyalty/RequireLoyaltyAccess';
+
 
 function MainContent() {
   const { user } = useAuth();
@@ -93,6 +96,14 @@ function MainContent() {
               </RequireInstructor>
             }
           />
+          <Route 
+    path="/loyalty" 
+    element={
+      <RequireLoyaltyAccess>
+        <LoyaltyDashboard />
+      </RequireLoyaltyAccess>
+    } 
+  />
         </Routes>
       </main>
     </div>

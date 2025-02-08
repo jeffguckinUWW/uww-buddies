@@ -16,10 +16,6 @@ code {
     monospace;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
- 
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -64,5 +60,24 @@ code {
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+  }
+}
+
+@layer utilities {
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  .transform-style-3d {
+    transform-style: preserve-3d;
+  }
+  
+  .backface-hidden {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .rotate-y-180 {
+    transform: rotateY(180deg);
   }
 }
