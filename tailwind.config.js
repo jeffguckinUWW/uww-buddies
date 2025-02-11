@@ -48,7 +48,31 @@ module.exports = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      rotate: {
+        'y-180': '180deg',
+      },
+      transform: {
+        'perspective': 'perspective(1000px)',
+      }
     },
   },
-  plugins: [],
+  plugins: [
+    function({ addUtilities }) {
+      addUtilities({
+        '.rotate-y-180': {
+          transform: 'rotateY(180deg)',
+        },
+        '.preserve-3d': {
+          transformStyle: 'preserve-3d',
+        },
+        '.perspective': {
+          perspective: '1000px',
+        },
+        '.backface-hidden': {
+          backfaceVisibility: 'hidden',
+          '-webkit-backface-visibility': 'hidden',
+        }
+      })
+    }
+  ],
 }

@@ -1,12 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../firebase/config';
-import { doc, updateDoc, getDoc, Timestamp, increment } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, getDocs, Timestamp, increment, collection, query, where } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Alert, AlertDescription } from '../../components/ui/alert';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 
 const TIER_LEVELS = {
   OCEANIC_SILVER: { min: 0, max: 9999, multiplier: 1.0, name: 'Oceanic Silver' },
@@ -36,6 +31,13 @@ const LoyaltyDashboard = () => {
   const [message, setMessage] = useState(null);
   const [pointsToRedeem, setPointsToRedeem] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [giftCardRequests, setGiftCardRequests] = useState([]);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [giftCardNumber, setGiftCardNumber] = useState('');
+  const [processingGiftCard, setProcessingGiftCard] = useState(false);
+  const [selectedGiftCard, setSelectedGiftCard] = useState(null);
+  const [adjustmentAmount, setAdjustmentAmount] = useState('');
+  const [showGiftCardModal, setShowGiftCardModal] = useState(false);
   const [pointsAdjustment, setPointsAdjustment] = useState({
     amount: '',
     reason: '',
@@ -50,6 +52,94 @@ const LoyaltyDashboard = () => {
     rentals: 0
   });
   const { user } = useAuth();
+
+  const fetchGiftCardRequests = useCallback(async () => {
+    try {
+      const requestsRef = collection(db, 'giftCardRequests');
+      const q = query(requestsRef, where('status', '==', 'pending'));
+      const querySnapshot = await getDocs(q);
+      
+      const requests = [];
+      querySnapshot.forEach((doc) => {
+        requests.push({ id: doc.id, ...doc.data() });
+      });
+      
+      setGiftCardRequests(requests);
+    } catch (error) {
+      console.error('Error fetching gift card requests:', error);
+      showMessage('Error fetching gift card requests');
+    }
+  }, []);  // Empty dependency array since it doesn't use any external values
+
+  useEffect(() => {
+    fetchGiftCardRequests();
+  }, [fetchGiftCardRequests]);
+
+  const handleGiftCardBalanceAdjustment = async () => {
+    if (!selectedGiftCard || !adjustmentAmount) return;
+    
+    try {
+      const amount = parseFloat(adjustmentAmount);
+      if (isNaN(amount) || amount <= 0) {
+        showMessage('Please enter a valid amount');
+        return;
+      }
+  
+      if (amount > selectedGiftCard.amount) {
+        showMessage('Adjustment amount cannot be greater than current balance');
+        return;
+      }
+  
+      const customerRef = doc(db, 'profiles', customerData.id);
+      const customerSnap = await getDoc(customerRef);
+      const currentData = customerSnap.data();
+  
+      // Filter out zero balance cards and update remaining cards
+      const updatedGiftCards = currentData.giftCards
+        .map(card => {
+          if (card.number === selectedGiftCard.number) {
+            return {
+              ...card,
+              amount: card.amount - amount,
+              lastUsed: Timestamp.now()
+            };
+          }
+          return card;
+        })
+        .filter(card => card.amount > 0); // Remove cards with zero balance
+  
+      // Create transaction record
+      const transaction = {
+        type: 'gift_card_use',
+        date: Timestamp.now(),
+        giftCardNumber: selectedGiftCard.number,
+        amountUsed: amount,
+        remainingBalance: selectedGiftCard.amount - amount,
+        processedBy: user.email
+      };
+  
+      // Update profile with new gift card balance and transaction
+      await updateDoc(customerRef, {
+        giftCards: updatedGiftCards,
+        transactions: [transaction, ...(currentData.transactions || [])]
+      });
+  
+      // Update local state
+      setCustomerData({
+        ...customerData,
+        giftCards: updatedGiftCards,
+        transactions: [transaction, ...(customerData.transactions || [])]
+      });
+  
+      setShowGiftCardModal(false);
+      setSelectedGiftCard(null);
+      setAdjustmentAmount('');
+      showMessage('Gift card balance updated successfully', MESSAGE_TYPES.SUCCESS);
+    } catch (error) {
+      console.error('Error adjusting gift card balance:', error);
+      showMessage('Error adjusting gift card balance');
+    }
+  };
 
   const showMessage = (text, type = MESSAGE_TYPES.ERROR) => {
     setMessage({ text, type });
@@ -79,6 +169,29 @@ const LoyaltyDashboard = () => {
       return new Date(date.seconds * 1000).toLocaleDateString();
     }
     return 'Invalid Date';
+  };
+
+  const YearlyProgress = ({ customerData }) => {
+    const currentYear = new Date().getFullYear();
+    const currentTier = calculateTier(customerData.lifetimePoints);
+    const requiredYearlyPoints = TIER_LEVELS[currentTier.tier].min * 0.1;
+    const pointsThisYear = customerData.yearlyPointsEarned?.[currentYear] || 0;
+    const progress = (pointsThisYear / requiredYearlyPoints) * 100;
+  
+    return (
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2 text-gray-900">Yearly Progress</h4>
+        <div className="bg-gray-200 rounded-full h-2.5">
+          <div 
+            className="bg-blue-600 h-2.5 rounded-full"
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          ></div>
+        </div>
+        <p className="text-sm mt-1 text-gray-600">
+          {pointsThisYear} / {requiredYearlyPoints} points required this year
+        </p>
+      </div>
+    );
   };
 
   const handleCustomerLookup = async () => {
@@ -113,6 +226,73 @@ const LoyaltyDashboard = () => {
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProcessGiftCard = async (request) => {
+    if (!giftCardNumber) {
+      showMessage('Please enter a gift card number');
+      return;
+    }
+    
+    setProcessingGiftCard(true);
+    try {
+      // Get user's current profile
+      const userRef = doc(db, 'profiles', request.userId);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
+  
+      if (!userData) {
+        showMessage('User profile not found');
+        return;
+      }
+  
+      if (userData.redeemablePoints < request.pointsRequested) {
+        showMessage('User has insufficient points');
+        return;
+      }
+  
+      // Create gift card document
+      const giftCard = {
+        number: giftCardNumber,
+        amount: request.amount,
+        issueDate: Timestamp.now(),
+        status: 'active'
+      };
+  
+      // Update user's points and add gift card
+      const giftCards = userData.giftCards || [];
+      await updateDoc(userRef, {
+        redeemablePoints: increment(-request.pointsRequested),
+        giftCards: [...giftCards, giftCard],
+        transactions: [{
+          type: 'gift_card',
+          date: Timestamp.now(),
+          points: -request.pointsRequested,
+          giftCardAmount: request.amount,
+          giftCardNumber: giftCardNumber,
+          processedBy: user.email
+        }, ...(userData.transactions || [])]
+      });
+  
+      // Update request status
+      const requestRef = doc(db, 'giftCardRequests', request.id);
+      await updateDoc(requestRef, {
+        status: 'completed',
+        processedDate: Timestamp.now(),
+        processedBy: user.email,
+        giftCardNumber: giftCardNumber
+      });
+  
+      showMessage('Gift card processed successfully', MESSAGE_TYPES.SUCCESS);
+      setGiftCardNumber('');
+      setSelectedRequest(null);
+      fetchGiftCardRequests();
+    } catch (error) {
+      console.error('Error processing gift card:', error);
+      showMessage('Error processing gift card');
+    } finally {
+      setProcessingGiftCard(false);
     }
   };
 
@@ -158,34 +338,12 @@ const LoyaltyDashboard = () => {
         trips: 0,
         rentals: 0
       });
-
+  
       showMessage(`Successfully added ${newPoints} points`, MESSAGE_TYPES.SUCCESS);
     } catch (err) {
       showMessage('Error updating points');
       console.error('Error:', err);
     }
-  };
-  const YearlyProgress = ({ customerData }) => {
-    const currentYear = new Date().getFullYear();
-    const currentTier = calculateTier(customerData.lifetimePoints);
-    const requiredYearlyPoints = TIER_LEVELS[currentTier.tier].min * 0.1;
-    const pointsThisYear = customerData.yearlyPointsEarned?.[currentYear] || 0;
-    const progress = (pointsThisYear / requiredYearlyPoints) * 100;
-  
-    return (
-      <div className="mt-4">
-        <h4 className="font-semibold mb-2 text-gray-900">Yearly Progress</h4>
-        <div className="bg-gray-200 rounded-full h-2.5">
-          <div 
-            className="bg-blue-600 h-2.5 rounded-full"
-            style={{ width: `${Math.min(progress, 100)}%` }}
-          ></div>
-        </div>
-        <p className="text-sm mt-1 text-gray-600">
-          {pointsThisYear} / {requiredYearlyPoints} points required this year
-        </p>
-      </div>
-    );
   };
 
   const handleRedemption = async () => {
@@ -234,14 +392,16 @@ const LoyaltyDashboard = () => {
     try {
       const adjustmentAmount = parseInt(pointsAdjustment.amount);
       const customerRef = doc(db, 'profiles', customerData.id);
-      
       const customerSnap = await getDoc(customerRef);
       const currentData = customerSnap.data();
+      
       const currentPoints = currentData?.redeemablePoints || 0;
       const currentLifetimePoints = currentData?.lifetimePoints || 0;
-  
+      const currentYearlyPoints = currentData?.yearlyPointsEarned?.[new Date().getFullYear()] || 0;
+      
       let newRedeemablePoints = currentPoints;
       let newLifetimePoints = currentLifetimePoints;
+      let newYearlyPoints = currentYearlyPoints;
   
       if (pointsAdjustment.type === 'add') {
         newRedeemablePoints += adjustmentAmount;
@@ -254,7 +414,12 @@ const LoyaltyDashboard = () => {
             showMessage('Cannot subtract more points than available lifetime points');
             return;
           }
+          
+          const reductionRatio = adjustmentAmount / currentLifetimePoints;
+          const yearlyPointsReduction = Math.ceil(currentYearlyPoints * reductionRatio);
+          
           newLifetimePoints -= adjustmentAmount;
+          newYearlyPoints -= yearlyPointsReduction;
         }
         
         if (adjustmentAmount > currentPoints) {
@@ -278,9 +443,11 @@ const LoyaltyDashboard = () => {
         processedBy: user.email
       };
   
+      const currentYear = new Date().getFullYear();
       const updatedData = {
         redeemablePoints: newRedeemablePoints,
         lifetimePoints: newLifetimePoints,
+        [`yearlyPointsEarned.${currentYear}`]: newYearlyPoints,
         transactions: [transaction, ...(currentData?.transactions || [])]
       };
   
@@ -294,6 +461,7 @@ const LoyaltyDashboard = () => {
   
       setShowEditModal(false);
       setPointsAdjustment({ amount: '', reason: '', type: 'add', affectLifetime: false });
+      
       showMessage(
         `Successfully ${pointsAdjustment.type === 'add' ? 'added' : 'subtracted'} ${adjustmentAmount} points` +
         (pointsAdjustment.affectLifetime ? ' (including lifetime points)' : ''),
@@ -307,44 +475,116 @@ const LoyaltyDashboard = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-4 bg-gray-100">
-      <Card className="bg-white shadow-sm border border-gray-200">
-        <CardHeader className="bg-white">
-          <CardTitle className="text-gray-900">Loyalty Program Management</CardTitle>
+      <div className="bg-white rounded-lg shadow-md">
+        {/* Header */}
+        <div className="border-b p-6">
+          <h2 className="text-2xl font-bold text-gray-900">Loyalty Program Management</h2>
           <div className="text-sm text-gray-500 mt-2">
             Your UID for testing: 
             <code className="bg-gray-100 px-2 py-1 rounded ml-2 select-all text-gray-900">
               {user?.uid}
             </code>
           </div>
-        </CardHeader>
-        <CardContent className="bg-white">
+        </div>
+
+        {/* Main Content */}
+        <div className="p-6">
           <div className="space-y-6">
+            {/* Alert Messages */}
             {message && (
-              <Alert variant={message.type === MESSAGE_TYPES.SUCCESS ? 'default' : 'destructive'}>
-                <AlertDescription>{message.text}</AlertDescription>
-              </Alert>
+              <div className={`p-4 rounded-lg ${
+                message.type === MESSAGE_TYPES.SUCCESS 
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {message.text}
+              </div>
             )}
 
+            {/* Customer Lookup */}
             <div className="flex space-x-4">
-              <Input
+              <input
                 type="text"
                 placeholder="Enter customer UID"
                 value={barcodeInput}
                 onChange={(e) => setBarcodeInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleCustomerLookup()}
-                className="flex-1 bg-white border-gray-200"
+                className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <Button 
+              <button 
                 onClick={handleCustomerLookup}
                 disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 Look Up Customer
-              </Button>
+              </button>
+            </div>
+
+            {/* Gift Card Requests Section */}
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900">Pending Gift Card Requests</h3>
+              <div className="space-y-4">
+                {giftCardRequests.map((request) => (
+                  <div key={request.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-gray-900">{request.userName}</p>
+                        <p className="text-sm text-gray-600">Requested: ${request.amount}</p>
+                        <p className="text-sm text-gray-600">Points: {request.pointsRequested}</p>
+                        <p className="text-sm text-gray-500">
+                          Requested on: {formatDate(request.requestDate)}
+                        </p>
+                      </div>
+                      <div>
+                        {selectedRequest?.id === request.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              placeholder="Enter gift card number"
+                              value={giftCardNumber}
+                              onChange={(e) => setGiftCardNumber(e.target.value)}
+                              className="w-full p-2 border border-gray-200 rounded-lg text-sm"
+                            />
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleProcessGiftCard(request)}
+                                disabled={!giftCardNumber || processingGiftCard}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {processingGiftCard ? 'Processing...' : 'Process'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedRequest(null);
+                                  setGiftCardNumber('');
+                                }}
+                                className="px-3 py-1 bg-gray-100 text-gray-600 text-sm rounded hover:bg-gray-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setSelectedRequest(request)}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                          >
+                            Process Request
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {giftCardRequests.length === 0 && (
+                  <p className="text-gray-500 text-center py-4">No pending gift card requests</p>
+                )}
+              </div>
             </div>
 
             {customerData && (
               <div className="space-y-6">
+                {/* Customer Info */}
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                   <h3 className="text-lg font-semibold mb-2 text-gray-900">{customerData.name}</h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -359,25 +599,57 @@ const LoyaltyDashboard = () => {
                     <div>
                       <p className="text-sm text-gray-600">Lifetime Points</p>
                       <p className="font-medium text-gray-900">{customerData.lifetimePoints || 0}</p>
-                      </div>
+                    </div>
                     <div>
                       <p className="text-sm text-gray-600">Redeemable Points</p>
                       <div className="flex items-center space-x-2">
                         <p className="font-medium text-gray-900">{customerData.redeemablePoints || 0}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
+                        <button
                           onClick={() => setShowEditModal(true)}
-                          className="bg-white hover:bg-gray-50 border-gray-200"
+                          className="px-2 py-1 text-sm bg-white border border-gray-200 rounded hover:bg-gray-50"
                         >
                           Edit
-                        </Button>
+                        </button>
                       </div>
                     </div>
                   </div>
                   <YearlyProgress customerData={customerData} />
                 </div>
 
+                {/* Gift Cards Section */}
+                {customerData?.giftCards && customerData.giftCards.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-900">Gift Cards</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                      {customerData.giftCards.map((card, index) => (
+                        <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-medium text-gray-900">Card: ****{card.number.slice(-4)}</p>
+                              <p className="text-sm text-gray-600">Balance: ${card.amount}</p>
+                              {card.lastUsed && (
+                                <p className="text-xs text-gray-500">
+                                  Last used: {formatDate(card.lastUsed)}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedGiftCard(card);
+                                setShowGiftCardModal(true);
+                              }}
+                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                            >
+                              Adjust Balance
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Earn Points Section */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4 text-gray-900">Earn Points</h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -386,7 +658,7 @@ const LoyaltyDashboard = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           {category.charAt(0).toUpperCase() + category.slice(1)} ({rate} points/$)
                         </label>
-                        <Input
+                        <input
                           type="number"
                           min="0"
                           value={purchaseAmounts[category]}
@@ -394,7 +666,7 @@ const LoyaltyDashboard = () => {
                             ...purchaseAmounts,
                             [category]: parseFloat(e.target.value) || 0
                           })}
-                          className="bg-white border-gray-200"
+                          className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     ))}
@@ -411,43 +683,45 @@ const LoyaltyDashboard = () => {
                     </div>
                   </div>
 
-                  <Button 
+                  <button
                     onClick={handlePointsUpdate}
-                    className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white"
                     disabled={Object.values(purchaseAmounts).every(amount => amount === 0)}
+                    className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                   >
                     Process Transaction
-                  </Button>
+                  </button>
                 </div>
 
+                {/* Redeem Points Section */}
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-900">Redeem Points</h3>
                   <div className="flex items-center space-x-4">
-                    <Input
+                    <input
                       type="number"
                       min="0"
                       max={customerData.redeemablePoints}
                       placeholder="Points to redeem"
-                      className="flex-1 bg-white border-gray-200"
+                      className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       value={pointsToRedeem}
                       onChange={(e) => setPointsToRedeem(e.target.value)}
                     />
                     <div className="text-sm text-gray-600 whitespace-nowrap">
                       Value: ${((pointsToRedeem || 0) / 100).toFixed(2)}
                     </div>
-                    <Button
+                    <button
                       onClick={handleRedemption}
                       disabled={!pointsToRedeem || pointsToRedeem > customerData.redeemablePoints}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
                       Redeem Points
-                    </Button>
+                    </button>
                   </div>
                   <p className="text-sm text-gray-500 mt-2">
                     Available points for redemption: {customerData.redeemablePoints}
                   </p>
                 </div>
 
+                {/* Transaction History */}
                 <div className="border-t pt-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-900">Transaction History</h3>
                   <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -460,6 +734,8 @@ const LoyaltyDashboard = () => {
                                 ? `Points ${transaction.adjustmentType === 'add' ? 'Added' : 'Subtracted'}`
                                 : transaction.type === 'earn'
                                   ? 'Points Earned'
+                                  : transaction.type === 'gift_card_use'
+                                  ? 'Gift Card Used'
                                   : 'Points Redeemed'}
                             </p>
                             <p className="text-sm text-gray-600">
@@ -485,6 +761,15 @@ const LoyaltyDashboard = () => {
                             {transaction.type === 'redeem' && (
                               <p className="text-sm text-gray-600">
                                 Value: ${transaction.value}
+                              </p>
+                            )}
+                            {transaction.type === 'gift_card_use' && (
+                              <p className="text-sm text-gray-600">
+                                Card: ****{transaction.giftCardNumber.slice(-4)}
+                                <br />
+                                Amount Used: ${transaction.amountUsed}
+                                <br />
+                                Remaining: ${transaction.remainingBalance}
                               </p>
                             )}
                           </div>
@@ -516,90 +801,155 @@ const LoyaltyDashboard = () => {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="bg-white border shadow-lg">
-          <DialogHeader className="border-b pb-4 bg-white">
-            <DialogTitle className="text-gray-900">Adjust Points</DialogTitle>
-            <DialogDescription className="text-gray-600">
-              Modify customer points and lifetime tier status
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 p-4 bg-white">
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center space-x-2">
+      {/* Points Adjustment Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md">
+            <div className="border-b p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Adjust Points</h3>
+                  <p className="text-sm text-gray-600">Modify customer points and lifetime tier status</p>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center space-x-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={pointsAdjustment.type === 'add'}
+                    onChange={() => setPointsAdjustment(prev => ({ ...prev, type: 'add' }))}
+                    className="text-blue-600"
+                  />
+                  <span className="text-gray-900">Add Points</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={pointsAdjustment.type === 'subtract'}
+                    onChange={() => setPointsAdjustment(prev => ({ ...prev, type: 'subtract' }))}
+                    className="text-blue-600"
+                  />
+                  <span className="text-gray-900">Subtract Points</span>
+                </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Points Amount
+                </label>
                 <input
-                  type="radio"
-                  checked={pointsAdjustment.type === 'add'}
-                  onChange={() => setPointsAdjustment(prev => ({ ...prev, type: 'add' }))}
-                  className="text-blue-600"
+                  type="number"
+                  min="0"
+                  value={pointsAdjustment.amount}
+                  onChange={(e) => setPointsAdjustment(prev => ({ ...prev, amount: e.target.value }))}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
                 />
-                <span className="text-gray-900">Add Points</span>
-              </label>
-              <label className="flex items-center space-x-2">
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason for Adjustment
+                </label>
                 <input
-                  type="radio"
-                  checked={pointsAdjustment.type === 'subtract'}
-                  onChange={() => setPointsAdjustment(prev => ({ ...prev, type: 'subtract' }))}
-                  className="text-blue-600"
+                  type="text"
+                  value={pointsAdjustment.reason}
+                  onChange={(e) => setPointsAdjustment(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Enter reason for adjustment"
+                  className="w-full p-2 border border-gray-200 rounded-lg"
                 />
-                <span className="text-gray-900">Subtract Points</span>
-              </label>
+              </div>
+              <div className="flex items-center">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={pointsAdjustment.affectLifetime}
+                    onChange={(e) => setPointsAdjustment(prev => ({ 
+                      ...prev, 
+                      affectLifetime: e.target.checked 
+                    }))}
+                    className="text-blue-600 rounded"
+                  />
+                  <span className="text-gray-900">Adjust Lifetime Points (affects tier status)</span>
+                </label>
+              </div>
+              <button
+                onClick={handlePointsAdjustment}
+                disabled={!pointsAdjustment.amount || !pointsAdjustment.reason}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Confirm Adjustment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gift Card Balance Adjustment Modal */}
+      {showGiftCardModal && selectedGiftCard && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Adjust Gift Card Balance</h3>
+                <p className="text-sm text-gray-600">Card: ****{selectedGiftCard.number.slice(-4)}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowGiftCardModal(false);
+                  setSelectedGiftCard(null);
+                  setAdjustmentAmount('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Points Amount
-              </label>
-              <Input
-                type="number"
-                min="0"
-                value={pointsAdjustment.amount}
-                onChange={(e) => setPointsAdjustment(prev => ({ ...prev, amount: e.target.value }))}
-                className="bg-white border-gray-200"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Reason for Adjustment
-              </label>
-              <Input
-                type="text"
-                value={pointsAdjustment.reason}
-                onChange={(e) => setPointsAdjustment(prev => ({ ...prev, reason: e.target.value }))}
-                placeholder="Enter reason for adjustment"
-                className="bg-white border-gray-200"
-              />
-            </div>
-
-            <div className="flex items-center">
-              <label className="flex items-center space-x-2">
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Current Balance: ${selectedGiftCard.amount}</p>
+                <label className="block text-sm font-medium text-gray-700">Amount Used</label>
                 <input
-                  type="checkbox"
-                  checked={pointsAdjustment.affectLifetime}
-                  onChange={(e) => setPointsAdjustment(prev => ({ 
-                    ...prev, 
-                    affectLifetime: e.target.checked 
-                  }))}
-                  className="text-blue-600"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  max={selectedGiftCard.amount}
+                  value={adjustmentAmount}
+                  onChange={(e) => setAdjustmentAmount(e.target.value)}
+                  className="w-full p-2 border border-gray-200 rounded-lg"
+                  placeholder="Enter amount used"
                 />
-                <span className="text-gray-900">Adjust Lifetime Points (affects tier status)</span>
-              </label>
-            </div>
+                {adjustmentAmount && !isNaN(adjustmentAmount) && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    New balance will be: ${(selectedGiftCard.amount - parseFloat(adjustmentAmount)).toFixed(2)}
+                  </p>
+                )}
+              </div>
 
-            <Button
-              onClick={handlePointsAdjustment}
-              disabled={!pointsAdjustment.amount || !pointsAdjustment.reason}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Confirm Adjustment
-            </Button>
+              <button
+                onClick={handleGiftCardBalanceAdjustment}
+                disabled={!adjustmentAmount || isNaN(adjustmentAmount) || parseFloat(adjustmentAmount) <= 0 || parseFloat(adjustmentAmount) > selectedGiftCard.amount}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Update Balance
+              </button>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };

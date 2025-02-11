@@ -1,9 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Button } from '../ui/button';
 
 const calculateStudentProgress = (student, course) => {
     if (!student || !course || !course?.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
@@ -16,23 +11,20 @@ const calculateStudentProgress = (student, course) => {
   
     course.trainingRecord.sections.forEach(section => {
       if (section.subsections) {
-        // Handle sections with subsections
         section.subsections.forEach(subsection => {
           totalSkills += subsection.skills.length;
           completedSkills += Object.keys(progress[subsection.title] || {}).length;
         });
       } else {
-        // Handle regular sections
         totalSkills += section.skills.length;
         completedSkills += Object.keys(progress[section.title] || {}).length;
       }
     });
   
     return totalSkills > 0 ? Math.round((completedSkills / totalSkills) * 100) : 0;
-  };
+};
 
 const CourseEndReport = ({ course, onSubmit, onCancel }) => {
-  // Initialize state for form data
   const [formData, setFormData] = useState({
     creditAllocations: course.assistants?.map(assistant => ({
       name: assistant.displayName,
@@ -42,13 +34,11 @@ const CourseEndReport = ({ course, onSubmit, onCancel }) => {
     additionalNotes: ''
   });
 
-  // Validation state
   const [errors, setErrors] = useState({});
 
   const validateForm = () => {
     const newErrors = {};
     
-    // Validate credit allocations (total should not exceed 100%)
     const totalCredit = formData.creditAllocations.reduce((sum, allocation) => {
       return sum + (parseFloat(allocation.percentage) || 0);
     }, 0);
@@ -57,7 +47,6 @@ const CourseEndReport = ({ course, onSubmit, onCancel }) => {
       newErrors.creditAllocations = 'Total credit allocation cannot exceed 100%';
     }
 
-    // Validate individual percentages
     formData.creditAllocations.forEach((allocation, index) => {
       if (allocation.percentage && (isNaN(allocation.percentage) || allocation.percentage < 0 || allocation.percentage > 100)) {
         newErrors[`percentage_${index}`] = 'Percentage must be between 0 and 100';
@@ -78,7 +67,6 @@ const CourseEndReport = ({ course, onSubmit, onCancel }) => {
       ...formData,
       creditAllocations: newAllocations
     });
-    // Clear error for this field
     if (errors[`percentage_${index}`]) {
       const newErrors = { ...errors };
       delete newErrors[`percentage_${index}`];
@@ -100,132 +88,131 @@ const CourseEndReport = ({ course, onSubmit, onCancel }) => {
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Course End Report</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Course Details Section */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-medium mb-4">Course Details</h3>
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-gray-500">Course:</span>
-                  <div className="font-medium">{course.name}</div>
-                </div>
-                <div>
-                  <span className="text-gray-500">Location:</span>
-                  <div className="font-medium">{course.location}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-gray-500">Start Date:</span>
-                  <div className="font-medium">
-                    {new Date(course.startDate).toLocaleDateString()}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-500">End Date:</span>
-                  <div className="font-medium">
-                    {new Date(course.endDate).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <span className="text-gray-500">Instructor:</span>
-                <div className="font-medium">{course.instructor?.displayName}</div>
-              </div>
-            </div>
-          </div>
+    <div className="bg-white rounded-lg w-full">
+      <div className="flex justify-between items-center border-b p-6">
+        <div>
+          <h3 className="text-2xl font-bold text-gray-900">Course End Report</h3>
+          <p className="text-sm text-gray-600">Complete and finalize course details</p>
+        </div>
+      </div>
 
-          {/* Students Section */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-medium mb-2">Students</h3>
-                <div className="space-y-1">
-                    {course.students?.map((student, index) => (
-                    <div key={index} className="text-sm flex justify-between">
-                        <span>• {student.displayName}</span>
-                        <span className="text-gray-500">
-                        {course.trainingRecord ? 
-                            `${calculateStudentProgress(student, course)}% Complete` : 
-                            'No Training Record'
-                        }
-                        </span>
-                    </div>
-                    ))}
-                </div>
-                </div>
-
-          {/* Credit Allocation Section */}
-          {formData.creditAllocations.length > 0 && (
+      <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Course Details Section */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4">Course Details</h4>
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-base font-medium">Credit Allocation</Label>
-              <p className="text-sm text-gray-500 mb-2">
-                Would you like to apply any of your credit to an assistant or DM?
-              </p>
-              {errors.creditAllocations && (
-                <p className="text-sm text-red-500 mb-2">{errors.creditAllocations}</p>
-              )}
-              {formData.creditAllocations.map((allocation, index) => (
-                <div key={index} className="flex items-center gap-4 mb-2">
-                  <div className="flex-grow">
-                    <Label htmlFor={`credit-${index}`}>{allocation.name}</Label>
-                  </div>
-                  <div className="w-32 flex items-center">
-                    <Input
-                      id={`credit-${index}`}
-                      type="number"
-                      min="0"
-                      max="100"
-                      placeholder="0"
-                      value={allocation.percentage}
-                      onChange={(e) => handleCreditAllocationChange(index, e.target.value)}
-                      className={errors[`percentage_${index}`] ? 'border-red-500' : ''}
-                    />
-                    <span className="ml-2">%</span>
-                  </div>
-                  {errors[`percentage_${index}`] && (
-                    <p className="text-sm text-red-500">{errors[`percentage_${index}`]}</p>
-                  )}
-                </div>
-              ))}
+              <span className="text-gray-600">Course:</span>
+              <div className="font-medium text-gray-900">{course.name}</div>
             </div>
-          )}
-
-          {/* Additional Notes */}
-          <div>
-            <Label htmlFor="additionalNotes">Additional Notes</Label>
-            <Textarea
-              id="additionalNotes"
-              value={formData.additionalNotes}
-              onChange={(e) => setFormData({...formData, additionalNotes: e.target.value})}
-              placeholder="Any additional comments or observations?"
-              className="h-32"
-            />
+            <div>
+              <span className="text-gray-600">Location:</span>
+              <div className="font-medium text-gray-900">{course.location}</div>
+            </div>
+            <div>
+              <span className="text-gray-600">Start Date:</span>
+              <div className="font-medium text-gray-900">
+                {new Date(course.startDate).toLocaleDateString()}
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-600">End Date:</span>
+              <div className="font-medium text-gray-900">
+                {new Date(course.endDate).toLocaleDateString()}
+              </div>
+            </div>
+            <div className="col-span-2">
+              <span className="text-gray-600">Instructor:</span>
+              <div className="font-medium text-gray-900">{course.instructor?.displayName}</div>
+            </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="bg-green-600 hover:bg-green-700"
-            >
-              Complete Course
-            </Button>
+        {/* Students Section */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-lg font-semibold text-gray-900 mb-4">Students</h4>
+          <div className="space-y-2">
+            {course.students?.map((student, index) => (
+              <div key={index} className="flex justify-between items-center">
+                <span className="text-gray-900">• {student.displayName}</span>
+                <span className="text-gray-600">
+                  {course.trainingRecord ? 
+                    `${calculateStudentProgress(student, course)}% Complete` : 
+                    'No Training Record'
+                  }
+                </span>
+              </div>
+            ))}
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+
+        {/* Credit Allocation Section */}
+        {formData.creditAllocations.length > 0 && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">Credit Allocation</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Would you like to apply any of your credit to an assistant or DM?
+            </p>
+            {errors.creditAllocations && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4">
+                {errors.creditAllocations}
+              </div>
+            )}
+            {formData.creditAllocations.map((allocation, index) => (
+              <div key={index} className="flex items-center gap-4 mb-4">
+                <div className="flex-grow">
+                  <label className="text-gray-900">{allocation.name}</label>
+                </div>
+                <div className="w-32 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    value={allocation.percentage}
+                    onChange={(e) => handleCreditAllocationChange(index, e.target.value)}
+                    className={`w-full p-2 border rounded ${
+                      errors[`percentage_${index}`] ? 'border-red-500' : 'border-gray-200'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  <span className="text-gray-600">%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Additional Notes */}
+        <div>
+          <label className="block text-lg font-semibold text-gray-900 mb-2">
+            Additional Notes
+          </label>
+          <textarea
+            value={formData.additionalNotes}
+            onChange={(e) => setFormData({...formData, additionalNotes: e.target.value})}
+            placeholder="Any additional comments or observations?"
+            className="w-full p-2 border border-gray-200 rounded-lg min-h-[100px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Complete Course
+          </button>
+        </div>
+      </form>
+    </div>
   );
 };
 

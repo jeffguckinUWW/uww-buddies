@@ -1,9 +1,10 @@
+// src/components/Navigation/LogoutButton.js
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 
-const LogoutButton = ({ className = '' }) => {
+const LogoutButton = ({ className = '', color = 'text-white' }) => {
   const { logout } = useAuth();
   const navigate = useNavigate();
 
@@ -19,7 +20,7 @@ const LogoutButton = ({ className = '' }) => {
   return (
     <button
       onClick={handleLogout}
-      className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium text-white hover:bg-blue-700 transition-colors duration-150 ${className}`}
+      className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 transition-colors duration-150 ${color} ${className}`}
     >
       <LogOut size={18} />
       <span>Logout</span>

@@ -9,7 +9,7 @@ import {
   getDocs 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { AlertTriangle, MapPin } from 'lucide-react';
+import { AlertTriangle, MapPin, Award, Clock, Droplet } from 'lucide-react';
 import Badges from './Badges';
 import { Alert, AlertDescription } from '../../components/ui/alert';
 import MembershipCard from '../Loyalty/MembershipCard';
@@ -723,7 +723,8 @@ function Profile() {
 
   const [profile, setProfile] = useState({ ...formData });
   const [isLogbookSynced, setIsLogbookSynced] = useState(true);
-
+  const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false)
+  
   const certificationLevels = [
     "Student Diver",
     "SCUBA Diver",
@@ -1026,227 +1027,311 @@ function Profile() {
   
     setIsLoading(false);
   };
+
   return (
-    <div className="max-w-3xl mx-auto p-4">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <ProfileCompletionIndicator profile={profile} />
-        
-        {!isLogbookSynced && (
-          <Alert className="mb-6">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Your profile dive count is being synced with your logbook.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {isEditing ? (
-  <EditForm
-    formData={formData}
-    onInputChange={handleInputChange}
-    onEmergencyContactChange={handleEmergencyContactChange}
-    onSocialLinksChange={handleSocialLinksChange}
-    onPrivacySettingsChange={handlePrivacySettingsChange}
-    onSpecialtyChange={handleSpecialtyChange}
-    onInstructorCertChange={handleInstructorCertChange}
-    onImageChange={handleImageChange}
-    onDeletePhoto={handleDeletePhoto}
-    onSubmit={handleSubmit}
-    onCancel={() => setIsEditing(false)}
-    isLoading={isLoading}
-    certificationLevels={certificationLevels}
-    specialtyOptions={specialtyOptions}
-  />
-) : (
-  <div>
-    {/* Profile Header */}
-    <div className="text-center">
-      {profile.photoURL ? (
-        <img
-          src={profile.photoURL}
-          alt="Profile"
-          className="w-32 h-32 rounded-full mx-auto mb-4 object-cover"
+    <div className="max-w-4xl mx-auto p-4">
+      {!isLogbookSynced && (
+        <Alert className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Your profile dive count is being synced with your logbook.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isEditing ? (
+        <EditForm
+          formData={formData}
+          onInputChange={handleInputChange}
+          onEmergencyContactChange={handleEmergencyContactChange}
+          onSocialLinksChange={handleSocialLinksChange}
+          onPrivacySettingsChange={handlePrivacySettingsChange}
+          onSpecialtyChange={handleSpecialtyChange}
+          onInstructorCertChange={handleInstructorCertChange}
+          onImageChange={handleImageChange}
+          onDeletePhoto={handleDeletePhoto}
+          onSubmit={handleSubmit}
+          onCancel={() => setIsEditing(false)}
+          isLoading={isLoading}
+          certificationLevels={certificationLevels}
+          specialtyOptions={specialtyOptions}
         />
       ) : (
-        <div className="w-32 h-32 rounded-full mx-auto mb-4 bg-blue-100 flex items-center justify-center">
-          <span className="text-4xl text-blue-500">
-            {profile.name ? profile.name[0].toUpperCase() : '?'}
-          </span>
-        </div>
-      )}
-      
-      <h2 className="text-2xl font-bold text-gray-900">
-        {profile.name || 'New Diver'}
-      </h2>
-      
-      {profile.certificationLevel && (
-        <p className="text-blue-600 mt-1">{profile.certificationLevel}</p>
-      )}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          {/* Cover Photo Area */}
+          <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+          
+          {/* Main Content */}
+          <div className="px-8 pb-8">
+            {/* Profile Header */}
+            <div className="relative -mt-16 mb-8">
+              <div className="flex items-end space-x-6">
+                {/* Profile Photo */}
+                {profile.photoURL ? (
+                  <img
+                    src={profile.photoURL}
+                    alt="Profile"
+                    className="w-32 h-32 rounded-xl border-4 border-white object-cover shadow-sm"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-xl border-4 border-white bg-blue-50 flex items-center justify-center shadow-sm">
+                    <span className="text-4xl text-blue-500">
+                      {profile.name ? profile.name[0].toUpperCase() : '?'}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Basic Info */}
+                <div className="flex-1 pb-2">
+                  <h1 className="text-2xl font-bold text-gray-900">
+                    {profile.name || 'New Diver'}
+                  </h1>
+                  {profile.certificationLevel && (
+                    <p className="text-blue-600">{profile.certificationLevel}</p>
+                  )}
+                </div>
 
-      <Badges 
-        certificationLevel={profile.certificationLevel}
-        specialties={profile.specialties}
-        numberOfDives={profile.divingStats?.totalDives}
-      />
-    </div>
+                {/* Quick Stats */}
+                {!profile.privacySettings?.hideStats && profile.divingStats && (
+                  <div className="flex space-x-6 pb-2">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center text-gray-500 mb-1">
+                        <Clock className="w-4 h-4 mr-1" />
+                        <span className="text-sm">Bottom Time</span>
+                      </div>
+                      <p className="text-xl font-semibold text-gray-900">
+                        {profile.divingStats.totalTime || 0}h
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center text-gray-500 mb-1">
+                        <Droplet className="w-4 h-4 mr-1" />
+                        <span className="text-sm">Max Depth</span>
+                      </div>
+                      <p className="text-xl font-semibold text-gray-900">
+                        {profile.divingStats.maxDepth || 0}ft
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-    {/* Diving Stats */}
-    {!profile.privacySettings?.hideStats && profile.divingStats && (
-  <DivingStats stats={profile.divingStats} />
-)}
+              {/* Badges */}
+              <div className="mt-4">
+                <Badges 
+                  certificationLevel={profile.certificationLevel}
+                  specialties={profile.specialties}
+                  numberOfDives={profile.divingStats?.totalDives}
+                />
+              </div>
 
-    {/* Location & Contact */}
-    <div className="space-y-2 mt-6">
-      {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
-        <p className="flex items-center text-gray-600">
-          <MapPin className="h-4 w-4 mr-2" />
-          {[profile.city, profile.state].filter(Boolean).join(', ')}
-        </p>
-      )}
-      
-      {!profile.privacySettings?.hideEmail && profile.email && (
-        <p className="text-gray-600">Email: {profile.email}</p>
-      )}
-      
-      {!profile.privacySettings?.hidePhone && profile.phone && (
-        <p className="text-gray-600">Phone: {profile.phone}</p>
-      )}
-    </div>
-
-    {/* Bio */}
-    {profile.bio && (
-      <div className="mt-6">
-        <h3 className="font-medium text-gray-900 mb-2">About Me</h3>
-        <p className="text-gray-600">{profile.bio}</p>
-      </div>
-    )}
-
-    {/* Instructor Certifications */}
-    {profile.certificationLevel === "Instructor" && profile.instructorCertifications?.length > 0 && (
-      <div className="mt-6">
-        <h3 className="font-medium text-gray-900 mb-2">Instructor Certifications</h3>
-        <div className="space-y-2">
-          {profile.instructorCertifications.map((cert, index) => (
-            <div key={index} className="text-sm text-gray-600">
-              {cert.agency} - #{cert.number}
+              {/* Location & Contact */}
+              <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
+                {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
+                  <div className="flex items-center">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    {[profile.city, profile.state].filter(Boolean).join(', ')}
+                  </div>
+                )}
+                {!profile.privacySettings?.hideEmail && profile.email && (
+                  <div>{profile.email}</div>
+                )}
+                {!profile.privacySettings?.hidePhone && profile.phone && (
+                  <div>{profile.phone}</div>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-    )}
 
-    {/* Dive Trips */}
-    <div className="mt-6">
-      <h3 className="font-medium text-gray-900 mb-2">Dive Trips</h3>
-      <div className="space-y-2 text-gray-600">
-        {profile.favoritePlace && (
-          <p>Favorite Place: {profile.favoritePlace}
-            {profile.favoriteDivesite && ` - ${profile.favoriteDivesite}`}
-          </p>
-        )}
-        {profile.diveTrips?.length > 0 && (
-          <div className="mt-2">
-            <p className="text-sm font-medium text-gray-700 mb-1">Trip History:</p>
-            <div className="space-y-1">
-              {profile.diveTrips
-                .sort((a, b) => b.year - a.year)
-                .map((trip, index) => (
-                  <p key={index} className="text-sm">
-                    {trip.year}: {trip.location}
-                  </p>
-                ))}
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column - Bio & Experience */}
+              <div className="lg:col-span-2 space-y-8">
+                {profile.bio && (
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-3">About</h2>
+                    <p className="text-gray-600">{profile.bio}</p>
+                  </div>
+                )}
+
+                {/* Certifications & Specialties */}
+                <div className="space-y-6">
+                  {/* Main Certification */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                      Certifications
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-100 text-blue-800 font-medium">
+                        {profile.certificationLevel || 'Uncertified'}
+                      </span>
+                      {profile.certificationLevel === "Instructor" && 
+                       profile.instructorCertifications?.map((cert, index) => (
+                        <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-50 text-blue-700">
+                          {cert.agency} #{cert.number}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Specialties */}
+                  {profile.specialties?.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                        Specialties
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {profile.specialties.map((specialty, index) => (
+                          <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-green-50 text-green-700">
+                            {specialty}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dive Experience */}
+                {(profile.favoritePlace || profile.diveTrips?.length > 0) && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                      Experience
+                    </h3>
+                    {profile.favoritePlace && (
+                      <div className="mb-4">
+                        <p className="text-sm font-medium text-gray-700">
+                          Favorite Location
+                        </p>
+                        <p className="text-gray-600">
+                          {profile.favoritePlace}
+                          {profile.favoriteDivesite && ` - ${profile.favoriteDivesite}`}
+                        </p>
+                      </div>
+                    )}
+                    {profile.diveTrips?.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-2">
+                          Recent Trips
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {profile.diveTrips
+                            .sort((a, b) => b.year - a.year)
+                            .slice(0, 5)
+                            .map((trip, index) => (
+                              <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-gray-100 text-gray-700">
+                                {trip.year}: {trip.location}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Social Links */}
+                {!profile.privacySettings?.hideSocial && 
+                 profile.socialLinks && 
+                 Object.values(profile.socialLinks).some(Boolean) && (
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 mb-3">Connect</h2>
+                    <div className="flex flex-wrap gap-4">
+                      {Object.entries(profile.socialLinks).map(([platform, url]) => (
+                        url && (
+                          <a
+                            key={platform}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            {platform.charAt(0).toUpperCase() + platform.slice(1)}
+                          </a>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Rewards */}
+              <div className="lg:col-span-1">
+                <div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-6 border border-blue-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <Award className="h-5 w-5 text-blue-600 mr-2" />
+                      <h2 className="text-lg font-semibold text-gray-900">Rewards</h2>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <span className="text-gray-500 text-sm">Available</span>
+                      <p className="font-semibold text-gray-900">
+                        {loyaltyData.redeemablePoints.toLocaleString()}
+                        <span className="text-sm text-gray-500 ml-1">pts</span>
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-sm">Lifetime</span>
+                      <p className="font-semibold text-gray-900">
+                        {loyaltyData.lifetimePoints.toLocaleString()}
+                        <span className="text-sm text-gray-500 ml-1">pts</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="transform hover:scale-[1.02] transition-transform">
+                    <MembershipCard 
+                      tier={loyaltyData.currentTier?.tier}
+                      memberName={profile.name}
+                      memberId={user?.uid?.slice(-6)}
+                      joinDate={loyaltyData.joinDate}
+                    />
+                  </div>
+
+                  {loyaltyData.transactions?.length > 0 && (
+                    <div className="mt-4">
+                      <button
+                        onClick={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
+                        className="w-full text-sm text-center text-blue-600 hover:text-blue-800"
+                      >
+                        {isTransactionsExpanded ? 'Hide History' : 'View History'}
+                      </button>
+
+                      {isTransactionsExpanded && (
+                        <div className="mt-4 space-y-3 max-h-48 overflow-y-auto">
+                          {loyaltyData.transactions.map((transaction, index) => (
+                            <div key={index} className="flex justify-between text-sm py-2 border-b border-blue-50 last:border-0">
+                              <div>
+                                <p className="text-gray-900">
+                                  {transaction.type === 'earn' ? 'Points Earned' : 'Points Redeemed'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(transaction.date?.seconds * 1000).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <span className={transaction.type === 'earn' ? 'text-green-600' : 'text-red-600'}>
+                                {transaction.type === 'earn' ? '+' : '-'}{transaction.points}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+
+            {/* Edit Button */}
+            <button
+              onClick={() => setIsEditing(true)}
+              className="mt-8 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
+            >
+              Edit Profile
+            </button>
           </div>
-        )}
-      </div>
-    </div>
-
-    {/* Social Links */}
-    {!profile.privacySettings?.hideSocial && profile.socialLinks && Object.values(profile.socialLinks).some(Boolean) && (
-  <div className="mt-6">
-    <h3 className="font-medium text-gray-900 mb-2">Connect</h3>
-    <div className="flex space-x-4">
-      {Object.entries(profile.socialLinks).map(([platform, url]) => (
-        url && (
-          <a
-            key={platform}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800"
-          >
-            {platform.charAt(0).toUpperCase() + platform.slice(1)}
-          </a>
-        )
-      ))}
-    </div>
-  </div>
-)}
-
-{/* Membership Card Section */}
-<div className="mt-8 border-t pt-6">
-  <h3 className="font-medium text-gray-900 mb-4">Membership & Rewards</h3>
-  
-  <div className="space-y-6">
-    <MembershipCard 
-      tier={loyaltyData.currentTier?.tier}
-      memberName={profile.name}
-      memberId={user?.uid?.slice(-6)}
-      joinDate={loyaltyData.joinDate}
-    />
-    
-    <div className="grid grid-cols-2 gap-4">
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <p className="text-sm text-gray-600">Available Points</p>
-        <p className="text-2xl font-bold text-gray-900">
-          {loyaltyData.redeemablePoints.toLocaleString()}
-        </p>
-      </div>
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <p className="text-sm text-gray-600">Lifetime Points</p>
-        <p className="text-2xl font-bold text-gray-900">
-          {loyaltyData.lifetimePoints.toLocaleString()}
-        </p>
-      </div>
-    </div>
-
-    {loyaltyData.transactions?.length > 0 && (
-      <div>
-        <h4 className="font-medium text-gray-900 mb-2">Recent Transactions</h4>
-        <div className="space-y-2">
-          {loyaltyData.transactions.slice(0, 3).map((transaction, index) => (
-            <div key={index} className="bg-white border rounded-lg p-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">
-                  {transaction.type === 'earn' ? 'Points Earned' : 'Points Redeemed'}
-                </span>
-                <span className={`font-medium ${
-                  transaction.type === 'earn' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {transaction.type === 'earn' ? '+' : '-'}{transaction.points}
-                </span>
-              </div>
-              <div className="text-sm text-gray-500">
-                {new Date(transaction.date?.seconds * 1000).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
         </div>
-      </div>
-    )}
-  </div>
-</div>
-
-    {/* Edit Button */}
-    <button
-      onClick={() => setIsEditing(true)}
-      className="mt-6 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-    >
-      Edit Profile
-    </button>
-  </div>
-)}
-      </div>
+      )}
     </div>
   );
 }
