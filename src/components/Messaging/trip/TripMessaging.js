@@ -1,62 +1,66 @@
+// src/components/Messaging/trip/TripMessaging.js
+
 import React, { useState, useEffect } from 'react';
 import { X, MessageSquare, User, Search } from 'lucide-react';
 import { useMessages } from '../../../context/MessageContext';
 import { useAuth } from '../../../context/AuthContext';
 import MessageInput from '../shared/MessageInput';
 import MessageList from '../shared/MessageList';
-import { Card } from '../../../components/ui/card';
-import { Alert, AlertDescription } from '../../../components/ui/alert';
+import { Card } from '../../ui/card';
+import { Alert, AlertDescription } from '../../ui/alert';
 
-const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) => {
+const TripMessaging = ({ trip, isOpen, onClose }) => {
   const { user } = useAuth();
   const { messages, loading, error, subscribeToMessages, sendMessage, deleteMessage } = useMessages();
   const [activeTab, setActiveTab] = useState('discussion');
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const isInstructor = course?.instructorId === user?.uid;
+  const isInstructor = trip?.instructorId === user?.uid;
 
   useEffect(() => {
-    if (!course?.id || !user?.uid) return;
+    if (!trip?.id || !user?.uid) return;
+    
     const unsubscribe = subscribeToMessages({
-      type: isTripMessaging ? 'trip' : 'course',
-      [isTripMessaging ? 'tripId' : 'courseId']: course.id
+      type: 'trip',
+      tripId: trip.id
     });
+    
     return () => unsubscribe();
-  }, [course?.id, user?.uid, subscribeToMessages, isTripMessaging]);
+  }, [trip?.id, user?.uid, subscribeToMessages]);
 
   const handleSendMessage = async (text, type = 'discussion', recipientId = null) => {
-    if (!text.trim() || !user || !course) return;
+    if (!text.trim() || !user || !trip) return;
+    
     const messageData = {
-      [isTripMessaging ? 'tripId' : 'courseId']: course.id,
+      tripId: trip.id,
       senderId: user.uid,
       senderName: user.displayName || 'Unknown User',
       text: text.trim(),
       timestamp: new Date(),
       readBy: [user.uid],
-      type: isTripMessaging ? 
-        (type === 'discussion' ? 'trip_discussion' : 'trip_private') :
-        (type === 'discussion' ? 'course_discussion' : 'course_private'),
+      type: type === 'discussion' ? 'trip_discussion' : 'trip_private',
       ...(recipientId && { recipientId })
     };
+    
     await sendMessage(messageData);
   };
 
   const filteredMessages = messages.filter(msg => {
     switch (activeTab) {
       case 'discussion':
-        return msg.type === (isTripMessaging ? 'trip_discussion' : 'course_discussion');
+        return msg.type === 'trip_discussion';
       case 'private':
-        return msg.type === (isTripMessaging ? 'trip_private' : 'course_private') && 
+        return msg.type === 'trip_private' && 
           (msg.senderId === user?.uid || msg.recipientId === user?.uid ||
-           (isInstructor && (msg.senderId === selectedStudent || msg.recipientId === selectedStudent)));
+           (isInstructor && (msg.senderId === selectedParticipant || msg.recipientId === selectedParticipant)));
       default:
         return false;
     }
   });
 
-  const filteredStudents = course?.students?.filter(student =>
-    student.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    student.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredParticipants = trip?.participants?.filter(participant =>
+    participant.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    participant.email?.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
   if (!isOpen) return null;
@@ -70,7 +74,7 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4">
             <h2 className="text-xl text-gray-800">
-              {course?.name} - {isTripMessaging ? 'Trip' : 'Course'} Communications
+              {trip?.location} - Trip Communications
             </h2>
             <button 
               onClick={onClose}
@@ -89,26 +93,26 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
 
           {/* Tabs */}
           <div className="flex px-6 border-b">
-          <button
-            onClick={() => setActiveTab('discussion')}
-            className={`px-5 py-3 flex items-center gap-2 border-b-2 transition-colors
-              ${activeTab === 'discussion' 
-                ? 'border-[#4460F1] text-[#4460F1]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <MessageSquare size={18} />
-            <span>{isTripMessaging ? 'Trip Discussion' : 'Class Discussion'}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('private')}
-            className={`px-5 py-3 ml-6 flex items-center gap-2 border-b-2 transition-colors
-              ${activeTab === 'private' 
-                ? 'border-[#4460F1] text-[#4460F1]' 
-                : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-          >
-            <User size={18} />
-            <span>{isInstructor ? 'Participant Messages' : 'Message Instructor'}</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('discussion')}
+              className={`px-5 py-3 flex items-center gap-2 border-b-2 transition-colors
+                ${activeTab === 'discussion' 
+                  ? 'border-[#4460F1] text-[#4460F1]' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <MessageSquare size={18} />
+              <span>Trip Discussion</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('private')}
+              className={`px-5 py-3 ml-6 flex items-center gap-2 border-b-2 transition-colors
+                ${activeTab === 'private' 
+                  ? 'border-[#4460F1] text-[#4460F1]' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <User size={18} />
+              <span>{isInstructor ? 'Participant Messages' : 'Message Trip Leader'}</span>
+            </button>
           </div>
 
           <div className="flex-1 flex flex-col min-h-0">
@@ -125,7 +129,7 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                 </div>
                 <div className="flex-shrink-0">
                   <MessageInput
-                    onSend={(text) => handleSendMessage(text, 'course_discussion')}
+                    onSend={(text) => handleSendMessage(text, 'discussion')}
                     placeholder={isInstructor ? "Post an announcement or start a discussion..." : "Type a message..."}
                   />
                 </div>
@@ -134,7 +138,7 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
               <div className="flex-1 flex overflow-hidden">
                 {isInstructor ? (
                   <>
-                    {/* Student list */}
+                    {/* Participant list */}
                     <div className="w-80 flex-shrink-0 border-r flex flex-col">
                       <div className="p-4">
                         <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-md">
@@ -143,23 +147,23 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search students..."
+                            placeholder="Search participants..."
                             className="flex-1 bg-transparent border-none outline-none text-sm text-gray-600 placeholder-gray-400"
                           />
                         </div>
                       </div>
                       <div className="flex-1 overflow-y-auto">
-                        {filteredStudents.map(student => (
+                        {filteredParticipants.map(participant => (
                           <button
-                            key={student.uid}
-                            onClick={() => setSelectedStudent(student.uid)}
+                            key={participant.uid}
+                            onClick={() => setSelectedParticipant(participant.uid)}
                             className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors
-                              ${selectedStudent === student.uid ? 'bg-[#4460F1]/5 hover:bg-[#4460F1]/5' : ''}`}
+                              ${selectedParticipant === participant.uid ? 'bg-[#4460F1]/5 hover:bg-[#4460F1]/5' : ''}`}
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
                                 <span className="text-sm text-gray-600">
-                                  {student.displayName
+                                  {participant.displayName
                                     ?.split(' ')
                                     .map(n => n[0])
                                     .join('')
@@ -169,10 +173,10 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="text-sm text-gray-800 truncate">
-                                  {student.displayName}
+                                  {participant.displayName}
                                 </div>
                                 <div className="text-xs text-gray-500 truncate">
-                                  {student.email}
+                                  {participant.email}
                                 </div>
                               </div>
                             </div>
@@ -183,7 +187,7 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
 
                     {/* Message area */}
                     <div className="flex-1 flex flex-col min-w-0 bg-white">
-                      {selectedStudent ? (
+                      {selectedParticipant ? (
                         <>
                           <div className="flex-1 overflow-y-auto">
                             <MessageList
@@ -196,8 +200,8 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                           </div>
                           <div className="flex-shrink-0">
                             <MessageInput
-                              onSend={(text) => handleSendMessage(text, 'course_private', selectedStudent)}
-                              placeholder="Message student..."
+                              onSend={(text) => handleSendMessage(text, 'private', selectedParticipant)}
+                              placeholder="Message participant..."
                             />
                           </div>
                         </>
@@ -205,7 +209,7 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                         <div className="flex-1 flex items-center justify-center text-gray-500">
                           <div className="text-center">
                             <div className="text-3xl mb-3">👋</div>
-                            <p>Select a student to start messaging</p>
+                            <p>Select a participant to start messaging</p>
                           </div>
                         </div>
                       )}
@@ -223,8 +227,8 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
                       />
                     </div>
                     <MessageInput
-                      onSend={(text) => handleSendMessage(text, 'course_private', course.instructorId)}
-                      placeholder="Message your instructor..."
+                      onSend={(text) => handleSendMessage(text, 'private', trip.instructorId)}
+                      placeholder="Message trip leader..."
                     />
                   </div>
                 )}
@@ -237,4 +241,4 @@ const CourseMessaging = ({ course, isOpen, onClose, isTripMessaging = false }) =
   );
 };
 
-export default CourseMessaging;
+export default TripMessaging;

@@ -18,6 +18,7 @@ import RequireLoyaltyAccess from './components/Loyalty/RequireLoyaltyAccess';
 import HomePage from './pages/Home';
 import Layout from './components/Layout/Layout';
 import RewardsPage from './pages/RewardsPage';
+import Travel from './pages/Travel';  // Add this import
 
 function MainContent() {
   const { user } = useAuth();
@@ -62,6 +63,7 @@ function MainContent() {
         <Route path="/buddy/:userId" element={<BuddyProfile />} />
         <Route path="/logbook" element={<Logbook />} />
         <Route path="/training" element={<Training />} />
+        <Route path="/travel" element={<Travel />} />  {/* Add this route */}
         <Route path="/messages" element={<ChatPage />} />
         <Route path="/buddies" element={<BuddyList />} />
         <Route path="/rewards" element={<RewardsPage />} />
