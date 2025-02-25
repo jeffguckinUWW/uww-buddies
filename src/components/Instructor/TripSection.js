@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import TripMessaging from '../Messaging/trip/TripMessaging';
@@ -14,11 +14,13 @@ const TripsSection = ({ user, instructorProfile }) => {
     isOpen: false,
     participant: null
   });
-
+  
   // Modal states
   const [isNewTripModalOpen, setIsNewTripModalOpen] = useState(false);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
+  // Add the ref to store current trips value
+  const tripsRef = useRef([]);
   
   // Participant management states
   const [participantSearch, setParticipantSearch] = useState('');
@@ -58,6 +60,7 @@ const TripsSection = ({ user, instructorProfile }) => {
   });
 
   // Stats management state
+  // eslint-disable-next-line no-unused-vars
   const [tripStats, setTripStats] = useState({
     totalParticipants: 0,
     totalDivers: 0,
@@ -67,10 +70,18 @@ const TripsSection = ({ user, instructorProfile }) => {
   // Helper Functions
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
+    
+    // Ensure dateStr is a string
+    if (typeof dateStr !== 'string') {
+      // Convert to string if possible
+      dateStr = String(dateStr);
+    }
+    
     // If it's already in YYYY-MM-DD format, return as is
     if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       return dateStr;
     }
+    
     // Otherwise, clean it up to YYYY-MM-DD
     return dateStr.split('T')[0];
   };
@@ -169,13 +180,13 @@ const TripsSection = ({ user, instructorProfile }) => {
       }
     };
     
-    loadTrips();
+    loadTrips(); // Add this line to call the function
   
     const intervalId = setInterval(async () => {
-      if (trips.length > 0) {
+      if (tripsRef.current.length > 0) {
         try {
           const updatedTrips = await Promise.all(
-            trips.map(trip => checkAndUpdateTripStatus(trip))
+            tripsRef.current.map(trip => checkAndUpdateTripStatus(trip))
           );
           setTrips(updatedTrips);
         } catch (error) {
@@ -183,9 +194,13 @@ const TripsSection = ({ user, instructorProfile }) => {
         }
       }
     }, 3600000);
-  
+    
     return () => clearInterval(intervalId);
   }, [user, checkAndUpdateTripStatus]);
+
+  useEffect(() => {
+    tripsRef.current = trips;
+  }, [trips]);
 
   // Trip Management Functions
   const handleCreateTrip = async () => {
@@ -705,8 +720,7 @@ const TripsSection = ({ user, instructorProfile }) => {
                     <div className="mb-4">
                       <h4 className="text-lg font-semibold">{trip.location}</h4>
                       <p className="text-sm text-gray-600">
-                        {trip.resort} • {trip.resort} • {formatDate(trip.startDate)} - {formatDate(trip.endDate)}
-                      </p>
+                      {trip.resort} • {formatDate(trip.startDate)} - {formatDate(trip.endDate)}                      </p>
                       <div className="mt-2 flex flex-wrap gap-3">
                         <span className="text-sm text-gray-600">
                           Total Participants: {trip.currentParticipants}
@@ -975,14 +989,14 @@ const TripsSection = ({ user, instructorProfile }) => {
                   </button>
                 </div>
                 <p className="text-sm text-gray-600">
-                  Location: {selectedTrip.location}<br />
-                  Resort: {selectedTrip.resort}<br />
+                  Location: {selectedTrip.location || 'N/A'}<br />
+                  Resort: {selectedTrip.resort || 'N/A'}<br />
                   Start Date: {formatDate(selectedTrip.startDate)}<br />
                   End Date: {formatDate(selectedTrip.endDate)}<br />
-                  Total Participants: {selectedTrip.currentParticipants}<br />
-                  Requirements: {selectedTrip.requirements}<br />
-                  Description: {selectedTrip.description}
-                  </p>
+                  Total Participants: {selectedTrip.currentParticipants || 0}<br />
+                  Requirements: {selectedTrip.requirements || 'None'}<br />
+                  Description: {selectedTrip.description || 'No description available'}
+                </p>
               </div>
 
               {/* Participant Management Section */}

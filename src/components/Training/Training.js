@@ -360,14 +360,16 @@ const Training = () => {
 
   const CourseCard = ({ training, isExpanded, onToggle, details, isLoading, error }) => {
     const [activeTab, setActiveTab] = useState('details');
-    const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadCount, setUnreadCount] = useState({
+      messages: 0,
+      broadcasts: 0
+    });
     const [buddyStatuses, setBuddyStatuses] = useState({});
     const { user } = useAuth();
   
     useEffect(() => {
       const fetchBuddyStatuses = async () => {
         if (!details || !user) return;
-        
         try {
           const userRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userRef);
@@ -379,9 +381,67 @@ const Training = () => {
           console.error('Error fetching buddy statuses:', err);
         }
       };
-  
       fetchBuddyStatuses();
     }, [details, user]);
+  
+    // Listen for unread messages and broadcasts
+    useEffect(() => {
+      if (!training.courseId || !user) return;
+  
+      const messagesQuery = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', user.uid),
+        where('courseId', '==', training.courseId),
+        where('type', '==', 'course_message'),
+        where('read', '==', false)
+      );
+  
+      const broadcastsQuery = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', user.uid),
+        where('courseId', '==', training.courseId),
+        where('type', '==', 'course_broadcast'),
+        where('read', '==', false)
+      );
+  
+      const unsubMessages = onSnapshot(messagesQuery, (snapshot) => {
+        setUnreadCount(prev => ({ ...prev, messages: snapshot.size }));
+      });
+  
+      const unsubBroadcasts = onSnapshot(broadcastsQuery, (snapshot) => {
+        setUnreadCount(prev => ({ ...prev, broadcasts: snapshot.size }));
+      });
+  
+      return () => {
+        unsubMessages();
+        unsubBroadcasts();
+      };
+    }, [training.courseId, user]);
+  
+    const markNotificationsAsRead = useCallback(async () => {
+      if (!training.courseId || !user) return;
+  
+      try {
+        const batch = writeBatch(db);
+        
+        const notificationsQuery = query(
+          collection(db, 'notifications'),
+          where('toUser', '==', user.uid),
+          where('courseId', '==', training.courseId),
+          where('type', 'in', ['course_message', 'course_broadcast']),
+          where('read', '==', false)
+        );
+  
+        const snapshot = await getDocs(notificationsQuery);
+        snapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { read: true });
+        });
+  
+        await batch.commit();
+      } catch (err) {
+        console.error('Error marking notifications as read:', err);
+      }
+    }, [training.courseId, user]);
   
     const sendBuddyRequest = async (buddy) => {
       try {
@@ -429,60 +489,12 @@ const Training = () => {
       }
     };
   
-    const markNotificationsAsRead = useCallback(async () => {
-      if (!training.courseId || !user) return;
-  
-      try {
-        // Query for unread notifications for this course
-        const notificationsQuery = query(
-          collection(db, 'notifications'),
-          where('toUser', '==', user.uid),
-          where('courseId', '==', training.courseId),
-          where('type', '==', 'course_message'),
-          where('read', '==', false)
-        );
-  
-        // Get all unread notifications
-        const snapshot = await getDocs(notificationsQuery);
-        
-        // Update each notification to mark as read
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(doc => {
-          batch.update(doc.ref, { read: true });
-        });
-  
-        await batch.commit();
-      } catch (err) {
-        console.error('Error marking notifications as read:', err);
-      }
-    }, [training.courseId, user]);
-  
-    // Mark notifications as read when Messages tab is opened
     useEffect(() => {
-      if (activeTab === 'messages') {
+      if (activeTab === 'messages' || activeTab === 'broadcasts') {
         markNotificationsAsRead();
       }
     }, [activeTab, markNotificationsAsRead]);
   
-    // Listen for unread messages
-    useEffect(() => {
-      if (!training.courseId || !user) return;
-  
-      const q = query(
-        collection(db, 'notifications'),
-        where('toUser', '==', user.uid),
-        where('courseId', '==', training.courseId),
-        where('type', '==', 'course_message'),
-        where('read', '==', false)
-      );
-  
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        setUnreadCount(snapshot.size);
-      });
-  
-      return () => unsubscribe();
-    }, [training.courseId, user]);
-    
     return (
       <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
         {/* Course Header */}
@@ -490,9 +502,9 @@ const Training = () => {
           <div className="mb-2">
             <div className="flex items-start gap-2">
               <h4 className="text-lg font-semibold">{training.courseName}</h4>
-              {unreadCount > 0 && (
+              {(unreadCount.messages > 0 || unreadCount.broadcasts > 0) && (
                 <span className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded-full">
-                  {unreadCount} new
+                  {unreadCount.messages + unreadCount.broadcasts} new
                 </span>
               )}
             </div>
@@ -546,6 +558,7 @@ const Training = () => {
                     >
                       Details
                     </button>
+  
                     {details?.trainingRecord && (
                       <button
                         onClick={() => setActiveTab('training')}
@@ -558,6 +571,26 @@ const Training = () => {
                         Training Record
                       </button>
                     )}
+  
+                    {/* Show Broadcasts tab only for instructors */}
+                    {details?.instructorId === user.uid && (
+                      <button
+                        onClick={() => setActiveTab('broadcasts')}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                          activeTab === 'broadcasts'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        Broadcasts
+                        {unreadCount.broadcasts > 0 && (
+                          <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                            {unreadCount.broadcasts}
+                          </span>
+                        )}
+                      </button>
+                    )}
+  
                     <div className="relative">
                       <button
                         onClick={() => setActiveTab('messages')}
@@ -568,9 +601,9 @@ const Training = () => {
                         }`}
                       >
                         Messages
-                        {unreadCount > 0 && (
+                        {unreadCount.messages > 0 && (
                           <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-                            {unreadCount}
+                            {unreadCount.messages}
                           </span>
                         )}
                       </button>
@@ -583,251 +616,273 @@ const Training = () => {
                   <div className="p-4 space-y-4">
                     {/* Instructor Info */}
                     <div>
-                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
-                    {details.instructor ? (
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                            {details.instructor.photoURL ? (
-                              <img 
-                                src={details.instructor.photoURL} 
-                                alt={details.instructor.displayName}
-                                className="w-full h-full rounded-full"
-                              />
-                            ) : (
-                              <span className="text-gray-600">
-                                {details.instructor.displayName?.charAt(0)}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">{details.instructor.displayName}</p>
-                            <p className="text-sm text-gray-600">{details.instructor.email}</p>
-                          </div>
-                        </div>
-                        {details.instructor.uid !== user.uid && (
-                          buddyStatuses[details.instructor.uid]?.status === 'accepted' ? (
-                            <button
-                              onClick={() => setActiveTab('messages')}
-                              className="text-blue-600 hover:text-blue-700 text-sm"
-                            >
-                              Message Instructor
-                            </button>
-                          ) : buddyStatuses[details.instructor.uid]?.status === 'pending' ? (
-                            <span className="text-sm text-gray-500 italic">
-                              Buddy Request Pending
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => sendBuddyRequest(details.instructor)}
-                              className="text-blue-600 hover:text-blue-700 text-sm"
-                            >
-                              Add Buddy
-                            </button>
-                          )
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-600">Instructor information not available</p>
-                    )}
-                  </div>
-  
-                    {/* Course Assistants */}
-                    {details.assistants?.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Course Assistants</h5>
-                      <div className="border rounded max-h-40 overflow-y-auto">
-                        {details.assistants.map(assistant => (
-                          <div 
-                            key={assistant.uid}
-                            className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                {assistant.photoURL ? (
-                                  <img 
-                                    src={assistant.photoURL} 
-                                    alt={assistant.displayName}
-                                    className="w-full h-full rounded-full"
-                                  />
-                                ) : (
-                                  <span className="text-gray-600">
-                                    {assistant.displayName?.charAt(0)}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <div className="font-medium">{assistant.displayName}</div>
-                                {!assistant.hideEmail && assistant.email && (
-                                  <div className="text-sm text-gray-600">{assistant.email}</div>
-                                )}
-                                {!assistant.hidePhone && assistant.phone && (
-                                  <div className="text-sm text-gray-600">Phone: {assistant.phone}</div>
-                                )}
-                              </div>
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">Instructor</h5>
+                      {details.instructor ? (
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                              {details.instructor.photoURL ? (
+                                <img 
+                                  src={details.instructor.photoURL} 
+                                  alt={details.instructor.displayName}
+                                  className="w-full h-full rounded-full"
+                                />
+                              ) : (
+                                <span className="text-gray-600">
+                                  {details.instructor.displayName?.charAt(0)}
+                                </span>
+                              )}
                             </div>
-                            {buddyStatuses[assistant.uid]?.status === 'accepted' ? (
+                            <div>
+                              <p className="font-medium">{details.instructor.displayName}</p>
+                              <p className="text-sm text-gray-600">{details.instructor.email}</p>
+                            </div>
+                          </div>
+                          {details.instructor.uid !== user.uid && (
+                            buddyStatuses[details.instructor.uid]?.status === 'accepted' ? (
                               <button
                                 onClick={() => setActiveTab('messages')}
                                 className="text-blue-600 hover:text-blue-700 text-sm"
                               >
-                                Message Buddy
+                                Message Instructor
                               </button>
-                            ) : buddyStatuses[assistant.uid]?.status === 'pending' ? (
+                            ) : buddyStatuses[details.instructor.uid]?.status === 'pending' ? (
                               <span className="text-sm text-gray-500 italic">
                                 Buddy Request Pending
                               </span>
                             ) : (
                               <button
-                                onClick={() => sendBuddyRequest(assistant)}
+                                onClick={() => sendBuddyRequest(details.instructor)}
                                 className="text-blue-600 hover:text-blue-700 text-sm"
                               >
                                 Add Buddy
                               </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                            )
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-600">Instructor information not available</p>
+                      )}
                     </div>
-                  )}
-
-                  {/* Fellow Students */}
-                  {details.students?.length > 0 && (
-  <div>
-    <h5 className="text-sm font-semibold text-gray-700 mb-2">Fellow Students</h5>
-    <div className="border rounded max-h-60 overflow-y-auto">
-      {details.students
-        .filter(student => student.uid !== user.uid)
-        .map(student => (
-          <div 
-            key={student.uid} 
-            className="p-2 hover:bg-gray-50 flex justify-between items-start border-b last:border-b-0"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                {student.photoURL ? (
-                  <img 
-                    src={student.photoURL} 
-                    alt={student.displayName}
-                    className="w-full h-full rounded-full"
-                  />
-                ) : (
-                  <span className="text-gray-600">
-                    {student.displayName?.charAt(0)}
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="font-medium">{student.displayName}</div>
-                <Badges
-                  certificationLevel={student.certificationLevel}
-                  specialties={student.specialties}
-                  numberOfDives={student.numberOfDives}
-                  size="small"
-                  showSections={false}
-                />
-                {!student.hideEmail && student.email && (
-                  <div className="text-sm text-gray-600">{student.email}</div>
-                )}
-                {!student.hidePhone && student.phone && (
-                  <div className="text-sm text-gray-600">Phone: {student.phone}</div>
-                )}
-              </div>
-            </div>
-            {buddyStatuses[student.uid]?.status === 'accepted' ? (
-              <button
-                onClick={() => setActiveTab('messages')}
-                className="text-blue-600 hover:text-blue-700 text-sm"
-              >
-                Message Buddy
-              </button>
-            ) : buddyStatuses[student.uid]?.status === 'pending' ? (
-              <span className="text-sm text-gray-500 italic">
-                Buddy Request Pending
-              </span>
-            ) : (
-              <button
-                onClick={() => sendBuddyRequest(student)}
-                className="text-blue-600 hover:text-blue-700 text-sm"
-              >
-                Add Buddy
-              </button>
-            )}
-          </div>
-        ))}
-    </div>
-  </div>
-)}
+  
+                    {/* Course Assistants */}
+                    {details.assistants?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-700 mb-2">Course Assistants</h5>
+                        <div className="border rounded max-h-40 overflow-y-auto">
+                          {details.assistants.map(assistant => (
+                            <div 
+                              key={assistant.uid}
+                              className="p-2 hover:bg-gray-50 flex justify-between items-center border-b last:border-b-0"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                                  {assistant.photoURL ? (
+                                    <img 
+                                      src={assistant.photoURL} 
+                                      alt={assistant.displayName}
+                                      className="w-full h-full rounded-full"
+                                    />
+                                  ) : (
+                                    <span className="text-gray-600">
+                                      {assistant.displayName?.charAt(0)}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-medium">{assistant.displayName}</div>
+                                  {!assistant.hideEmail && assistant.email && (
+                                    <div className="text-sm text-gray-600">{assistant.email}</div>
+                                  )}
+                                  {!assistant.hidePhone && assistant.phone && (
+                                    <div className="text-sm text-gray-600">Phone: {assistant.phone}</div>
+                                  )}
+                                </div>
+                              </div>
+                              {buddyStatuses[assistant.uid]?.status === 'accepted' ? (
+                                <button
+                                  onClick={() => setActiveTab('messages')}
+                                  className="text-blue-600 hover:text-blue-700 text-sm"
+                                >
+                                  Message Buddy
+                                </button>
+                              ) : buddyStatuses[assistant.uid]?.status === 'pending' ? (
+                                <span className="text-sm text-gray-500 italic">
+                                  Buddy Request Pending
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => sendBuddyRequest(assistant)}
+                                  className="text-blue-600 hover:text-blue-700 text-sm"
+                                >
+                                  Add Buddy
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+  
+                    {/* Fellow Students */}
+                    {details.students?.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-700 mb-2">Fellow Students</h5>
+                        <div className="border rounded max-h-60 overflow-y-auto">
+                          {details.students
+                            .filter(student => student.uid !== user.uid)
+                            .map(student => (
+                              <div 
+                                key={student.uid} 
+                                className="p-2 hover:bg-gray-50 flex justify-between items-start border-b last:border-b-0"
+                              >
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                                    {student.photoURL ? (
+                                      <img 
+                                        src={student.photoURL} 
+                                        alt={student.displayName}
+                                        className="w-full h-full rounded-full"
+                                      />
+                                    ) : (
+                                      <span className="text-gray-600">
+                                        {student.displayName?.charAt(0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="font-medium">{student.displayName}</div>
+                                    <Badges
+                                      certificationLevel={student.certificationLevel}
+                                      specialties={student.specialties}
+                                      numberOfDives={student.numberOfDives}
+                                      size="small"
+                                      showSections={false}
+                                    />
+                                    {!student.hideEmail && student.email && (
+                                      <div className="text-sm text-gray-600">{student.email}</div>
+                                    )}
+                                    {!student.hidePhone && student.phone && (
+                                      <div className="text-sm text-gray-600">Phone: {student.phone}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                {buddyStatuses[student.uid]?.status === 'accepted' ? (
+                                  <button
+                                    onClick={() => setActiveTab('messages')}
+                                    className="text-blue-600 hover:text-blue-700 text-sm"
+                                  >
+                                    Message Buddy
+                                  </button>
+                                ) : buddyStatuses[student.uid]?.status === 'pending' ? (
+                                  <span className="text-sm text-gray-500 italic">
+                                    Buddy Request Pending
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => sendBuddyRequest(student)}
+                                    className="text-blue-600 hover:text-blue-700 text-sm"
+                                  >
+                                    Add Buddy
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : activeTab === 'broadcasts' ? (
+                  <div className="p-4">
+                    <CourseMessaging 
+                      course={{
+                        id: training.courseId,
+                        name: training.courseName,
+                        instructor: {
+                          id: details.instructor?.uid,
+                          displayName: details.instructor?.displayName,
+                          email: details.instructor?.email
+                        },
+                        instructorId: details.instructorId,
+                        students: details.students,
+                        assistants: details.assistants
+                      }}
+                      isOpen={true}
+                      onClose={() => setActiveTab('details')}
+                      messageType="course_broadcast"
+                      defaultView="broadcasts"
+                    />
                   </div>
                 ) : activeTab === 'messages' ? (
                   <div className="p-4">
                     <CourseMessaging 
-                  course={{
-                    id: training.courseId,
-                    name: training.courseName,
-                    instructor: {
-                      id: details.instructor?.uid,
-                      displayName: details.instructor?.displayName,
-                      email: details.instructor?.email
-                    },
-                    instructorId: details.instructorId,
-                    students: details.students,
-                    assistants: details.assistants
-                  }}
-                  isOpen={true}
-                  onClose={() => setActiveTab('details')}
-                  defaultView={details.instructorId === user.uid ? undefined : "combined"}
-                />
-                </div>
-              ) : activeTab === 'training' && details?.trainingRecord && (
-                <div className="p-4">
-                  <div className="flex justify-end mb-4">
-                    <button
-                      onClick={() => generateTrainingRecordPDF(
-                        details,
-                        { 
-                          uid: user.uid, 
-                          displayName: details.students?.find(s => s.uid === user.uid)?.displayName, 
-                          email: details.students?.find(s => s.uid === user.uid)?.email 
-                        },
-                        details.trainingRecord,
-                        details.studentRecords?.[user.uid]?.progress || {},
-                        details.studentRecords?.[user.uid]?.signOff,
-                        details.studentRecords?.[user.uid]?.notes,
-                        {
-                          name: details.instructor?.name || details.instructor?.displayName,
+                      course={{
+                        id: training.courseId,
+                        name: training.courseName,
+                        instructor: {
+                          id: details.instructor?.uid,
                           displayName: details.instructor?.displayName,
-                          instructorCertifications: details.instructor?.instructorCertifications || []
-                        }
-                      )}
-                      variant="outline"
-                    >
-                      Export Record
-                    </button>
+                          email: details.instructor?.email
+                        },
+                        instructorId: details.instructorId,
+                        students: details.students,
+                        assistants: details.assistants
+                      }}
+                      isOpen={true}
+                      onClose={() => setActiveTab('details')}
+                      defaultView={details.instructorId === user.uid ? undefined : "combined"}
+                      showBroadcasts={details.instructorId !== user.uid}
+                    />
                   </div>
-                  <StudentTrainingRecord
-                    isOpen={activeTab === 'training'}
-                    onClose={() => setActiveTab('details')}
-                    student={{ 
-                      uid: user.uid,
-                      displayName: details.students?.find(s => s.uid === user.uid)?.displayName,
-                      email: details.students?.find(s => s.uid === user.uid)?.email
-                    }}
-                    course={details}
-                    trainingRecord={details.trainingRecord}
-                    readOnly={true}
-                  />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-4 text-center text-gray-600">No details available</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+                ) : activeTab === 'training' && details?.trainingRecord && (
+                  <div className="p-4">
+                    <div className="flex justify-end mb-4">
+                      <button
+                        onClick={() => generateTrainingRecordPDF(
+                          details,
+                          { 
+                            uid: user.uid, 
+                            displayName: details.students?.find(s => s.uid === user.uid)?.displayName, 
+                            email: details.students?.find(s => s.uid === user.uid)?.email 
+                          },
+                          details.trainingRecord,
+                          details.studentRecords?.[user.uid]?.progress || {},
+                          details.studentRecords?.[user.uid]?.signOff,
+                          details.studentRecords?.[user.uid]?.notes,
+                          {
+                            name: details.instructor?.name || details.instructor?.displayName,
+                            displayName: details.instructor?.displayName,
+                            instructorCertifications: details.instructor?.instructorCertifications || []
+                          }
+                        )}
+                        variant="outline"
+                      >
+                        Export Record
+                      </button>
+                    </div>
+                    <StudentTrainingRecord
+                      isOpen={activeTab === 'training'}
+                      onClose={() => setActiveTab('details')}
+                      student={{ 
+                        uid: user.uid,
+                        displayName: details.students?.find(s => s.uid === user.uid)?.displayName,
+                        email: details.students?.find(s => s.uid === user.uid)?.email
+                      }}
+                      course={details}
+                      trainingRecord={details.trainingRecord}
+                      readOnly={true}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 text-center text-gray-600">No details available</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
