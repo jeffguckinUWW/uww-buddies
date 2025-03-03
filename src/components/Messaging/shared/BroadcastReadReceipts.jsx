@@ -1,7 +1,9 @@
 // BroadcastReadReceipts.jsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Users } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
+import { useMessages } from '../../../context/MessageContext';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +13,51 @@ import {
 } from '../../../components/ui/dialog';
 
 const BroadcastReadReceipts = ({ message, isInstructor }) => {
+  const { user } = useAuth();
+  const { markAsRead } = useMessages();
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Always define the useEffect hook, but make its logic conditional
+  useEffect(() => {
+    if (!message || !user || !message.type?.includes('broadcast')) {
+      return;
+    }
+
+    // Skip if already read
+    if (message.readBy?.includes(user.uid)) {
+      return;
+    }
+
+    // Add a small delay before marking as read to avoid permission errors
+    // This helps when the component loads before permissions are fully established
+    const timeoutId = setTimeout(() => {
+      markAsRead(message.id, user.uid, true)
+        .then(() => {
+          // Successfully marked as read
+        })
+        .catch(err => {
+          console.error('Error marking message as read:', err);
+          
+          // If we still have retries left, increment retry count which will trigger a retry
+          if (retryCount < 3) {
+            setRetryCount(prevCount => prevCount + 1);
+          }
+        });
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timeoutId);
+  }, [message, user, markAsRead, retryCount]);
+
+  // Exit early if not a broadcast message
   if (!message.type?.includes('broadcast')) return null;
 
-  const readCount = message.readCount || 0;
+  // Calculate read count more reliably
+  const getReadCount = () => {
+    if (!message.readStatus) return 0;
+    return Object.values(message.readStatus).filter(statusObj => statusObj.read).length;
+  };
+
+  const readCount = getReadCount();
   const totalRecipients = message.totalRecipients || 0;
   const readStatus = message.readStatus || {};
 
@@ -28,11 +72,16 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
 
   // For instructors, show detailed modal
   const readUsers = Object.entries(readStatus)
-    .filter(([_, status]) => status.read)
-    .sort((a, b) => new Date(b[1].readAt) - new Date(a[1].readAt));
+    .filter(([_, statusObj]) => statusObj.read)
+    .sort((a, b) => {
+      // Handle potential missing readAt fields
+      const dateA = a[1]?.readAt ? new Date(a[1].readAt) : new Date(0);
+      const dateB = b[1]?.readAt ? new Date(b[1].readAt) : new Date(0);
+      return dateB - dateA; // Most recent first
+    });
 
   const unreadUsers = Object.entries(readStatus)
-    .filter(([_, status]) => !status.read);
+    .filter(([_, statusObj]) => !statusObj.read);
 
   return (
     <Dialog>
@@ -53,14 +102,17 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
               Read ({readUsers.length})
             </h3>
             <div className="space-y-2">
-              {readUsers.map(([userId, status]) => (
+              {readUsers.map(([userId, statusObj]) => (
                 <div key={userId} className="flex justify-between items-center text-sm">
-                  <span>{message.readStatus[userId].name || 'Unknown User'}</span>
+                  <span>{readStatus[userId]?.name || 'Unknown User'}</span>
                   <span className="text-xs text-gray-500">
-                    {format(new Date(status.readAt), 'MMM d, h:mm a')}
+                    {statusObj.readAt ? format(new Date(statusObj.readAt), 'MMM d, h:mm a') : 'Time unknown'}
                   </span>
                 </div>
               ))}
+              {readUsers.length === 0 && (
+                <div className="text-sm text-gray-500">No one has read this message yet</div>
+              )}
             </div>
           </div>
 
@@ -72,9 +124,12 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
             <div className="space-y-2">
               {unreadUsers.map(([userId]) => (
                 <div key={userId} className="text-sm text-gray-500">
-                  {message.readStatus[userId].name || 'Unknown User'}
+                  {readStatus[userId]?.name || 'Unknown User'}
                 </div>
               ))}
+              {unreadUsers.length === 0 && (
+                <div className="text-sm text-gray-500">Everyone has read this message</div>
+              )}
             </div>
           </div>
         </div>

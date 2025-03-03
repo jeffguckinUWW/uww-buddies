@@ -15,6 +15,7 @@ import {
   getDocs,
   getDoc,
   limit,
+  deleteDoc,
   startAfter
 } from 'firebase/firestore';
 import { 
@@ -27,7 +28,6 @@ import { handleError, AppError, ErrorTypes } from '../lib/utils';
 
 const MESSAGES_PER_PAGE = 25;
 const INITIAL_MESSAGES_LIMIT = 50;
-const THREAD_MESSAGES_PER_PAGE = 20;
 
 export const MessageTypes = {
   // Buddy-to-buddy messaging
@@ -54,7 +54,6 @@ class MessageService {
           collection(db, 'messages'),
           where('courseId', '==', params.courseId),
           where('type', '==', params.messageType),
-          where('parentMessageId', '==', null), // Only fetch root messages
           orderBy('timestamp', 'desc'),
           ...(lastMessage ? [startAfter(lastMessage.timestamp)] : []),
           limit(MESSAGES_PER_PAGE)
@@ -65,7 +64,6 @@ class MessageService {
           collection(db, 'messages'),
           where('tripId', '==', params.tripId),
           where('type', '==', params.messageType),
-          where('parentMessageId', '==', null), // Only fetch root messages
           orderBy('timestamp', 'desc'),
           ...(lastMessage ? [startAfter(lastMessage.timestamp)] : []),
           limit(MESSAGES_PER_PAGE)
@@ -76,7 +74,6 @@ class MessageService {
           collection(db, 'messages'),
           where('chatId', '==', params.chatId),
           where('type', '==', MessageTypes.CHAT),
-          where('parentMessageId', '==', null), // Only fetch root messages
           orderBy('timestamp', 'desc'),
           ...(lastMessage ? [startAfter(lastMessage.timestamp)] : []),
           limit(MESSAGES_PER_PAGE)
@@ -105,94 +102,120 @@ class MessageService {
 
   static subscribeToTypingStatus(params, callback) {
     try {
-      let typingRef;
+      // Get reference to typing status collection
+      const typingStatusRef = collection(db, 'typingStatus');
+      
+      // Create a query for active typing statuses
+      let q;
       
       if (params.courseId) {
-        typingRef = doc(db, 'typingStatus', `course_${params.courseId}_${params.messageType}`);
+        q = query(
+          typingStatusRef,
+          where('type', '==', 'course'),
+          where('contextId', '==', params.courseId),
+          where('messageType', '==', params.messageType),
+          where('isTyping', '==', true)
+        );
       } else if (params.tripId) {
-        typingRef = doc(db, 'typingStatus', `trip_${params.tripId}_${params.messageType}`);
+        q = query(
+          typingStatusRef,
+          where('type', '==', 'trip'),
+          where('contextId', '==', params.tripId),
+          where('messageType', '==', params.messageType),
+          where('isTyping', '==', true)
+        );
       } else if (params.chatId) {
-        typingRef = doc(db, 'typingStatus', `chat_${params.chatId}`);
+        q = query(
+          typingStatusRef,
+          where('type', '==', 'chat'),
+          where('contextId', '==', params.chatId),
+          where('isTyping', '==', true)
+        );
       } else {
         console.error('Invalid typing status parameters');
+        callback([]);
         return () => {};
       }
       
-      return onSnapshot(typingRef, (snapshot) => {
-        if (!snapshot.exists()) {
+      // Setup subscription with error handling
+      return onSnapshot(q, 
+        (snapshot) => {
+          const typingUsers = snapshot.docs.map(doc => doc.data().userId);
+          callback(typingUsers);
+        }, 
+        (error) => {
+          console.error('Error in typing status subscription:', error);
+          // Call callback with empty array to avoid breaking UI
           callback([]);
-          return;
         }
-        
-        const data = snapshot.data();
-        const users = data.users || {};
-        
-        // Filter out stale typing indicators (more than 10 seconds old)
-        const now = new Date();
-        const typingUsers = Object.entries(users)
-          .filter(([_, data]) => {
-            if (!data.isTyping) return false;
-            
-            const timestamp = data.timestamp?.toDate();
-            if (!timestamp) return false;
-            
-            const timeDiff = now - timestamp;
-            return timeDiff < 10000; // 10 seconds
-          })
-          .map(([userId]) => userId);
-        
-        callback(typingUsers);
-      }, (error) => {
-        console.error('Error subscribing to typing status:', error);
-        callback([]);
-      });
+      );
     } catch (error) {
-      console.error('Error in subscribeToTypingStatus:', error);
+      console.error('Error setting up typing subscription:', error);
+      // Return a no-op function and call callback with empty array
+      callback([]);
       return () => {};
     }
   }
 
   static async addReaction(messageId, userId, emoji, userName) {
     try {
-      const messageRef = doc(db, 'messages', messageId);
-      const messageSnap = await getDoc(messageRef);
+      // Input validation
+      if (!messageId || !userId || !emoji) {
+        console.error('Missing required parameters for addReaction:', { messageId, userId, emoji });
+        throw new Error('Missing required reaction parameters');
+      }
       
+      // Use a safer name if not provided
+      const safeUserName = userName || 'Unknown User';
+      
+      // Get message reference
+      const messageRef = doc(db, 'messages', messageId);
+      
+      // First check if message exists to avoid errors
+      const messageSnap = await getDoc(messageRef);
       if (!messageSnap.exists()) {
         throw new Error('Message not found');
       }
       
       const messageData = messageSnap.data();
-      const reactions = messageData.reactions || {};
-      
-      if (!reactions[emoji]) {
-        reactions[emoji] = {
-          count: 0,
-          users: {}
-        };
-      }
+      let reactions = { ...(messageData.reactions || {}) };
       
       // Check if user already reacted with this emoji
-      const hasReacted = reactions[emoji].users[userId];
+      const hasReacted = reactions[emoji]?.users?.[userId];
       
       if (hasReacted) {
-        // User already reacted with this emoji, so remove it
-        delete reactions[emoji].users[userId];
-        reactions[emoji].count = Math.max(0, reactions[emoji].count - 1);
+        // User already reacted, remove the reaction
+        const newUsers = { ...reactions[emoji].users };
+        delete newUsers[userId];
         
-        // Remove the emoji entry if no reactions left
-        if (reactions[emoji].count === 0) {
-          delete reactions[emoji];
+        const newCount = Math.max(0, (reactions[emoji].count || 1) - 1);
+        
+        if (newCount === 0) {
+          // No reactions left for this emoji, remove it
+          const { [emoji]: removed, ...remainingReactions } = reactions;
+          reactions = remainingReactions;
+        } else {
+          // Update the reaction with user removed
+          reactions[emoji] = {
+            count: newCount,
+            users: newUsers
+          };
         }
       } else {
         // Add new reaction
-        reactions[emoji].users[userId] = {
-          name: userName,
-          timestamp: new Date()
+        reactions[emoji] = {
+          count: ((reactions[emoji]?.count) || 0) + 1,
+          users: {
+            ...(reactions[emoji]?.users || {}),
+            [userId]: {
+              name: safeUserName,
+              timestamp: new Date()
+            }
+          }
         };
-        reactions[emoji].count = (reactions[emoji].count || 0) + 1;
       }
       
-      // Update message with reactions
+      // Update the message with new reactions
       await updateDoc(messageRef, { reactions });
       
       return {
@@ -200,7 +223,7 @@ class MessageService {
         reactions
       };
     } catch (error) {
-      console.error('Error adding reaction:', error);
+      console.error('Error in addReaction:', error);
       throw new Error('Failed to add reaction');
     }
   }
@@ -381,74 +404,54 @@ class MessageService {
     return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
   }
 
-  static async fetchOlderThreadMessages(threadId, lastMessage) {
-    try {
-      const threadQuery = query(
-        collection(db, 'messages'),
-        where('threadInfo.rootMessageId', '==', threadId),
-        orderBy('threadInfo.level', 'asc'),
-        orderBy('timestamp', 'asc'),
-        startAfter(lastMessage.timestamp),
-        limit(THREAD_MESSAGES_PER_PAGE)
-      );
-
-      const snapshot = await getDocs(threadQuery);
-      const messages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate() || new Date()
-      }));
-
-      return {
-        messages,
-        hasMore: messages.length === THREAD_MESSAGES_PER_PAGE
-      };
-    } catch (error) {
-      console.error('Error fetching older thread messages:', error);
-      throw new Error('Failed to load older thread messages');
-    }
-  }
-
   static async setTypingStatus(params, userId, isTyping = true) {
     try {
-      let typingRef;
+      // Skip if we don't have all required parameters
+      if (!userId || !params) return;
+      
+      // Create a unique ID for the typing status
+      let typeValue = 'unknown';
+      let contextId = 'unknown';
       
       if (params.courseId) {
-        typingRef = doc(db, 'typingStatus', `course_${params.courseId}_${params.messageType}`);
+        typeValue = 'course';
+        contextId = params.courseId;
       } else if (params.tripId) {
-        typingRef = doc(db, 'typingStatus', `trip_${params.tripId}_${params.messageType}`);
+        typeValue = 'trip';
+        contextId = params.tripId;
       } else if (params.chatId) {
-        typingRef = doc(db, 'typingStatus', `chat_${params.chatId}`);
+        typeValue = 'chat';
+        contextId = params.chatId;
       } else {
-        throw new AppError('Invalid typing status parameters', ErrorTypes.VALIDATION);
+        // No valid context, so we'll exit early
+        return;
       }
       
-      // Try to update the document first
-      try {
-        await updateDoc(typingRef, {
-          [`users.${userId}`]: {
-            timestamp: serverTimestamp(),
-            isTyping: isTyping
-          }
-        });
-      } catch (error) {
-        // If document doesn't exist, create it
-        if (error.code === 'not-found') {
-          await setDoc(typingRef, {
-            users: {
-              [userId]: {
-                timestamp: serverTimestamp(),
-                isTyping: isTyping
-              }
-            }
-          });
-        } else {
-          throw error;
+      const typingId = `${typeValue}_${contextId}_${params.messageType || 'unknown'}_${userId}`;
+      const typingRef = doc(db, 'typingStatus', typingId);
+      
+      if (isTyping) {
+        // When setting typing status, use set with merge option to avoid overwriting
+        await setDoc(typingRef, {
+          userId,
+          type: typeValue,
+          contextId,
+          messageType: params.messageType || 'unknown',
+          isTyping: true,
+          timestamp: serverTimestamp()
+        }, { merge: true });
+      } else {
+        // When clearing typing status, we'll try to delete but catch errors silently
+        try {
+          await deleteDoc(typingRef);
+        } catch (deleteError) {
+          // Just log, don't throw - we don't want to break UI flow on this
+          console.log('No typing status to delete:', deleteError.message);
         }
       }
     } catch (error) {
-      console.error('Error setting typing status:', error);
-      // Don't throw the error as typing status is non-critical
+      // Just log, don't throw - typing status errors should never crash the app
+      console.log('Error setting typing status (non-critical):', error.message);
     }
   }
 
@@ -462,7 +465,6 @@ class MessageService {
           collection(db, 'messages'),
           where('courseId', '==', params.courseId),
           where('type', '==', MessageTypes.COURSE_BROADCAST),
-          where('parentMessageId', '==', null),
           orderBy('timestamp', 'desc'),
           limit(INITIAL_MESSAGES_LIMIT)
         );
@@ -471,7 +473,6 @@ class MessageService {
           collection(db, 'messages'),
           where('courseId', '==', params.courseId),
           where('type', '==', params.messageType || MessageTypes.COURSE_DISCUSSION),
-          where('parentMessageId', '==', null),
           orderBy('timestamp', 'desc'),
           limit(INITIAL_MESSAGES_LIMIT)
         );
@@ -483,7 +484,6 @@ class MessageService {
           collection(db, 'messages'),
           where('tripId', '==', params.tripId),
           where('type', '==', MessageTypes.TRIP_BROADCAST),
-          where('parentMessageId', '==', null),
           orderBy('timestamp', 'desc'),
           limit(INITIAL_MESSAGES_LIMIT)
         );
@@ -492,7 +492,6 @@ class MessageService {
           collection(db, 'messages'),
           where('tripId', '==', params.tripId),
           where('type', '==', params.messageType || MessageTypes.TRIP_DISCUSSION),
-          where('parentMessageId', '==', null),
           orderBy('timestamp', 'desc'),
           limit(INITIAL_MESSAGES_LIMIT)
         );
@@ -503,7 +502,6 @@ class MessageService {
         collection(db, 'messages'),
         where('chatId', '==', params.chatId),
         where('type', '==', MessageTypes.CHAT),
-        where('parentMessageId', '==', null),
         orderBy('timestamp', 'desc'),
         limit(INITIAL_MESSAGES_LIMIT)
       );
@@ -529,35 +527,6 @@ class MessageService {
       (error) => {
         console.error('Error in message subscription:', error);
         callback({ error: 'Failed to load messages' });
-      }
-    );
-  }
-
-  static subscribeToThread(threadId, callback) {
-    const threadQuery = query(
-      collection(db, 'messages'),
-      where('threadInfo.rootMessageId', '==', threadId),
-      orderBy('threadInfo.level', 'asc'),
-      orderBy('timestamp', 'asc')
-    );
-
-    return onSnapshot(
-      threadQuery,
-      (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate() || new Date()
-        }));
-        
-        callback({
-          messages,
-          threadId
-        });
-      },
-      (error) => {
-        console.error('Error in thread subscription:', error);
-        callback({ error: 'Failed to load thread messages' });
       }
     );
   }
@@ -686,16 +655,31 @@ class MessageService {
       if (!areBuddies) {
         throw new Error('Users must be buddies to create a chat');
       }
-
-      // Get user names for the chat
-      const [user1Doc, user2Doc] = await Promise.all([
+  
+      // Get user names with better fallbacks
+      const [user1Doc, user2Doc, profile1Doc, profile2Doc] = await Promise.all([
         getDoc(doc(db, 'users', userId1)),
-        getDoc(doc(db, 'users', userId2))
+        getDoc(doc(db, 'users', userId2)),
+        getDoc(doc(db, 'profiles', userId1)),
+        getDoc(doc(db, 'profiles', userId2))
       ]);
-
-      const user1Name = user1Doc.data().displayName || 'Unknown User';
-      const user2Name = user2Doc.data().displayName || 'Unknown User';
-
+  
+      // Use proper fallback logic for user1
+      let user1Name = 'Unknown User';
+      if (profile1Doc.exists() && profile1Doc.data().name) {
+        user1Name = profile1Doc.data().name;
+      } else if (user1Doc.exists() && user1Doc.data().displayName) {
+        user1Name = user1Doc.data().displayName;
+      }
+  
+      // Use proper fallback logic for user2
+      let user2Name = 'Unknown User';
+      if (profile2Doc.exists() && profile2Doc.data().name) {
+        user2Name = profile2Doc.data().name;
+      } else if (user2Doc.exists() && user2Doc.data().displayName) {
+        user2Name = user2Doc.data().displayName;
+      }
+  
       // Check existing chats
       const chatsQuery = query(
         collection(db, 'chats'),
@@ -708,11 +692,11 @@ class MessageService {
         return data.activeParticipants.includes(userId2) && 
                data.activeParticipants.length === 2;
       });
-
+  
       if (existingChat) {
         return existingChat.id;
       }
-
+  
       // Create new chat
       const chatRef = await addDoc(collection(db, 'chats'), {
         type: 'direct',
@@ -733,7 +717,7 @@ class MessageService {
         createdBy: userId1,
         lastMessageAt: serverTimestamp()
       });
-
+  
       return chatRef.id;
     } catch (error) {
       console.error('Error creating buddy chat:', error);
@@ -743,21 +727,26 @@ class MessageService {
 
   static async sendMessage(messageData) {
     try {
+      // Get sender name from multiple sources with fallbacks
       const senderProfile = await getDoc(doc(db, 'profiles', messageData.senderId));
-      const senderName = senderProfile.exists() ? 
-        senderProfile.data().name || 'Unknown User' : 
-        'Unknown User';
+      const userDoc = await getDoc(doc(db, 'users', messageData.senderId));
+  
+      let senderName = 'Unknown User';
+      if (senderProfile.exists() && senderProfile.data().name) {
+        senderName = senderProfile.data().name;
+      } else if (userDoc.exists() && userDoc.data().displayName) {
+        senderName = userDoc.data().displayName;
+      } else if (messageData.senderName) {
+        senderName = messageData.senderName;
+      }
   
       const baseMessage = {
         timestamp: serverTimestamp(),
         readBy: [messageData.senderId],
         deletedFor: [],
-        senderName,
-        parentMessageId: null,
-        replyCount: 0,
-        lastReplyAt: null
+        senderName
       };
-
+  
       // Handle Trip Messages
       if (messageData.tripId) {
         const tripDoc = await getDoc(doc(db, 'trips', messageData.tripId));
@@ -776,7 +765,7 @@ class MessageService {
         if (!isTripLeader && !isTripParticipant) {
           throw new Error('Not authorized to send messages in this trip');
         }
-
+  
         if (messageData.type === MessageTypes.TRIP_PRIVATE) {
           const isLeaderInvolved = isTripLeader || messageData.recipientId === tripData.leaderId;
           if (!isLeaderInvolved) {
@@ -801,10 +790,10 @@ class MessageService {
       
         const messageRef = await addDoc(collection(db, 'messages'), newMessage);
         console.log('Message added with ID:', messageRef.id);
-
+  
         let recipients = [];
         let notificationType = 'trip_message';
-
+  
         if (messageData.type === MessageTypes.TRIP_BROADCAST) {
           recipients = tripData.participants?.map(p => p.uid) || [];
           notificationType = 'trip_broadcast';
@@ -849,11 +838,11 @@ class MessageService {
         if (messageData.type === MessageTypes.COURSE_BROADCAST && !isInstructor) {
           throw new Error('Only instructors can send broadcast messages');
         }
-
+  
         if (!isInstructor && !isAssistant && !isStudent) {
           throw new Error('Not authorized to send messages in this course');
         }
-
+  
         if (messageData.type === MessageTypes.COURSE_PRIVATE) {
           const isInstructorInvolved = isInstructor || messageData.recipientId === courseData.instructorId;
           if (!isInstructorInvolved) {
@@ -880,7 +869,7 @@ class MessageService {
   
         let recipients = [];
         let notificationType = 'course_message';
-
+  
         if (messageData.type === MessageTypes.COURSE_BROADCAST) {
           recipients = [
             ...(courseData.students?.map(s => s.uid) || []),
@@ -897,7 +886,7 @@ class MessageService {
         else if (messageData.recipientId) {
           recipients = [messageData.recipientId];
         }
-
+  
         await Promise.all(recipients.map(recipientId => 
           addDoc(collection(db, 'notifications'), {
             type: notificationType,
@@ -924,12 +913,12 @@ class MessageService {
         }
         
         const chatData = chatDoc.data();
-
+  
         // Verify sender is part of the chat
         if (!chatData.activeParticipants.includes(messageData.senderId)) {
           throw new Error('Not authorized to send messages in this chat');
         }
-
+  
         // For buddy chats, verify all participants are buddies
         if (chatData.type === 'buddy') {
           const buddies = await this.getBuddies(messageData.senderId);
@@ -939,7 +928,7 @@ class MessageService {
             throw new Error('Can only chat with buddies');
           }
         }
-
+  
         const newMessage = {
           ...baseMessage,
           ...messageData,
@@ -982,102 +971,6 @@ class MessageService {
       console.error('MessageService - Detailed error:', error);
       console.error('MessageService - Error stack:', error.stack);
       throw new Error('Failed to send message');
-    }
-  }
-
-  static async sendReply(messageData, parentMessageId) {
-    try {
-      // First verify the parent message exists
-      const parentRef = doc(db, 'messages', parentMessageId);
-      const parentSnap = await getDoc(parentRef);
-      
-      if (!parentSnap.exists()) {
-        throw new Error('Parent message not found');
-      }
-  
-      const parentData = parentSnap.data();
-  
-      // Add threading info to the message
-      const messageWithThread = {
-        ...messageData,
-        parentMessageId,
-        threadInfo: {
-          rootMessageId: parentData.threadInfo?.rootMessageId || parentMessageId,
-          level: (parentData.threadInfo?.level || 0) + 1
-        }
-      };
-  
-      // Send the message
-      const messageRef = await addDoc(collection(db, 'messages'), messageWithThread);
-  
-      // Update the parent message's reply count
-      await updateDoc(parentRef, {
-        replyCount: (parentData.replyCount || 0) + 1,
-        lastReplyAt: serverTimestamp()
-      });
-  
-      // If this is a reply to a reply, also update the root message
-      if (parentData.threadInfo?.rootMessageId) {
-        const rootRef = doc(db, 'messages', parentData.threadInfo.rootMessageId);
-        const rootSnap = await getDoc(rootRef);
-        
-        if (rootSnap.exists()) {
-          await updateDoc(rootRef, {
-            totalThreadReplies: (rootSnap.data().totalThreadReplies || 0) + 1,
-            lastThreadReplyAt: serverTimestamp()
-          });
-        }
-      }
-  
-      return {
-        id: messageRef.id,
-        ...messageWithThread,
-        timestamp: new Date()
-      };
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      throw new Error('Failed to send reply');
-    }
-  }
-  
-  static async getReplies(messageId) {
-    try {
-      const repliesQuery = query(
-        collection(db, 'messages'),
-        where('parentMessageId', '==', messageId),
-        orderBy('timestamp', 'asc')
-      );
-  
-      const snapshot = await getDocs(repliesQuery);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate() || new Date()
-      }));
-    } catch (error) {
-      console.error('Error getting replies:', error);
-      throw new Error('Failed to get replies');
-    }
-  }
-  
-  static async getThreadMessages(rootMessageId) {
-    try {
-      const threadQuery = query(
-        collection(db, 'messages'),
-        where('threadInfo.rootMessageId', '==', rootMessageId),
-        orderBy('threadInfo.level', 'asc'),
-        orderBy('timestamp', 'asc')
-      );
-  
-      const snapshot = await getDocs(threadQuery);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate() || new Date()
-      }));
-    } catch (error) {
-      console.error('Error getting thread messages:', error);
-      throw new Error('Failed to get thread messages');
     }
   }
 
@@ -1190,7 +1083,6 @@ class MessageService {
     }
   }
   
-
   static async deleteChat(chatId, userId) {
     try {
       const chatDoc = await getDoc(doc(db, 'chats', chatId));

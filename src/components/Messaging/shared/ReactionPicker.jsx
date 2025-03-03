@@ -4,10 +4,28 @@ import { useMessages } from '../../../context/MessageContext';
 
 const ReactionPicker = ({ messageId, onReactionSelect, isOwnMessage }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState('top'); // 'top' or 'bottom'
+  const buttonRef = useRef(null);
   const pickerRef = useRef(null);
   const { getCommonEmojis } = useMessages();
   
   const commonEmojis = getCommonEmojis();
+
+  // Determine position on open
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      // Calculate button position relative to viewport
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      // Need at least 200px for the emoji picker
+      const spaceAbove = buttonRect.top;
+      const spaceBelow = viewportHeight - buttonRect.bottom;
+      
+      // Choose position with more space
+      setPosition(spaceBelow > spaceAbove ? 'bottom' : 'top');
+    }
+  }, [isOpen]);
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -38,6 +56,7 @@ const ReactionPicker = ({ messageId, onReactionSelect, isOwnMessage }) => {
   return (
     <div className="relative" ref={pickerRef}>
       <button
+        ref={buttonRef}
         onClick={togglePicker}
         className={`${
           isOwnMessage
@@ -50,13 +69,23 @@ const ReactionPicker = ({ messageId, onReactionSelect, isOwnMessage }) => {
       </button>
       
       {isOpen && (
-        <div className="absolute bottom-full mb-2 p-2 bg-white rounded-lg shadow-lg z-10 border">
-          <div className="grid grid-cols-5 gap-1">
+        <div className={`absolute ${
+          position === 'top' 
+            ? 'bottom-full mb-2' 
+            : 'top-full mt-2'
+          } left-0 p-3 bg-white rounded-lg shadow-lg z-20 border min-w-[220px]`}
+          style={{
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}
+        >
+          <div className="grid grid-cols-6 gap-2">
             {commonEmojis.map(emoji => (
               <button
                 key={emoji}
                 onClick={() => handleEmojiClick(emoji)}
-                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded text-lg"
+                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded text-lg transition-colors"
+                title={`React with ${emoji}`}
               >
                 {emoji}
               </button>

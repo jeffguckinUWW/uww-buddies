@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Profile from './components/Profile/Profile';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
@@ -18,13 +18,12 @@ import RequireLoyaltyAccess from './components/Loyalty/RequireLoyaltyAccess';
 import HomePage from './pages/Home';
 import Layout from './components/Layout/Layout';
 import RewardsPage from './pages/RewardsPage';
-import Travel from './pages/Travel';  // Add this import
+import Travel from './pages/Travel';
 
-function MainContent() {
-  const { user } = useAuth();
-  const [error, setError] = useState('');
+function AuthRoutes() {
   const location = useLocation();
-
+  const [error, setError] = useState('');
+  
   useEffect(() => {
     const errorMessage = localStorage.getItem('instructorAccessError');
     if (errorMessage) {
@@ -38,18 +37,7 @@ function MainContent() {
       return () => clearTimeout(timer);
     }
   }, [location.pathname]);
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        <Routes>
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Login />} />
-        </Routes>
-      </div>
-    );
-  }
-
+  
   return (
     <Layout>
       {error && (
@@ -63,7 +51,7 @@ function MainContent() {
         <Route path="/buddy/:userId" element={<BuddyProfile />} />
         <Route path="/logbook" element={<Logbook />} />
         <Route path="/training" element={<Training />} />
-        <Route path="/travel" element={<Travel />} />  {/* Add this route */}
+        <Route path="/travel" element={<Travel />} />
         <Route path="/messages" element={<ChatPage />} />
         <Route path="/buddies" element={<BuddyList />} />
         <Route path="/rewards" element={<RewardsPage />} />
@@ -84,9 +72,31 @@ function MainContent() {
             </RequireLoyaltyAccess>
           } 
         />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Layout>
   );
+}
+
+function MainContent() {
+  const { user } = useAuth();
+  console.log("Current user state:", user);
+  console.log("Current path:", window.location.pathname);
+
+  // If user is not logged in, show login or register pages
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Routes>
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Login />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  // If user is logged in, show protected routes
+  return <AuthRoutes />;
 }
 
 function App() {

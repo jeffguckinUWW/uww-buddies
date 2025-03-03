@@ -6,7 +6,6 @@ import { useMessages } from '../../../context/MessageContext';
 import { useAuth } from '../../../context/AuthContext';
 import MessageInput from '../shared/MessageInput';
 import MessageList from '../shared/MessageList';
-import ThreadView from '../shared/ThreadView';
 import { Card } from '../../ui/card';
 import EnhancedErrorAlert from '../../ui/EnhancedErrorAlert';
 import SearchBar from '../shared/SearchBar';
@@ -43,8 +42,6 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
   const [sendError, setSendError] = useState(null);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeThread, setActiveThread] = useState(null);
-  const [showThreadView, setShowThreadView] = useState(false);
   const [userProfiles, setUserProfiles] = useState({});
   const isInstructor = trip?.instructorId === user?.uid;
 
@@ -186,10 +183,17 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         };
       }
       
+      // Add role designation for broadcast messages with better name retrieval
+      // Get user name with proper fallbacks, checking all possible sources
+      let senderDisplayName = user.name || user.displayName || user.email || 'Unknown User';
+      if (type === 'broadcast' && isInstructor) {
+        senderDisplayName += ' (Trip Leader)';
+      }
+      
       const messageData = {
         tripId: trip.id,
         senderId: user.uid,
-        senderName: user.displayName || 'Unknown User',
+        senderName: senderDisplayName,
         text: text.trim(),
         timestamp: new Date(),
         type: messageType,
@@ -234,16 +238,6 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
     }
   };
 
-  const handleReplyMessage = useCallback((message) => {
-    setActiveThread(message);
-    setShowThreadView(true);
-  }, []);
-
-  const closeThreadView = useCallback(() => {
-    setShowThreadView(false);
-    setActiveThread(null);
-  }, []);
-
   const filteredMessages = messages.filter(msg => {
     switch (activeTab) {
       case 'broadcast':
@@ -265,28 +259,6 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
   ) || [];
 
   if (!isOpen) return null;
-
-  // Show ThreadView when a thread is active
-  if (showThreadView && activeThread) {
-    return (
-      <div className="fixed inset-0 z-50 bg-gray-100">
-        <div className="absolute inset-0 bg-black/30" onClick={closeThreadView} />
-        <div className="relative flex items-center justify-center min-h-screen p-4">
-          <Card className="w-full max-w-4xl h-[36rem] flex flex-col overflow-hidden bg-white shadow-lg">
-            <ThreadView
-              parentMessage={activeThread}
-              currentUserId={user?.uid}
-              onClose={closeThreadView}
-              onDeleteMessage={handleDeleteMessage}
-              onEditMessage={handleEditMessage}
-              tripId={trip.id}
-              isTripMessaging={true}
-            />
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-100">
@@ -385,8 +357,6 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                 currentUserId={user?.uid}
                 onDeleteMessage={handleDeleteMessage}
                 onEditMessage={handleEditMessage}
-                onReplyMessage={handleReplyMessage}
-                onViewThread={handleReplyMessage}
                 isInstructor={isInstructor}
               />
             ) : activeTab === 'broadcast' ? (
@@ -397,14 +367,11 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                   currentUserId={user?.uid}
                   onDeleteMessage={handleDeleteMessage}
                   onEditMessage={handleEditMessage}
-                  onReplyMessage={handleReplyMessage}
-                  onViewThread={handleReplyMessage}
                   onReactionSelect={handleReaction}
                   loading={loading}
                   loadingMore={loadingMore}
                   error={error}
                   showBroadcastIndicator={true}
-                  showThreadIndicator={true}
                   isInstructor={isInstructor}
                   hasMore={hasMore}
                   onLoadMore={handleLoadMore}
@@ -442,14 +409,11 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                   currentUserId={user?.uid}
                   onDeleteMessage={handleDeleteMessage}
                   onEditMessage={handleEditMessage}
-                  onReplyMessage={handleReplyMessage}
-                  onViewThread={handleReplyMessage}
                   onReactionSelect={handleReaction}
                   loading={loading}
                   loadingMore={loadingMore}
                   error={error}
                   showBroadcastIndicator={true}
-                  showThreadIndicator={true}
                   isInstructor={isInstructor}
                   hasMore={hasMore}
                   onLoadMore={handleLoadMore}
@@ -538,14 +502,11 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                             currentUserId={user?.uid}
                             onDeleteMessage={handleDeleteMessage}
                             onEditMessage={handleEditMessage}
-                            onReplyMessage={handleReplyMessage}
-                            onViewThread={handleReplyMessage}
                             onReactionSelect={handleReaction}
                             loading={loading}
                             loadingMore={loadingMore}
                             error={error}
                             showBroadcastIndicator={true}
-                            showThreadIndicator={true}
                             isInstructor={isInstructor}
                             hasMore={hasMore}
                             onLoadMore={handleLoadMore}
@@ -591,14 +552,11 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                       currentUserId={user?.uid}
                       onDeleteMessage={handleDeleteMessage}
                       onEditMessage={handleEditMessage}
-                      onReplyMessage={handleReplyMessage}
-                      onViewThread={handleReplyMessage}
                       onReactionSelect={handleReaction}
                       loading={loading}
                       loadingMore={loadingMore}
                       error={error}
                       showBroadcastIndicator={true}
-                      showThreadIndicator={true}
                       isInstructor={isInstructor}
                       hasMore={hasMore}
                       onLoadMore={handleLoadMore}

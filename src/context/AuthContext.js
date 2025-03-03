@@ -60,21 +60,53 @@ export const AuthProvider = ({ children }) => {
           createdAt: new Date()
         });
       }
-
+  
       // Check and create profile document
       const profileRef = doc(db, 'profiles', user.uid);
       const profileSnap = await getDoc(profileRef);
       
       if (!profileSnap.exists()) {
+        // Create a more complete profile with all necessary fields
         await setDoc(profileRef, {
           name: user.displayName || user.email,
           email: user.email,
+          photoURL: '',
+          phone: '',
+          bio: '',
+          city: '',
+          state: '',
           certificationLevel: 'Student Diver',
           specialties: [],
-          numberOfDives: 0,
-          hideEmail: false,
-          hidePhone: false,
-          createdAt: new Date()
+          divingStats: { totalDives: 0, maxDepth: 0, totalTime: 0 },
+          syncWithLogbook: false,
+          instructorCertifications: [],
+          diveTrips: [],
+          favoritePlace: '',
+          favoriteDivesite: '',
+          emergencyContact: {
+            name: '',
+            relationship: '',
+            phone: '',
+            email: ''
+          },
+          socialLinks: {
+            instagram: '',
+            facebook: '',
+            youtube: '',
+            twitter: ''
+          },
+          privacySettings: {
+            hideEmail: false,
+            hidePhone: false,
+            hideLocation: false,
+            hideStats: false,
+            hideSocial: false
+          },
+          lifetimePoints: 0,
+          redeemablePoints: 0,
+          transactions: [],
+          joinDate: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
         });
       }
     } catch (error) {

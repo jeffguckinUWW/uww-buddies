@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, MessageSquare, User, Search, Megaphone } from 'lucide-react';
 import { useMessages } from '../../../context/MessageContext';
 import { useAuth } from '../../../context/AuthContext';
 import MessageInput from '../shared/MessageInput';
 import MessageList from '../shared/MessageList';
-import ThreadView from '../shared/ThreadView';
 import { Card } from '../../../components/ui/card';
 import EnhancedErrorAlert from '../../../components/ui/EnhancedErrorAlert';
 import SearchBar from '../shared/SearchBar';
@@ -43,16 +42,41 @@ const CourseMessaging = ({
     addReaction
   } = useMessages();
   
-  const [activeTab, setActiveTab] = useState(defaultView);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeThread, setActiveThread] = useState(null);
-  const [showThreadView, setShowThreadView] = useState(false);
   const isInstructor = course?.instructorId === user?.uid;
+  const isAssistant = course?.assistants?.some(a => a.uid === user?.uid);
   const [userProfiles, setUserProfiles] = useState({});
+  const [activeTab, setActiveTab] = useState(isAssistant ? 'combined' : defaultView);
+  
+  // Refs to track subscriptions and avoid dependency cycles
+  const subscriptionsRef = useRef([]);
+  const isComponentMounted = useRef(true);
 
+  // Setup component lifecycle
+  useEffect(() => {
+    isComponentMounted.current = true;
+    
+    return () => {
+      isComponentMounted.current = false;
+      
+      // Clean up all subscriptions on unmount
+      subscriptionsRef.current.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          try {
+            unsub();
+          } catch (e) {
+            console.error('Error during unsubscribe:', e);
+          }
+        }
+      });
+      subscriptionsRef.current = [];
+    };
+  }, []);
+
+  // Fetch user profiles for typing users
   useEffect(() => {
     if (!typingUsers || typingUsers.length === 0) return;
     
@@ -64,7 +88,7 @@ const CourseMessaging = ({
         if (!userProfiles[userId]) {
           try {
             const userDoc = await getDoc(doc(db, 'users', userId));
-            if (userDoc.exists()) {
+            if (userDoc.exists() && isComponentMounted.current) {
               newProfiles[userId] = userDoc.data();
               hasNewProfiles = true;
             }
@@ -74,15 +98,16 @@ const CourseMessaging = ({
         }
       }
       
-      if (hasNewProfiles) {
+      if (hasNewProfiles && isComponentMounted.current) {
         setUserProfiles(newProfiles);
       }
     };
     
     fetchUserProfiles();
-  }, [typingUsers, userProfiles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typingUsers]); // Intentionally excluded userProfiles to prevent infinite loop
   
-  // Add effect to subscribe to typing status
+  // Subscribe to typing status
   useEffect(() => {
     if (!course?.id || !user?.uid) return;
     
@@ -94,57 +119,123 @@ const CourseMessaging = ({
         : (isTripMessaging ? 'trip_discussion' : 'course_discussion')
     };
     
-    const unsubscribe = subscribeToTypingStatus(typingParams);
+    let unsubscribe;
+    // Add small delay to ensure clean subscription setup
+    const timeoutId = setTimeout(() => {
+      if (isComponentMounted.current) {
+        unsubscribe = subscribeToTypingStatus(typingParams);
+        if (unsubscribe) {
+          subscriptionsRef.current.push(unsubscribe);
+        }
+      }
+    }, 50);
     
     return () => {
-      unsubscribe();
+      clearTimeout(timeoutId);
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+          subscriptionsRef.current = subscriptionsRef.current.filter(sub => sub !== unsubscribe);
+        } catch (e) {
+          console.error('Error unsubscribing from typing:', e);
+        }
+      }
+      
       // Make sure to set typing status to false when unmounting
-      setTypingStatus(typingParams, false);
+      if (isComponentMounted.current) {
+        setTypingStatus(typingParams, false);
+      }
     };
   }, [course?.id, user?.uid, activeTab, isTripMessaging, subscribeToTypingStatus, setTypingStatus]);  
 
+  // Subscribe to messages based on active tab
   useEffect(() => {
     if (!course?.id || !user?.uid) return;
 
     const unsubscribes = [];
+    const timeoutIds = [];
 
+    // Stagger subscriptions slightly to avoid race conditions
     if (activeTab === 'broadcast' && isInstructor) {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'course',
-          courseId: course.id,
-          messageType: isTripMessaging ? 'trip_broadcast' : 'course_broadcast'
-        })
-      );
-    } else if (activeTab === 'discussion' || activeTab === 'combined') {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'course',
-          courseId: course.id,
-          messageType: isTripMessaging ? 'trip_discussion' : 'course_discussion'
-        })
-      );
-      
-      if (showBroadcasts || activeTab === 'combined') {
-        unsubscribes.push(
-          subscribeToMessages({
+      const timeoutId = setTimeout(() => {
+        if (isComponentMounted.current) {
+          const unsub = subscribeToMessages({
             type: 'course',
             courseId: course.id,
             messageType: isTripMessaging ? 'trip_broadcast' : 'course_broadcast'
-          })
-        );
+          });
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId);
+    } else if (activeTab === 'discussion' || activeTab === 'combined') {
+      const timeoutId1 = setTimeout(() => {
+        if (isComponentMounted.current) {
+          const unsub = subscribeToMessages({
+            type: 'course',
+            courseId: course.id,
+            messageType: isTripMessaging ? 'trip_discussion' : 'course_discussion'
+          });
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId1);
+      
+      if (showBroadcasts || activeTab === 'combined') {
+        const timeoutId2 = setTimeout(() => {
+          if (isComponentMounted.current) {
+            const unsub = subscribeToMessages({
+              type: 'course',
+              courseId: course.id,
+              messageType: isTripMessaging ? 'trip_broadcast' : 'course_broadcast'
+            });
+            if (unsub) {
+              unsubscribes.push(unsub);
+              subscriptionsRef.current.push(unsub);
+            }
+          }
+        }, 200);
+        timeoutIds.push(timeoutId2);
       }
     } else if (activeTab === 'private') {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'course',
-          courseId: course.id,
-          messageType: isTripMessaging ? 'trip_private' : 'course_private'
-        })
-      );
+      const timeoutId = setTimeout(() => {
+        if (isComponentMounted.current) {
+          const unsub = subscribeToMessages({
+            type: 'course',
+            courseId: course.id,
+            messageType: isTripMessaging ? 'trip_private' : 'course_private'
+          });
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId);
     }
 
-    return () => unsubscribes.forEach(unsub => unsub());
+    return () => {
+      // Clear all timeouts
+      timeoutIds.forEach(id => clearTimeout(id));
+      
+      // Unsubscribe from all subscriptions created in this effect
+      unsubscribes.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          try {
+            unsub();
+            subscriptionsRef.current = subscriptionsRef.current.filter(sub => sub !== unsub);
+          } catch (e) {
+            console.error('Error unsubscribing from messages:', e);
+          }
+        }
+      });
+    };
   }, [course?.id, user?.uid, subscribeToMessages, isTripMessaging, activeTab, isInstructor, showBroadcasts]);
 
   const handleReaction = useCallback(async (messageId, emoji) => {
@@ -210,10 +301,17 @@ const CourseMessaging = ({
         };
       }
   
+      // Add role designation for broadcast messages with better name retrieval
+      // Get user name with proper fallbacks, checking all possible sources
+      let senderDisplayName = user.name || user.displayName || user.email || 'Unknown User';
+      if (type === 'broadcast' && isInstructor) {
+        senderDisplayName += ' (Instructor)';
+      }
+  
       const messageData = {
         [isTripMessaging ? 'tripId' : 'courseId']: course.id,
         senderId: user.uid,
-        senderName: user.displayName || 'Unknown User',
+        senderName: senderDisplayName,
         text: text.trim(),
         timestamp: new Date(),
         type: messageType,
@@ -245,7 +343,6 @@ const CourseMessaging = ({
       }
     } catch (error) {
       console.error('Error deleting message:', error);
-      // Optionally show an error toast or notification
     }
   };
 
@@ -273,19 +370,8 @@ const CourseMessaging = ({
       await editMessage(messageId, newText, user.uid);
     } catch (error) {
       console.error('Error editing message:', error);
-      // Optionally show an error toast or notification
     }
   };
-
-  const handleReplyMessage = useCallback((message) => {
-    setActiveThread(message);
-    setShowThreadView(true);
-  }, []);
-
-  const closeThreadView = useCallback(() => {
-    setShowThreadView(false);
-    setActiveThread(null);
-  }, []);
 
   const filteredStudents = course?.students?.filter(student =>
     student.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -293,28 +379,6 @@ const CourseMessaging = ({
   ) || [];
 
   if (!isOpen) return null;
-
-  // Show ThreadView when a thread is active
-  if (showThreadView && activeThread) {
-    return (
-      <div className="fixed inset-0 z-50 bg-gray-100">
-        <div className="absolute inset-0 bg-black/30" onClick={closeThreadView} />
-        <div className="relative flex items-center justify-center min-h-screen p-4">
-          <Card className="w-full max-w-4xl h-[36rem] flex flex-col overflow-hidden bg-white shadow-lg">
-            <ThreadView
-              parentMessage={activeThread}
-              currentUserId={user?.uid}
-              onClose={closeThreadView}
-              onDeleteMessage={handleDeleteMessage}
-              onEditMessage={handleEditMessage}
-              courseId={course.id}
-              isTripMessaging={isTripMessaging}
-            />
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 bg-gray-100">
@@ -410,8 +474,6 @@ const CourseMessaging = ({
                 currentUserId={user?.uid}
                 onDeleteMessage={handleDeleteMessage}
                 onEditMessage={handleEditMessage}
-                onReplyMessage={handleReplyMessage}
-                onViewThread={handleReplyMessage}
                 isInstructor={isInstructor}
               />
             ) : activeTab === 'broadcast' ? (
@@ -422,14 +484,11 @@ const CourseMessaging = ({
                   currentUserId={user?.uid}
                   onDeleteMessage={handleDeleteMessage}
                   onEditMessage={handleEditMessage}
-                  onReplyMessage={handleReplyMessage}
-                  onViewThread={handleReplyMessage}
                   onReactionSelect={handleReaction}
                   loading={loading}
                   loadingMore={loadingMore}
                   error={error}
                   showBroadcastIndicator={true}
-                  showThreadIndicator={true}
                   isInstructor={isInstructor}
                   hasMore={hasMore}
                   onLoadMore={handleLoadMore}
@@ -438,14 +497,14 @@ const CourseMessaging = ({
                 {isInstructor && (
                   <div className="flex-shrink-0">
                     <MessageInput
-                    onSend={(text, file) => handleSendMessage(text, file, 'discussion')}
-                    placeholder={isInstructor ? "Start a discussion..." : "Type a message..."}
+                    onSend={(text, file) => handleSendMessage(text, file, 'broadcast')}
+                    placeholder="Send a broadcast message..."
                     isSending={isSending}
                     sendError={sendError}
                     typingParams={{
                       type: 'course',
                       courseId: course.id,
-                      messageType: isTripMessaging ? 'trip_discussion' : 'course_discussion'
+                      messageType: isTripMessaging ? 'trip_broadcast' : 'course_broadcast'
                     }}
                     onTypingStatus={setTypingStatus}
                   />
@@ -460,26 +519,25 @@ const CourseMessaging = ({
                   currentUserId={user?.uid}
                   onDeleteMessage={handleDeleteMessage}
                   onEditMessage={handleEditMessage}
-                  onReplyMessage={handleReplyMessage}
-                  onViewThread={handleReplyMessage}
                   onReactionSelect={handleReaction}
                   loading={loading}
                   loadingMore={loadingMore}
                   error={error}
                   showBroadcastIndicator={true}
-                  showThreadIndicator={true}
                   isInstructor={isInstructor}
                   hasMore={hasMore}
                   onLoadMore={handleLoadMore}
                 />
               </div>
 
-              {/* Add typing indicator after MessageList */}
-              <TypingIndicator 
-                typingUsers={typingUsers} 
-                userProfiles={userProfiles}
-                currentUserId={user?.uid}
-              />
+              {/* Only show typing indicator if available */}
+                {typingUsers && typingUsers.length > 0 && (
+                  <TypingIndicator 
+                    typingUsers={typingUsers} 
+                    userProfiles={userProfiles}
+                    currentUserId={user?.uid}
+                  />
+                )}
                 <div className="flex-shrink-0">
                 <MessageInput
                   onSend={(text, file) => handleSendMessage(text, file, 'discussion')}
@@ -561,36 +619,36 @@ const CourseMessaging = ({
                               currentUserId={user?.uid}
                               onDeleteMessage={handleDeleteMessage}
                               onEditMessage={handleEditMessage}
-                              onReplyMessage={handleReplyMessage}
-                              onViewThread={handleReplyMessage}
                               onReactionSelect={handleReaction}
                               loading={loading}
                               loadingMore={loadingMore}
                               error={error}
                               showBroadcastIndicator={true}
-                              showThreadIndicator={true}
                               isInstructor={isInstructor}
                               hasMore={hasMore}
                               onLoadMore={handleLoadMore}
                             />
                           </div>
 
-                          {/* Add typing indicator after MessageList */}
-                          <TypingIndicator 
-                            typingUsers={typingUsers} 
-                            userProfiles={userProfiles}
-                            currentUserId={user?.uid}
-                          />
+                          {/* Only show typing indicator if available */}
+                            {typingUsers && typingUsers.length > 0 && (
+                              <TypingIndicator 
+                                typingUsers={typingUsers} 
+                                userProfiles={userProfiles}
+                                currentUserId={user?.uid}
+                              />
+                            )}
                             <div className="flex-shrink-0">
                             <MessageInput
-                              onSend={(text, file) => handleSendMessage(text, file, 'discussion')}
-                              placeholder={isInstructor ? "Start a discussion..." : "Type a message..."}
+                              onSend={(text, file) => handleSendMessage(text, file, 'private', selectedStudent)}
+                              placeholder="Type a private message..."
                               isSending={isSending}
                               sendError={sendError}
                               typingParams={{
                                 type: 'course',
                                 courseId: course.id,
-                                messageType: isTripMessaging ? 'trip_discussion' : 'course_discussion'
+                                messageType: isTripMessaging ? 'trip_private' : 'course_private',
+                                recipientId: selectedStudent
                               }}
                               onTypingStatus={setTypingStatus}
                             />
@@ -614,42 +672,35 @@ const CourseMessaging = ({
                         currentUserId={user?.uid}
                         onDeleteMessage={handleDeleteMessage}
                         onEditMessage={handleEditMessage}
-                        onReplyMessage={handleReplyMessage}
-                        onViewThread={handleReplyMessage}
                         onReactionSelect={handleReaction}
                         loading={loading}
                         loadingMore={loadingMore}
                         error={error}
                         showBroadcastIndicator={true}
-                        showThreadIndicator={true}
                         isInstructor={isInstructor}
                         hasMore={hasMore}
                         onLoadMore={handleLoadMore}
                       />
                     </div>
 
-                    {/* Add typing indicator after MessageList */}
-                    <TypingIndicator 
-                      typingUsers={typingUsers} 
-                      userProfiles={userProfiles}
-                      currentUserId={user?.uid}
-                    />
-
-                    {/* Add typing indicator after MessageList */}
-                    <TypingIndicator 
-                      typingUsers={typingUsers} 
-                      userProfiles={userProfiles}
-                      currentUserId={user?.uid}
-                    />
+                    {/* Only show typing indicator if available */}
+                      {typingUsers && typingUsers.length > 0 && (
+                        <TypingIndicator 
+                          typingUsers={typingUsers} 
+                          userProfiles={userProfiles}
+                          currentUserId={user?.uid}
+                        />
+                      )}
                       <MessageInput
-                        onSend={(text, file) => handleSendMessage(text, file, 'discussion')}
-                        placeholder={isInstructor ? "Start a discussion..." : "Type a message..."}
+                        onSend={(text, file) => handleSendMessage(text, file, 'private', course.instructorId)}
+                        placeholder="Message your instructor..."
                         isSending={isSending}
                         sendError={sendError}
                         typingParams={{
                           type: 'course',
                           courseId: course.id,
-                          messageType: isTripMessaging ? 'trip_discussion' : 'course_discussion'
+                          messageType: isTripMessaging ? 'trip_private' : 'course_private',
+                          recipientId: course.instructorId
                         }}
                         onTypingStatus={setTypingStatus}
                       />

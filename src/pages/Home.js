@@ -14,8 +14,6 @@ const TIER_LEVELS = {
   LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
 };
 
-
-
 const calculateTier = (lifetimePoints) => {
   return Object.entries(TIER_LEVELS).reduce((acc, [tier, details]) => {
     if (lifetimePoints >= details.min && lifetimePoints <= details.max) {
@@ -37,6 +35,13 @@ const Home = () => {
         try {
           const profileRef = doc(db, 'profiles', user.uid);
           const profileDoc = await getDoc(profileRef);
+          
+          // Check if user has a profile - if not, redirect to profile page
+          if (!profileDoc.exists() || !profileDoc.data().name) {
+            navigate('/profile');
+            return;
+          }
+          
           if (profileDoc.exists()) {
             const data = profileDoc.data();
             setProfileData(data);
@@ -49,7 +54,7 @@ const Home = () => {
     };
 
     fetchProfile();
-  }, [user]);
+  }, [user, navigate]);
 
   const getFirstName = (fullName) => {
     return fullName ? fullName.split(' ')[0] : 'Diver';
@@ -89,16 +94,16 @@ const Home = () => {
       </div>
 
       {/* User Profile Card */}
-<div className="m-4 p-4 bg-white rounded-lg shadow-md">
-  <h2 className="text-xl font-bold mb-2">
-    Hello, {getFirstName(profileData?.name)}
-  </h2>
-  <div className={`${getTierColor(currentTier?.tier)} px-3 py-1 rounded-full inline-block mb-2`}>
-    <span className="text-sm font-medium">
-      {currentTier?.name || 'Oceanic Silver'}
-    </span>
-  </div>
-  
+      <div className="m-4 p-4 bg-white rounded-lg shadow-md">
+        <h2 className="text-xl font-bold mb-2">
+          Hello, {getFirstName(profileData?.name)}
+        </h2>
+        <div className={`${getTierColor(currentTier?.tier)} px-3 py-1 rounded-full inline-block mb-2`}>
+          <span className="text-sm font-medium">
+            {currentTier?.name || 'Oceanic Silver'}
+          </span>
+        </div>
+        
         {/* Clickable Rewards Section */}
         <div 
           onClick={() => navigate('/rewards')}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 function Register() {
   const [email, setEmail] = useState('');
@@ -7,6 +8,7 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const { signup } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,7 +19,8 @@ function Register() {
 
     try {
       await signup(email, password);
-      // Successfully signed up
+      // Redirect to profile page for first-time users
+      navigate('/profile');
     } catch (error) {
       setError('Failed to create account. ' + error.message);
     }

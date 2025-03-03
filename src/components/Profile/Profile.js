@@ -790,11 +790,22 @@ function Profile() {
     const fetchProfileAndDives = async () => {
       if (user?.uid) {
         try {
+          console.log("Fetching profile for user:", user.uid);
           const docRef = doc(db, 'profiles', user.uid);
           const docSnap = await getDoc(docRef);
-          const profileData = docSnap.exists() ? docSnap.data() : {};
-
+          
+          // Debug log
+          console.log("Profile exists in DB:", docSnap.exists());
           if (docSnap.exists()) {
+            console.log("Profile data:", docSnap.data());
+          }
+          
+          let profileData;
+          
+          if (docSnap.exists()) {
+            profileData = docSnap.data();
+            
+            // Set loyalty data
             const loyaltyInfo = {
               lifetimePoints: profileData.lifetimePoints || 0,
               redeemablePoints: profileData.redeemablePoints || 0,
@@ -808,36 +819,54 @@ function Profile() {
               ...loyaltyInfo,
               currentTier
             });
+          } else {
+            // Create default profile for new users
+            profileData = {
+              name: '',
+              email: user.email || '',
+              photoURL: '',
+              divingStats: { totalDives: 0, maxDepth: 0, totalTime: 0 },
+              createdAt: new Date().toISOString()
+            };
+            
+            // Set default loyalty data
+            setLoyaltyData({
+              lifetimePoints: 0,
+              redeemablePoints: 0,
+              transactions: [],
+              joinDate: new Date().toISOString(),
+              currentTier: calculateTier(0)
+            });
+            
+            // For new users, initialize with a bare-bones profile
+            await setDoc(docRef, profileData, { merge: true });
+            
+            // Auto-enable edit mode for new users
+            setIsEditing(true);
           }
   
+          // Process diving stats if needed
           if (profileData.syncWithLogbook) {
             const logbookStats = await fetchDiveStats();
             
             if (logbookStats) {
               const needsSync = JSON.stringify(profileData.divingStats) !== JSON.stringify(logbookStats);
               setIsLogbookSynced(!needsSync);
-  
+    
               if (needsSync) {
-                const updatedProfileData = {
-                  ...profileData,
-                  divingStats: logbookStats
-                };
-  
-                await setDoc(docRef, updatedProfileData);
-                setProfile(updatedProfileData);
-                setFormData(updatedProfileData);
-              } else {
-                setProfile(profileData);
-                setFormData(profileData);
+                profileData.divingStats = logbookStats;
+                await setDoc(docRef, profileData, { merge: true });
               }
             }
-          } else {
-            setProfile(profileData);
-            setFormData(profileData);
-            setIsLogbookSynced(true);
           }
+          
+          // Update state with profile data
+          setProfile(profileData);
+          setFormData(profileData);
+          
         } catch (error) {
           console.error('Error loading profile:', error);
+          alert(`Error loading profile: ${error.message}`);
         }
       }
     };
@@ -982,8 +1011,9 @@ function Profile() {
     setIsLoading(true);
   
     try {
-      let photoURL = formData.photoURL;
-      let divingStats = formData.divingStats;
+      // FIX: Ensure photoURL is never undefined
+      let photoURL = formData.photoURL || ''; 
+      let divingStats = formData.divingStats || { totalDives: 0, maxDepth: 0, totalTime: 0 };
       
       if (profileImage) {
         const timestamp = Date.now();
@@ -1002,27 +1032,81 @@ function Profile() {
         }
       }
   
+      // Clean object with no undefined values
       const updatedProfile = {
-        ...formData,
-        photoURL,
-        divingStats,
+        // User details
+        name: formData.name || '',
+        email: formData.email || user.email || '',
+        photoURL: photoURL,
+        phone: formData.phone || '',
+        bio: formData.bio || '',
+        city: formData.city || '',
+        state: formData.state || '',
+        
+        // Diving info
+        divingStats: divingStats,
+        certificationLevel: formData.certificationLevel || '',
+        specialties: formData.specialties || [],
+        syncWithLogbook: Boolean(formData.syncWithLogbook),
+        instructorCertifications: formData.instructorCertifications || [],
+        
+        // Additional data
+        diveTrips: formData.diveTrips || [],
+        favoritePlace: formData.favoritePlace || '',
+        favoriteDivesite: formData.favoriteDivesite || '',
+        emergencyContact: formData.emergencyContact || {
+          name: '',
+          relationship: '',
+          phone: '',
+          email: ''
+        },
+        socialLinks: formData.socialLinks || {
+          instagram: '',
+          facebook: '',
+          youtube: '',
+          twitter: ''
+        },
+        privacySettings: formData.privacySettings || {
+          hideEmail: false,
+          hidePhone: false,
+          hideLocation: false,
+          hideStats: false,
+          hideSocial: false
+        },
+        
         // Loyalty data
-        lifetimePoints: loyaltyData.lifetimePoints,
-        redeemablePoints: loyaltyData.redeemablePoints,
-        transactions: loyaltyData.transactions,
-        joinDate: loyaltyData.joinDate,
-        // Only include updatedAt once
+        lifetimePoints: loyaltyData.lifetimePoints || 0,
+        redeemablePoints: loyaltyData.redeemablePoints || 0,
+        transactions: loyaltyData.transactions || [],
+        joinDate: loyaltyData.joinDate || new Date().toISOString(),
+        
+        // Timestamps
+        createdAt: profile.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
   
-      await setDoc(doc(db, 'profiles', user.uid), updatedProfile);
-      setProfile(updatedProfile);
+      // Use merge option to ensure we don't overwrite existing data
+      await setDoc(doc(db, 'profiles', user.uid), updatedProfile, { merge: true });
+      
+      // Verify the save succeeded by reading it back
+      const verifyDoc = await getDoc(doc(db, 'profiles', user.uid));
+      if (!verifyDoc.exists()) {
+        throw new Error("Profile failed to save to database");
+      }
+      
+      // Update local state with saved data
+      const savedData = verifyDoc.data();
+      setProfile(savedData);
+      setFormData(savedData);
       setIsEditing(false);
       setIsLogbookSynced(true);
       
+      // Show success message
+      alert('Profile saved successfully!');
+      
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile. Please try again.');
+      alert(`Failed to update profile: ${error.message}`);
     }
   
     setIsLoading(false);
@@ -1062,96 +1146,109 @@ function Profile() {
           <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600"></div>
           
           {/* Main Content */}
-          <div className="px-8 pb-8">
-            {/* Profile Header */}
-            <div className="relative -mt-16 mb-8">
-              <div className="flex items-end space-x-6">
-                {/* Profile Photo */}
-                {profile.photoURL ? (
-                  <img
-                    src={profile.photoURL}
-                    alt="Profile"
-                    className="w-32 h-32 rounded-xl border-4 border-white object-cover shadow-sm"
-                  />
-                ) : (
-                  <div className="w-32 h-32 rounded-xl border-4 border-white bg-blue-50 flex items-center justify-center shadow-sm">
-                    <span className="text-4xl text-blue-500">
-                      {profile.name ? profile.name[0].toUpperCase() : '?'}
-                    </span>
-                  </div>
-                )}
+            <div className="px-8 pb-8">
+              {/* Profile Header */}
+              <div className="relative -mt-16 mb-8">
+                {/* Profile Completion Indicator */}
+                <div className="mb-4">
+                  <ProfileCompletionIndicator profile={profile} />
+                </div>
                 
-                {/* Basic Info */}
-                <div className="flex-1 pb-2">
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    {profile.name || 'New Diver'}
-                  </h1>
-                  {profile.certificationLevel && (
-                    <p className="text-blue-600">{profile.certificationLevel}</p>
+                <div className="flex items-end space-x-6">
+                  {/* Profile Photo */}
+                  {profile.photoURL ? (
+                    <img
+                      src={profile.photoURL}
+                      alt="Profile"
+                      className="w-32 h-32 rounded-xl border-4 border-white object-cover shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-32 h-32 rounded-xl border-4 border-white bg-blue-50 flex items-center justify-center shadow-sm">
+                      <span className="text-4xl text-blue-500">
+                        {profile.name ? profile.name[0].toUpperCase() : '?'}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Basic Info */}
+                  <div className="flex-1 pb-2">
+                    <h1 className="text-2xl font-bold text-gray-900">
+                      {profile.name || 'New Diver'}
+                    </h1>
+                    {profile.certificationLevel && (
+                      <p className="text-blue-600">{profile.certificationLevel}</p>
+                    )}
+                  </div>
+
+                  {/* Quick Stats */}
+                  {!profile.privacySettings?.hideStats && profile.divingStats && (
+                    <div className="flex space-x-6 pb-2">
+                      <div className="text-center">
+                        <div className="flex items-center justify-center text-gray-500 mb-1">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Bottom Time</span>
+                        </div>
+                        <p className="text-xl font-semibold text-gray-900">
+                          {profile.divingStats.totalTime || 0}h
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <div className="flex items-center justify-center text-gray-500 mb-1">
+                          <Droplet className="w-4 h-4 mr-1" />
+                          <span className="text-sm">Max Depth</span>
+                        </div>
+                        <p className="text-xl font-semibold text-gray-900">
+                          {profile.divingStats.maxDepth || 0}ft
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Quick Stats */}
-                {!profile.privacySettings?.hideStats && profile.divingStats && (
-                  <div className="flex space-x-6 pb-2">
-                    <div className="text-center">
-                      <div className="flex items-center justify-center text-gray-500 mb-1">
-                        <Clock className="w-4 h-4 mr-1" />
-                        <span className="text-sm">Bottom Time</span>
-                      </div>
-                      <p className="text-xl font-semibold text-gray-900">
-                        {profile.divingStats.totalTime || 0}h
-                      </p>
+                {/* Badges */}
+                <div className="mt-4">
+                  <Badges 
+                    certificationLevel={profile.certificationLevel}
+                    specialties={profile.specialties}
+                    numberOfDives={profile.divingStats?.totalDives}
+                  />
+                </div>
+
+                {/* Location & Contact */}
+                <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
+                  {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      {[profile.city, profile.state].filter(Boolean).join(', ')}
                     </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center text-gray-500 mb-1">
-                        <Droplet className="w-4 h-4 mr-1" />
-                        <span className="text-sm">Max Depth</span>
-                      </div>
-                      <p className="text-xl font-semibold text-gray-900">
-                        {profile.divingStats.maxDepth || 0}ft
-                      </p>
+                  )}
+                  {!profile.privacySettings?.hideEmail && profile.email && (
+                    <div>{profile.email}</div>
+                  )}
+                  {!profile.privacySettings?.hidePhone && profile.phone && (
+                    <div>{profile.phone}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column - Bio & Experience */}
+                <div className="lg:col-span-2 space-y-8">
+                  {/* Add Diving Stats Component */}
+                  {!profile.privacySettings?.hideStats && (
+                    <div className="mb-6">
+                      <h2 className="text-lg font-semibold text-gray-900 mb-3">Diving Statistics</h2>
+                      <DivingStats stats={profile.divingStats} />
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Badges */}
-              <div className="mt-4">
-                <Badges 
-                  certificationLevel={profile.certificationLevel}
-                  specialties={profile.specialties}
-                  numberOfDives={profile.divingStats?.totalDives}
-                />
-              </div>
-
-              {/* Location & Contact */}
-              <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
-                {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
-                  <div className="flex items-center">
-                    <MapPin className="h-4 w-4 mr-1" />
-                    {[profile.city, profile.state].filter(Boolean).join(', ')}
-                  </div>
-                )}
-                {!profile.privacySettings?.hideEmail && profile.email && (
-                  <div>{profile.email}</div>
-                )}
-                {!profile.privacySettings?.hidePhone && profile.phone && (
-                  <div>{profile.phone}</div>
-                )}
-              </div>
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left Column - Bio & Experience */}
-              <div className="lg:col-span-2 space-y-8">
-                {profile.bio && (
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900 mb-3">About</h2>
-                    <p className="text-gray-600">{profile.bio}</p>
-                  </div>
-                )}
+                  )}
+                  
+                  {profile.bio && (
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900 mb-3">About</h2>
+                      <p className="text-gray-600">{profile.bio}</p>
+                    </div>
+                  )}
 
                 {/* Certifications & Specialties */}
                 <div className="space-y-6">

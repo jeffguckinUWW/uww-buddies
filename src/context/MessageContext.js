@@ -1,9 +1,8 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import MessageService from '../services/MessageService';
 import { arrayUnion } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';  // Adjust path if needed
+import { useAuth } from '../context/AuthContext';
 import { handleError, AppError, ErrorTypes } from '../lib/utils';
-
 
 const MessageContext = createContext();
 
@@ -55,15 +54,6 @@ const MESSAGE_ACTIONS = {
   CLEAR_MESSAGES: 'CLEAR_MESSAGES',
   SET_BUDDIES: 'SET_BUDDIES',
   UPDATE_BUDDY_STATUS: 'UPDATE_BUDDY_STATUS',
-  ADD_REPLY: 'ADD_REPLY',
-  SET_THREAD_MESSAGES: 'SET_THREAD_MESSAGES',
-  CLEAR_THREAD: 'CLEAR_THREAD',
-  UPDATE_THREAD_MESSAGE: 'UPDATE_THREAD_MESSAGE',
-  SET_THREAD_LOADING: 'SET_THREAD_LOADING',
-  SET_THREAD_ERROR: 'SET_THREAD_ERROR',
-  ADD_OLDER_THREAD_MESSAGES: 'ADD_OLDER_THREAD_MESSAGES',
-  SET_THREAD_HAS_MORE: 'SET_THREAD_HAS_MORE',
-  SET_THREAD_SUBSCRIPTION: 'SET_THREAD_SUBSCRIPTION',
   SET_SEARCH_RESULTS: 'SET_SEARCH_RESULTS',
   SET_SEARCH_LOADING: 'SET_SEARCH_LOADING',
   SET_SEARCH_ERROR: 'SET_SEARCH_ERROR',
@@ -73,7 +63,8 @@ const MESSAGE_ACTIONS = {
   CLEAR_FILE_UPLOAD: 'CLEAR_FILE_UPLOAD',
   UPDATE_MESSAGE_REACTIONS: 'UPDATE_MESSAGE_REACTIONS',
   SET_TYPING_USERS: 'SET_TYPING_USERS',
-  SET_TYPING_SUBSCRIPTION: 'SET_TYPING_SUBSCRIPTION'
+  SET_TYPING_SUBSCRIPTION: 'SET_TYPING_SUBSCRIPTION',
+  SET_MESSAGE_SUBSCRIPTION: 'SET_MESSAGE_SUBSCRIPTION',
 };
 
 // Initial state
@@ -88,13 +79,7 @@ const initialState = {
   currentTripId: null,
   buddies: [],
   buddyRequests: [],
-  threadMessages: [],
-  activeThreadId: null,
-  threadLoading: false,
-  threadError: null,
-  threadHasMore: true,
-  threadLoadingMore: false,
-  threadSubscription: null,
+  messageSubscription: null,
   searchResults: [],
   searchLoading: false,
   searchError: null,
@@ -117,24 +102,6 @@ const messageReducer = (state, action) => {
         error: null
       };
 
-    case MESSAGE_ACTIONS.ADD_REPLY:
-      return {
-        ...state,
-        messages: mergeMessages(state.messages, [action.payload]),
-        threadMessages: action.payload.parentMessageId === state.activeThreadId 
-          ? [...state.threadMessages, action.payload]
-          : state.threadMessages
-      };
-
-    case MESSAGE_ACTIONS.SET_THREAD_MESSAGES:
-      return {
-        ...state,
-        threadMessages: action.payload.messages,
-        activeThreadId: action.payload.threadId,
-        threadLoading: false,
-        threadError: null
-      };
-
     case MESSAGE_ACTIONS.SET_TYPING_USERS:
       return {
         ...state,
@@ -147,14 +114,11 @@ const messageReducer = (state, action) => {
         typingSubscription: action.payload
       };
 
-    case MESSAGE_ACTIONS.CLEAR_THREAD:
+    case MESSAGE_ACTIONS.SET_MESSAGE_SUBSCRIPTION:
       return {
         ...state,
-        threadMessages: [],
-        activeThreadId: null,
-        threadError: null,
-        threadHasMore: true
-      };
+        messageSubscription: action.payload
+      };  
 
     case MESSAGE_ACTIONS.ADD_MESSAGE:
       if (state.messages.some(msg => msg.id === action.payload.id)) {
@@ -178,9 +142,6 @@ const messageReducer = (state, action) => {
         ...state,
         messages: state.messages.map(msg => 
           msg.id === action.payload.id ? { ...msg, ...action.payload } : msg
-        ),
-        threadMessages: state.threadMessages.map(msg =>
-          msg.id === action.payload.id ? { ...msg, ...action.payload } : msg
         )
       };
 
@@ -196,17 +157,6 @@ const messageReducer = (state, action) => {
                 lastEditedAt: action.payload.lastEditedAt,
                 editHistory: action.payload.editHistory
               } 
-            : msg
-        ),
-        threadMessages: state.threadMessages.map(msg =>
-          msg.id === action.payload.id
-            ? {
-                ...msg,
-                text: action.payload.text,
-                isEdited: true,
-                lastEditedAt: action.payload.lastEditedAt,
-                editHistory: action.payload.editHistory
-              }
             : msg
         )
       };
@@ -281,124 +231,106 @@ const messageReducer = (state, action) => {
           : state.buddies.filter(id => id !== action.payload.buddyId)
       };
 
-    case MESSAGE_ACTIONS.UPDATE_THREAD_MESSAGE:
+    case MESSAGE_ACTIONS.UPDATE_MESSAGE_REACTIONS:
       return {
         ...state,
-        threadMessages: state.threadMessages.map(msg =>
-          msg.id === action.payload.id ? { ...msg, ...action.payload } : msg
+        messages: state.messages.map(msg => 
+          msg.id === action.payload.id 
+            ? { ...msg, reactions: action.payload.reactions } 
+            : msg
         )
       };
 
-    case MESSAGE_ACTIONS.SET_THREAD_LOADING:
+    case MESSAGE_ACTIONS.SET_SEARCH_RESULTS:
       return {
         ...state,
-        threadLoading: action.payload
+        searchResults: action.payload,
+        searchLoading: false,
+        isSearching: true
       };
-
-    case MESSAGE_ACTIONS.SET_THREAD_ERROR:
+    
+    case MESSAGE_ACTIONS.SET_SEARCH_LOADING:
       return {
         ...state,
-        threadError: action.payload,
-        threadLoading: false,
-        threadLoadingMore: false
+        searchLoading: action.payload
       };
-
-    case MESSAGE_ACTIONS.ADD_OLDER_THREAD_MESSAGES:
+    
+    case MESSAGE_ACTIONS.SET_SEARCH_ERROR:
       return {
         ...state,
-        threadMessages: mergeMessages(state.threadMessages, action.payload.messages, true),
-        threadHasMore: action.payload.hasMore,
-        threadLoadingMore: false
+        searchError: action.payload,
+        searchLoading: false
       };
-
-    case MESSAGE_ACTIONS.SET_THREAD_HAS_MORE:
+    
+    case MESSAGE_ACTIONS.CLEAR_SEARCH:
       return {
         ...state,
-        threadHasMore: action.payload
+        searchResults: [],
+        searchError: null,
+        isSearching: false
       };
-
-      case MESSAGE_ACTIONS.UPDATE_MESSAGE_REACTIONS:
-        return {
-          ...state,
-          messages: state.messages.map(msg => 
-            msg.id === action.payload.id 
-              ? { ...msg, reactions: action.payload.reactions } 
-              : msg
-          ),
-          threadMessages: state.threadMessages.map(msg =>
-            msg.id === action.payload.id 
-              ? { ...msg, reactions: action.payload.reactions } 
-              : msg
-          )
-        };
-     
-
-    case MESSAGE_ACTIONS.SET_THREAD_SUBSCRIPTION:
+    
+    case MESSAGE_ACTIONS.SET_FILE_UPLOAD_PROGRESS:
       return {
         ...state,
-        threadSubscription: action.payload
+        fileUploadProgress: action.payload,
+        fileUploadError: null
       };
-
-      case MESSAGE_ACTIONS.SET_SEARCH_RESULTS:
-        return {
-          ...state,
-          searchResults: action.payload,
-          searchLoading: false,
-          isSearching: true
-        };
-      
-      case MESSAGE_ACTIONS.SET_SEARCH_LOADING:
-        return {
-          ...state,
-          searchLoading: action.payload
-        };
-      
-      case MESSAGE_ACTIONS.SET_SEARCH_ERROR:
-        return {
-          ...state,
-          searchError: action.payload,
-          searchLoading: false
-        };
-      
-      case MESSAGE_ACTIONS.CLEAR_SEARCH:
-        return {
-          ...state,
-          searchResults: [],
-          searchError: null,
-          isSearching: false
-        };
-      
-        case MESSAGE_ACTIONS.SET_FILE_UPLOAD_PROGRESS:
-          return {
-            ...state,
-            fileUploadProgress: action.payload,
-            fileUploadError: null
-          };
-        
-        case MESSAGE_ACTIONS.SET_FILE_UPLOAD_ERROR:
-          return {
-            ...state,
-            fileUploadError: action.payload,
-            fileUploadProgress: 0
-          };
-        
-        case MESSAGE_ACTIONS.CLEAR_FILE_UPLOAD:
-          return {
-            ...state,
-            fileUploadProgress: 0,
-            fileUploadError: null
-          };
+    
+    case MESSAGE_ACTIONS.SET_FILE_UPLOAD_ERROR:
+      return {
+        ...state,
+        fileUploadError: action.payload,
+        fileUploadProgress: 0
+      };
+    
+    case MESSAGE_ACTIONS.CLEAR_FILE_UPLOAD:
+      return {
+        ...state,
+        fileUploadProgress: 0,
+        fileUploadError: null
+      };
 
     default:
       return state;
   }
 };
 
+// Helper function to get users who reacted with an emoji
+const getUsersForReaction = (reaction) => {
+  if (!reaction || !reaction.users) return [];
+  
+  return Object.entries(reaction.users).map(([userId, data]) => ({
+    id: userId,
+    name: data.name,
+    timestamp: data.timestamp
+  }));
+};
+
 // Provider component
 export const MessageProvider = ({ children }) => {
-  const { user } = useAuth();  // Add this line
+  const { user } = useAuth();
   const [state, dispatch] = useReducer(messageReducer, initialState);
   
+  // Refs for subscriptions
+  const subscriptionsRef = useRef({
+    messageSubscription: null,
+    typingSubscription: null
+  });
+  
+  // Helper to safely unsubscribe
+  const safeUnsubscribe = useCallback((subscriptionType) => {
+    const currentSub = subscriptionsRef.current[subscriptionType];
+    if (typeof currentSub === 'function') {
+      try {
+        currentSub();
+        subscriptionsRef.current[subscriptionType] = null;
+      } catch (error) {
+        console.error(`Error unsubscribing from ${subscriptionType}:`, error);
+      }
+    }
+  }, []);
+
   const handleMessagesUpdate = useCallback(({ messages, error, hasMore }) => {
     if (error) {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error });
@@ -418,16 +350,26 @@ export const MessageProvider = ({ children }) => {
   }, []);
   
   const subscribeToTypingStatus = useCallback((params) => {
-    if (state.typingSubscription) {
-      state.typingSubscription();
-      dispatch({ type: MESSAGE_ACTIONS.SET_TYPING_SUBSCRIPTION, payload: null });
+    // Clean up previous subscription
+    safeUnsubscribe('typingSubscription');
+    
+    let unsubscribe = null;
+    
+    try {
+      // Create new subscription
+      unsubscribe = MessageService.subscribeToTypingStatus(params, handleTypingUpdate);
+      
+      // Store subscription
+      subscriptionsRef.current.typingSubscription = unsubscribe;
+      dispatch({ type: MESSAGE_ACTIONS.SET_TYPING_SUBSCRIPTION, payload: unsubscribe });
+    } catch (error) {
+      console.error('Error in subscribeToTypingStatus:', error);
+      // Don't throw the error, just return a no-op function
+      unsubscribe = () => {};
     }
     
-    const unsubscribe = MessageService.subscribeToTypingStatus(params, handleTypingUpdate);
-    dispatch({ type: MESSAGE_ACTIONS.SET_TYPING_SUBSCRIPTION, payload: unsubscribe });
-    
-    return unsubscribe;
-  }, [handleTypingUpdate, state.typingSubscription]);
+    return unsubscribe || (() => {});
+  }, [handleTypingUpdate, safeUnsubscribe]);
   
   const setTypingStatus = useCallback(async (params, isTyping = true) => {
     if (!user?.uid) return;
@@ -435,17 +377,10 @@ export const MessageProvider = ({ children }) => {
     try {
       await MessageService.setTypingStatus(params, user.uid, isTyping);
     } catch (error) {
+      // Log but don't crash the app
       console.error('Error setting typing status:', error);
     }
   }, [user?.uid]);
-
-  useEffect(() => {
-    return () => {
-      if (state.typingSubscription) {
-        state.typingSubscription();
-      }
-    };
-  }, [state.typingSubscription]);  
 
   const sendMessageWithFile = useCallback(async (messageData, file) => {
     try {
@@ -478,29 +413,110 @@ export const MessageProvider = ({ children }) => {
       });
       throw formattedError;
     }
-  }, []);
-
+  }, [dispatch]);
 
   const addReaction = useCallback(async (messageId, emoji) => {
+    if (!messageId || !emoji) {
+      console.warn('Missing parameters for reaction:', { messageId, emoji });
+      return;
+    }
+    
+    if (!user || !user.uid) {
+      console.warn('User must be logged in to add reactions');
+      return;
+    }
+    
     try {
+      // Get existing message to ensure it exists
+      const messageIndex = state.messages.findIndex(msg => msg.id === messageId);
+      if (messageIndex === -1) {
+        console.warn('Cannot add reaction to non-existent message');
+        return;
+      }
+      
+      // Get user display name with fallbacks
+      const userName = user.displayName || user.email || 'Unknown User';
+      
+      // Optimistically update UI
+      const message = state.messages[messageIndex];
+      const currentReactions = message.reactions || {};
+      let updatedReactions = { ...currentReactions };
+      
+      // Check if emoji exists in reactions
+      if (!updatedReactions[emoji]) {
+        // Add new emoji reaction
+        updatedReactions[emoji] = {
+          count: 1,
+          users: {
+            [user.uid]: {
+              name: userName,
+              timestamp: new Date()
+            }
+          }
+        };
+      } else {
+        // Check if user already reacted with this emoji
+        const hasReacted = updatedReactions[emoji].users?.[user.uid];
+        
+        if (hasReacted) {
+          // User already reacted, so remove their reaction
+          const { [user.uid]: _, ...remainingUsers } = updatedReactions[emoji].users;
+          const newCount = Math.max(0, (updatedReactions[emoji].count || 1) - 1);
+          
+          if (newCount === 0) {
+            // No reactions left for this emoji, remove it
+            const { [emoji]: __, ...remainingEmojis } = updatedReactions;
+            updatedReactions = remainingEmojis;
+          } else {
+            // Update count and users
+            updatedReactions[emoji] = {
+              count: newCount,
+              users: remainingUsers
+            };
+          }
+        } else {
+          // Add user's reaction
+          updatedReactions[emoji] = {
+            count: (updatedReactions[emoji].count || 0) + 1,
+            users: {
+              ...updatedReactions[emoji].users,
+              [user.uid]: {
+                name: userName,
+                timestamp: new Date()
+              }
+            }
+          };
+        }
+      }
+      
+      // Update local state optimistically
+      dispatch({
+        type: MESSAGE_ACTIONS.UPDATE_MESSAGE_REACTIONS,
+        payload: {
+          id: messageId,
+          reactions: updatedReactions
+        }
+      });
+      
+      // Call Firebase to update
       const result = await MessageService.addReaction(
         messageId, 
         user.uid, 
         emoji,
-        user.displayName || 'Unknown User'
+        userName
       );
-      
-      dispatch({
-        type: MESSAGE_ACTIONS.UPDATE_MESSAGE_REACTIONS,
-        payload: result
-      });
       
       return result;
     } catch (error) {
       console.error('Error adding reaction:', error);
-      throw error;
+      
+      // Show error in UI but don't throw (to avoid breaking component)
+      dispatch({ 
+        type: MESSAGE_ACTIONS.SET_ERROR, 
+        payload: 'Failed to add reaction' 
+      });
     }
-  }, [user]);
+  }, [user, state.messages, dispatch]);
 
   const searchMessages = useCallback(async (params) => {
     try {
@@ -521,56 +537,51 @@ export const MessageProvider = ({ children }) => {
         payload: error.message
       });
     }
-  }, [user?.uid]);
+  }, [user?.uid, dispatch]);
   
   const clearSearch = useCallback(() => {
     dispatch({ type: MESSAGE_ACTIONS.CLEAR_SEARCH });
-  }, []);
-
-  const handleThreadMessagesUpdate = useCallback(({ messages, error, threadId }) => {
-    if (error) {
-      dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_ERROR, payload: error });
-    } else {
-      dispatch({
-        type: MESSAGE_ACTIONS.SET_THREAD_MESSAGES,
-        payload: { messages, threadId }
-      });
-    }
-  }, []);
+  }, [dispatch]);
 
   const subscribeToMessages = useCallback((params) => {
+    // First, unsubscribe from any existing message subscription
+    safeUnsubscribe('messageSubscription');
+    
+    // Clear existing messages and set loading state
     dispatch({ type: MESSAGE_ACTIONS.CLEAR_MESSAGES });
     dispatch({ type: MESSAGE_ACTIONS.SET_LOADING, payload: true });
     
-    return MessageService.subscribeToMessages(params, handleMessagesUpdate);
-  }, [handleMessagesUpdate]);
-
-  const subscribeToThread = useCallback((threadId) => {
-    if (state.threadSubscription) {
-      state.threadSubscription();
-      dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_SUBSCRIPTION, payload: null });
-    }
-  
-    dispatch({ type: MESSAGE_ACTIONS.CLEAR_THREAD });
-    dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_LOADING, payload: true });
+    // Create new subscription with a small delay to ensure previous one is cleaned up
+    setTimeout(() => {
+      try {
+        const unsubscribe = MessageService.subscribeToMessages(params, handleMessagesUpdate);
+        
+        // Store the new subscription
+        subscriptionsRef.current.messageSubscription = unsubscribe;
+        dispatch({ type: MESSAGE_ACTIONS.SET_MESSAGE_SUBSCRIPTION, payload: unsubscribe });
+      } catch (error) {
+        console.error('Error creating message subscription:', error);
+        dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
+      }
+    }, 50);
     
-    const unsubscribe = MessageService.subscribeToThread(threadId, handleThreadMessagesUpdate);
-    dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_SUBSCRIPTION, payload: unsubscribe });
-    
-    return unsubscribe;
-  }, [handleThreadMessagesUpdate, state]);
+    // Return a function to unsubscribe
+    return () => {
+      // The string 'messageSubscription' is stable and won't change
+      const subscriptionType = 'messageSubscription';
+      
+      // We use the current value of safeUnsubscribe when the cleanup runs
+      safeUnsubscribe(subscriptionType);
+    };
+  }, [handleMessagesUpdate, safeUnsubscribe]);
 
   const loadMoreMessages = useCallback(async (params) => {
-    const messages = state.messages;
-    const hasMore = state.hasMore;
-    const loadingMore = state.loadingMore;
-    
-    if (!hasMore || loadingMore) return;
+    if (!state.hasMore || state.loadingMore) return;
 
     try {
       dispatch({ type: MESSAGE_ACTIONS.SET_LOADING_MORE, payload: true });
       
-      const oldestMessage = messages[0];
+      const oldestMessage = state.messages[0];
       const result = await MessageService.fetchOlderMessages(params, oldestMessage);
       
       dispatch({
@@ -583,35 +594,35 @@ export const MessageProvider = ({ children }) => {
     } catch (error) {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
     }
-}, [state.messages, state.hasMore, state.loadingMore]);
+  }, [state.messages, state.hasMore, state.loadingMore, dispatch]);
 
-const sendMessage = useCallback(async (messageData) => {
-  try {
-    // Input validation
-    if (!messageData) {
-      throw new AppError('Message data is required', ErrorTypes.VALIDATION);
+  const sendMessage = useCallback(async (messageData) => {
+    try {
+      // Input validation
+      if (!messageData) {
+        throw new AppError('Message data is required', ErrorTypes.VALIDATION);
+      }
+      
+      // For broadcast messages, ensure readTracking is set if required
+      if (messageData.type?.includes('broadcast') && !messageData.readStatus) {
+        console.warn('Broadcast message missing readStatus property');
+      }
+      
+      const message = await MessageService.sendMessage(messageData);
+      dispatch({
+        type: MESSAGE_ACTIONS.ADD_MESSAGE,
+        payload: message
+      });
+      return message;
+    } catch (error) {
+      const formattedError = handleError(error, 'MessageContext:sendMessage');
+      dispatch({ 
+        type: MESSAGE_ACTIONS.SET_ERROR, 
+        payload: formattedError 
+      });
+      throw formattedError;
     }
-    
-    // For broadcast messages, ensure readTracking is set if required
-    if (messageData.type?.includes('broadcast') && !messageData.readStatus) {
-      console.warn('Broadcast message missing readStatus property');
-    }
-    
-    const message = await MessageService.sendMessage(messageData);
-    dispatch({
-      type: MESSAGE_ACTIONS.ADD_MESSAGE,
-      payload: message
-    });
-    return message;
-  } catch (error) {
-    const formattedError = handleError(error, 'MessageContext:sendMessage');
-    dispatch({ 
-      type: MESSAGE_ACTIONS.SET_ERROR, 
-      payload: formattedError 
-    });
-    throw formattedError;
-  }
-}, []);
+  }, [dispatch]);
 
   const editMessage = useCallback(async (messageId, newText, userId) => {
     try {
@@ -625,15 +636,14 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const markAsRead = useCallback(async (messageId, userId) => {
-    const messages = state.messages;
     try {
-      const messageIndex = messages.findIndex(msg => msg.id === messageId);
+      const messageIndex = state.messages.findIndex(msg => msg.id === messageId);
       if (messageIndex === -1) return;
 
-      const message = messages[messageIndex];
+      const message = state.messages[messageIndex];
       
       if (message.readBy?.includes(userId)) return;
 
@@ -664,7 +674,7 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-}, [state.messages]);
+  }, [state.messages, dispatch]);
 
   const deleteMessage = useCallback(async (messageId, userId) => {
     try {
@@ -680,7 +690,7 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const deleteMessageWithFile = useCallback(async (messageId, userId, filePath) => {
     try {
@@ -711,7 +721,7 @@ const sendMessage = useCallback(async (messageData) => {
       });
       throw formattedError;
     }
-  }, [deleteMessage]);
+  }, [deleteMessage, dispatch]);
 
   const deleteChat = useCallback(async (chatId, userId) => {
     try {
@@ -721,7 +731,7 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const getBuddies = useCallback(async (userId) => {
     try {
@@ -732,7 +742,7 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const checkBuddyStatus = useCallback(async (userId1, userId2) => {
     try {
@@ -741,7 +751,7 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const getOrCreateBuddyChat = useCallback(async (userId1, userId2) => {
     try {
@@ -750,82 +760,29 @@ const sendMessage = useCallback(async (messageData) => {
       dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
-  const sendReply = useCallback(async (messageData, parentMessageId) => {
-    try {
-      const reply = await MessageService.sendReply(messageData, parentMessageId);
-      dispatch({
-        type: MESSAGE_ACTIONS.ADD_REPLY,
-        payload: reply
-      });
-      return reply;
-    } catch (error) {
-      dispatch({ type: MESSAGE_ACTIONS.SET_ERROR, payload: error.message });
-      throw error;
-    }
-  }, []);
-  
-  const loadThreadMessages = useCallback((threadId) => {
-    return subscribeToThread(threadId);
-  }, [subscribeToThread]);
-
-  const loadMoreThreadMessages = useCallback(async (threadId) => {
-    const threadMessages = state.threadMessages;
-    const threadHasMore = state.threadHasMore;
-    const threadLoadingMore = state.threadLoadingMore;
+  // Cleanup all subscriptions when component unmounts - fixed to avoid the ESLint warning
+  useEffect(() => {
+    // Store a reference to the current unsubscribe functions
+    const unsubscribeFns = {
+      messageSubscription: (subscriptionsRef.current.messageSubscription) || null,
+      typingSubscription: (subscriptionsRef.current.typingSubscription) || null
+    };
     
-    if (!threadHasMore || threadLoadingMore) return;
-
-    try {
-      dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_LOADING, payload: true });
-      
-      const oldestThreadMessage = threadMessages[0];
-      const result = await MessageService.fetchOlderThreadMessages(threadId, oldestThreadMessage);
-      
-      dispatch({
-        type: MESSAGE_ACTIONS.ADD_OLDER_THREAD_MESSAGES,
-        payload: {
-          messages: result.messages,
-          hasMore: result.hasMore
+    return () => {
+      // Use the captured unsubscribe functions, not the ref
+      Object.values(unsubscribeFns).forEach(unsubFn => {
+        if (typeof unsubFn === 'function') {
+          try {
+            unsubFn();
+          } catch (error) {
+            console.error('Error during cleanup:', error);
+          }
         }
       });
-    } catch (error) {
-      dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_ERROR, payload: error.message });
-    }
-}, [state.threadMessages, state.threadHasMore, state.threadLoadingMore]);
-  
-const clearActiveThread = useCallback(() => {
-  if (state.threadSubscription) {
-    state.threadSubscription();
-    dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_SUBSCRIPTION, payload: null });
-  }
-  dispatch({ type: MESSAGE_ACTIONS.CLEAR_THREAD });
-}, [state, dispatch]);
-
-  const updateThreadMessage = useCallback(async (messageId, updates) => {
-    try {
-      const updatedMessage = await MessageService.updateMessage(messageId, updates);
-      dispatch({
-        type: MESSAGE_ACTIONS.UPDATE_THREAD_MESSAGE,
-        payload: updatedMessage
-      });
-      return updatedMessage;
-    } catch (error) {
-      dispatch({ type: MESSAGE_ACTIONS.SET_THREAD_ERROR, payload: error.message });
-      throw error;
-    }
-  }, []);
-
-  // Cleanup thread subscription on unmount
-  useEffect(() => {
-    const { threadSubscription } = state;
-    return () => {
-      if (threadSubscription) {
-        threadSubscription();
-      }
     };
-  }, [state]);
+  }, []);
 
   const value = {
     ...state,
@@ -840,16 +797,6 @@ const clearActiveThread = useCallback(() => {
     checkBuddyStatus,
     getOrCreateBuddyChat,
     dispatch,
-    sendReply,
-    loadThreadMessages,
-    clearActiveThread,
-    loadMoreThreadMessages,
-    updateThreadMessage,
-    subscribeToThread,
-    threadError: state.threadError,
-    threadLoading: state.threadLoading,
-    threadHasMore: state.threadHasMore,
-    threadLoadingMore: state.threadLoadingMore,
     searchResults: state.searchResults,
     searchLoading: state.searchLoading,
     searchError: state.searchError,
@@ -861,8 +808,21 @@ const clearActiveThread = useCallback(() => {
     sendMessageWithFile,
     deleteMessageWithFile,
     addReaction,
-    getCommonEmojis: MessageService.getCommonEmojis,
-    getSortedReactions: MessageService.getSortedReactions,
+    
+    // Fixed implementation of these methods to avoid 'this' binding issues
+    getCommonEmojis: () => MessageService.getCommonEmojis(),
+    getSortedReactions: (reactions) => {
+      if (!reactions) return [];
+      
+      return Object.entries(reactions)
+        .map(([emoji, data]) => ({
+          emoji,
+          count: data.count,
+          users: getUsersForReaction(data)
+        }))
+        .sort((a, b) => b.count - a.count);
+    },
+    
     typingUsers: state.typingUsers,
     subscribeToTypingStatus,
     setTypingStatus

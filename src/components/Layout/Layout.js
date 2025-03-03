@@ -1,6 +1,6 @@
 // src/components/Layout/Layout.js
 import React, { useState, useEffect } from 'react';
-import { Menu, Home, BookOpen, MessageSquare, Compass, Book, User, X, ShieldCheck, GraduationCap, Award } from 'lucide-react';
+import { Menu, Home, BookOpen, MessageSquare, Compass, Book, User, X, ShieldCheck, GraduationCap, Award, Users } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../Navigation/LogoutButton';
@@ -50,6 +50,15 @@ const Layout = ({ children }) => {
               >
                 <User size={20} />
                 <span>Profile</span>
+              </button>
+              
+              {/* Buddies menu item */}
+              <button
+                onClick={() => handleNavigation('/buddies')}
+                className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+              >
+                <Users size={20} />
+                <span>Buddies</span>
               </button>
             </div>
 
