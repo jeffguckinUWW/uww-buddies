@@ -19,6 +19,9 @@ import HomePage from './pages/Home';
 import Layout from './components/Layout/Layout';
 import RewardsPage from './pages/RewardsPage';
 import Travel from './pages/Travel';
+import KnowledgePage from './pages/KnowledgePage';
+import LearningResources from './components/Knowledge/LearningResources';
+import ResourceViewer from './components/Knowledge/ResourceViewer';
 
 function AuthRoutes() {
   const location = useLocation();
@@ -73,6 +76,9 @@ function AuthRoutes() {
           } 
         />
         <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/knowledge/*" element={<KnowledgePage />} />
+        <Route path="/knowledge/resources" element={<LearningResources />} />
+        <Route path="/knowledge/resources/:resourceId" element={<ResourceViewer />} />
       </Routes>
     </Layout>
   );

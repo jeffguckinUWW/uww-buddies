@@ -3,13 +3,27 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../../../firebase/config';
 import { useAuth } from '../../../context/AuthContext';
 import { MessageSquarePlus } from 'lucide-react';
+import NotificationService from '../../../services/NotificationService';
+
+// Simple NotificationBadge component
+const NotificationBadge = ({ count }) => {
+  if (!count || count <= 0) return null;
+  
+  return (
+    <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+};
 
 const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
   const { user } = useAuth();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [chatNotifications, setChatNotifications] = useState({});
 
+  // Subscribe to chat list
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -38,6 +52,40 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     return () => unsubscribe();
   }, [user]);
 
+  // Subscribe to notifications for each chat
+  useEffect(() => {
+    if (!user?.uid || chats.length === 0) return;
+    
+    // Array to collect unsubscribe functions
+    const unsubscribers = [];
+    
+    // Subscribe to notifications for each chat
+    chats.forEach(chat => {
+      const unsubscribe = NotificationService.subscribeToItemNotifications(
+        user.uid,
+        'chat',
+        chat.id,
+        (data) => {
+          setChatNotifications(prev => ({
+            ...prev,
+            [chat.id]: data.totalCount || 0
+          }));
+        }
+      );
+      
+      unsubscribers.push(unsubscribe);
+    });
+    
+    // Cleanup function to unsubscribe from all notifications
+    return () => {
+      unsubscribers.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          unsub();
+        }
+      });
+    };
+  }, [user, chats]);
+
   const formatLastMessage = (chat) => {
     if (!chat.lastMessage) return 'No messages yet';
     const isCurrentUser = chat.lastMessage.senderId === user?.uid;
@@ -65,16 +113,21 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
     if (chat.type === 'group') return chat.name;
     
     const otherParticipantId = chat.activeParticipants.find(id => id !== user?.uid);
-  if (chat.names && otherParticipantId) {
-    return chat.names[otherParticipantId] || 'Unknown User';
-  }
-  
-  // Fallback to participants if names isn't available
-  const otherParticipant = Object.entries(chat.participants)
-    .find(([id]) => id !== user?.uid)?.[1];
+    if (chat.names && otherParticipantId) {
+      return chat.names[otherParticipantId] || 'Unknown User';
+    }
     
-  return otherParticipant?.displayName || 'Unknown User';
-};
+    // Fallback to participants if names isn't available
+    const otherParticipant = Object.entries(chat.participants)
+      .find(([id]) => id !== user?.uid)?.[1];
+      
+    return otherParticipant?.displayName || 'Unknown User';
+  };
+
+  const handleChatSelection = (chatId) => {
+    // Call the parent's onChatSelect handler
+    onChatSelect(chatId);
+  };
 
   return (
     <>
@@ -100,29 +153,39 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
             No chats yet
           </div>
         ) : (
-          chats.map(chat => (
-            <button
-              key={chat.id}
-              onClick={() => onChatSelect(chat.id)}
-              className={`w-full text-left p-4 hover:bg-gray-100 transition-colors
-                ${selectedChatId === chat.id ? 'bg-gray-100' : ''}
-              `}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <h3 className="font-medium truncate">
-                  {getChatName(chat)}
-                </h3>
-                {chat.lastMessageAt && (
-                  <span className="text-xs text-gray-500">
-                    {formatTimestamp(chat.lastMessageAt)}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-600 truncate">
-                {formatLastMessage(chat)}
-              </p>
-            </button>
-          ))
+          chats.map(chat => {
+            const notificationCount = chatNotifications[chat.id] || 0;
+            
+            return (
+              <button
+                key={chat.id}
+                onClick={() => handleChatSelection(chat.id)}
+                className={`w-full text-left p-4 hover:bg-gray-100 transition-colors
+                  ${selectedChatId === chat.id ? 'bg-gray-100' : ''}
+                `}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-medium truncate">
+                    {getChatName(chat)}
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    {/* Show notification badge if there are unread messages */}
+                    {notificationCount > 0 && (
+                      <NotificationBadge count={notificationCount} />
+                    )}
+                    {chat.lastMessageAt && (
+                      <span className="text-xs text-gray-500">
+                        {formatTimestamp(chat.lastMessageAt)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 truncate">
+                  {formatLastMessage(chat)}
+                </p>
+              </button>
+            );
+          })
         )}
       </div>
     </>

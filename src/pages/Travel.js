@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import TripMessaging from '../components/Messaging/trip/TripMessaging';
+import NotificationService from '../services/NotificationService';
+import NotificationBadge from '../components/Messaging/shared/NotificationBadge';
 
 const Travel = () => {
   const { user } = useAuth();
@@ -13,6 +15,30 @@ const Travel = () => {
   const [tripDetails, setTripDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
+  const [, setTripNotifications] = useState({});
+
+  // Subscribe to notification counts for each trip
+  useEffect(() => {
+    if (!user || !trips.length) return;
+
+    const unsubscribers = trips.map(trip => {
+      return NotificationService.subscribeToItemNotifications(
+        user.uid,
+        'trip',
+        trip.tripId,
+        (data) => {
+          setTripNotifications(prev => ({
+            ...prev,
+            [trip.tripId]: data.totalCount
+          }));
+        }
+      );
+    });
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub && unsub());
+    };
+  }, [user, trips]);
 
   const cleanupTripData = useCallback(async (tripData) => {
     if (!tripData || tripData.length === 0) return [];
@@ -127,8 +153,35 @@ const Travel = () => {
     }
   };
 
-  const TripCard = ({ trip, isExpanded, onToggle, details, isLoading, error, currentUserId }) => {
+  const TripCard = ({ trip, isExpanded, onToggle, isLoading, error, currentUserId }) => {
     const [isMessagingOpen, setIsMessagingOpen] = useState(false);
+    const [tabNotifications, setTabNotifications] = useState({
+      broadcasts: 0,
+      discussion: 0,
+      direct: 0
+    });
+    const { user } = useAuth();
+
+    // Subscribe to notification counts for this trip's tabs
+    useEffect(() => {
+      if (!trip.tripId || !user) return;
+
+      const unsubscribe = NotificationService.subscribeToItemNotifications(
+        user.uid,
+        'trip',
+        trip.tripId,
+        (data) => {
+          setTabNotifications({
+            broadcasts: data.tabCounts.broadcast,
+            discussion: data.tabCounts.discussion,
+            direct: data.tabCounts.direct
+          });
+        }
+      );
+
+      return () => unsubscribe();
+    }, [trip.tripId, user]);
+
     const getDiverCounts = (participants) => {
       let divers = 0;
       let nonDivers = 0;
@@ -163,7 +216,9 @@ const Travel = () => {
         {/* Trip Header */}
         <div className="p-4">
           <div className="mb-2">
-            <h4 className="text-lg font-semibold">{trip.location}</h4>
+          <div className="flex items-start gap-2">
+  <h4 className="text-lg font-semibold">{trip.location}</h4>
+</div>
             <p className="text-sm text-gray-600">
               {trip.resort} • {new Date(trip.startDate).toLocaleDateString()} - {new Date(trip.endDate).toLocaleDateString()}
             </p>
@@ -212,12 +267,17 @@ const Travel = () => {
   
             <button
               onClick={() => setIsMessagingOpen(true)}
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2"
+              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-2 relative"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
               </svg>
               Trip Messages
+              {(tabNotifications.broadcasts > 0 || tabNotifications.discussion > 0 || tabNotifications.direct > 0) && (
+                <div className="absolute -top-2 -right-2">
+                  <NotificationBadge count={tabNotifications.broadcasts + tabNotifications.discussion + tabNotifications.direct} size="sm" />
+                </div>
+              )}
             </button>
           </div>
         </div>
@@ -327,7 +387,16 @@ const Travel = () => {
               id: trip.tripId
             }}
             isOpen={isMessagingOpen}
-            onClose={() => setIsMessagingOpen(false)}
+            onClose={() => {
+              setIsMessagingOpen(false);
+              // Mark all trip notifications as read when closing the messaging panel
+              if (user && trip.tripId) {
+                NotificationService.markTabNotificationsAsRead(user.uid, 'trip', trip.tripId, 'broadcast');
+                NotificationService.markTabNotificationsAsRead(user.uid, 'trip', trip.tripId, 'discussion');
+                NotificationService.markTabNotificationsAsRead(user.uid, 'trip', trip.tripId, 'direct');
+              }
+            }}
+            defaultView="discussion" // Always default to discussion view
           />
         )}
       </div>

@@ -1,6 +1,6 @@
 // src/components/Messaging/trip/TripMessaging.js
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, MessageSquare, User, Search, Megaphone } from 'lucide-react';
 import { useMessages } from '../../../context/MessageContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -14,7 +14,12 @@ import TypingIndicator from '../shared/TypingIndicator';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 
-const TripMessaging = ({ trip, isOpen, onClose }) => {
+const TripMessaging = ({ 
+  trip, 
+  isOpen, 
+  onClose, 
+  defaultView = 'discussion' // Always default to discussion view
+}) => {
   const { user } = useAuth();
   const { 
     messages, 
@@ -31,20 +36,45 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
     deleteMessageWithFile,
     editMessage,
     addReaction,
-    // Add these for typing indicators
     subscribeToTypingStatus,
     setTypingStatus,
     typingUsers
   } = useMessages();
   
-  const [activeTab, setActiveTab] = useState('discussion');
+  const [activeTab, setActiveTab] = useState(defaultView);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState(null);
   const [selectedParticipant, setSelectedParticipant] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [userProfiles, setUserProfiles] = useState({});
   const isInstructor = trip?.instructorId === user?.uid;
+  
+  // Refs to track subscriptions and avoid dependency cycles
+  const subscriptionsRef = useRef([]);
+  const isComponentMounted = useRef(true);
 
+  // Setup component lifecycle
+  useEffect(() => {
+    isComponentMounted.current = true;
+    
+    return () => {
+      isComponentMounted.current = false;
+      
+      // Clean up all subscriptions on unmount
+      subscriptionsRef.current.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          try {
+            unsub();
+          } catch (e) {
+            console.error('Error during unsubscribe:', e);
+          }
+        }
+      });
+      subscriptionsRef.current = [];
+    };
+  }, []);
+
+  // Fetch user profiles for typing users
   useEffect(() => {
     if (!typingUsers || typingUsers.length === 0) return;
     
@@ -56,7 +86,7 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         if (!userProfiles[userId]) {
           try {
             const userDoc = await getDoc(doc(db, 'users', userId));
-            if (userDoc.exists()) {
+            if (userDoc.exists() && isComponentMounted.current) {
               newProfiles[userId] = userDoc.data();
               hasNewProfiles = true;
             }
@@ -66,15 +96,16 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         }
       }
       
-      if (hasNewProfiles) {
+      if (hasNewProfiles && isComponentMounted.current) {
         setUserProfiles(newProfiles);
       }
     };
     
     fetchUserProfiles();
-  }, [typingUsers, userProfiles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typingUsers]); // Intentionally excluded userProfiles to prevent infinite loop
   
-  // Add effect to subscribe to typing status
+  // Subscribe to typing status
   useEffect(() => {
     if (!trip?.id || !user?.uid) return;
     
@@ -86,57 +117,137 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         : 'trip_discussion'
     };
     
-    const unsubscribe = subscribeToTypingStatus(typingParams);
+    let unsubscribe;
+    // Add small delay to ensure clean subscription setup
+    const timeoutId = setTimeout(() => {
+      if (isComponentMounted.current) {
+        unsubscribe = subscribeToTypingStatus(typingParams);
+        if (unsubscribe) {
+          subscriptionsRef.current.push(unsubscribe);
+        }
+      }
+    }, 50);
     
     return () => {
-      unsubscribe();
+      clearTimeout(timeoutId);
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+          subscriptionsRef.current = subscriptionsRef.current.filter(sub => sub !== unsubscribe);
+        } catch (e) {
+          console.error('Error unsubscribing from typing:', e);
+        }
+      }
+      
       // Make sure to set typing status to false when unmounting
-      setTypingStatus(typingParams, false);
+      if (isComponentMounted.current) {
+        setTypingStatus(typingParams, false);
+      }
     };
   }, [trip?.id, user?.uid, activeTab, subscribeToTypingStatus, setTypingStatus]);
 
+  // Subscribe to messages based on active tab
   useEffect(() => {
     if (!trip?.id || !user?.uid) return;
-
+  
     const unsubscribes = [];
-
-    if (activeTab === 'broadcast' && isInstructor) {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'trip',
-          tripId: trip.id,
-          messageType: 'trip_broadcast'
-        })
-      );
-    } else if (activeTab === 'discussion') {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'trip',
-          tripId: trip.id,
-          messageType: 'trip_discussion'
-        })
-      );
-    } else if (activeTab === 'private') {
-      unsubscribes.push(
-        subscribeToMessages({
-          type: 'trip',
-          tripId: trip.id,
-          messageType: 'trip_private'
-        })
-      );
+    const timeoutIds = [];
+    
+    if (activeTab === 'broadcast') {
+      // Only subscribe to broadcasts when in broadcast tab
+      console.log('Subscribing to trip broadcasts');
+      const timeoutId = setTimeout(() => {
+        if (isComponentMounted.current) {
+          const unsub = subscribeToMessages({
+            type: 'trip',
+            tripId: trip.id,
+            messageType: 'trip_broadcast',
+            currentUserId: user.uid
+          });
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId);
     }
-
-    return () => unsubscribes.forEach(unsub => unsub());
-  }, [trip?.id, user?.uid, subscribeToMessages, activeTab, isInstructor]);
+    else if (activeTab === 'discussion') {
+      // Only subscribe to discussions when in discussion tab
+      console.log('Subscribing to trip discussions');
+      const timeoutId = setTimeout(() => {
+        if (isComponentMounted.current) {
+          const unsub = subscribeToMessages({
+            type: 'trip',
+            tripId: trip.id,
+            messageType: 'trip_discussion',
+            currentUserId: user.uid
+          });
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId);
+    }
+    else if (activeTab === 'private') {
+      // Only subscribe to private messages when in private tab
+      console.log('Subscribing to private messages');
+      const timeoutId = setTimeout(() => {
+        if (isComponentMounted.current) {
+          // Create the base subscription params
+          const subscriptionParams = {
+            type: 'trip',
+            tripId: trip.id,
+            messageType: 'trip_private',
+            currentUserId: user.uid
+          };
+          
+          // If instructor has selected a specific participant
+          if (isInstructor && selectedParticipant) {
+            subscriptionParams.recipientId = selectedParticipant;
+          }
+          
+          console.log('Subscribing with private params:', subscriptionParams);
+          
+          const unsub = subscribeToMessages(subscriptionParams);
+          if (unsub) {
+            unsubscribes.push(unsub);
+            subscriptionsRef.current.push(unsub);
+          }
+        }
+      }, 100);
+      timeoutIds.push(timeoutId);
+    }
+  
+    return () => {
+      // Clear all timeouts
+      timeoutIds.forEach(id => clearTimeout(id));
+      
+      // Unsubscribe from all subscriptions created in this effect
+      unsubscribes.forEach(unsub => {
+        if (typeof unsub === 'function') {
+          try {
+            unsub();
+            subscriptionsRef.current = subscriptionsRef.current.filter(sub => sub !== unsub);
+          } catch (e) {
+            console.error('Error unsubscribing from messages:', e);
+          }
+        }
+      });
+    };
+  }, [trip?.id, user?.uid, subscribeToMessages, activeTab, isInstructor, selectedParticipant]);
 
   const handleLoadMore = useCallback(() => {
     const params = {
       type: 'trip',
       tripId: trip?.id,
-      messageType: activeTab === 'broadcast' ? 'trip_broadcast' : 'trip_discussion'
+      messageType: activeTab === 'broadcast' ? 'trip_broadcast' : 'trip_discussion',
+      currentUserId: user?.uid
     };
     loadMoreMessages(params);
-  }, [loadMoreMessages, trip?.id, activeTab]);
+  }, [loadMoreMessages, trip?.id, activeTab, user?.uid]);
 
   const handleReaction = useCallback(async (messageId, emoji) => {
     try {
@@ -164,10 +275,23 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         default:
           messageType = 'trip_discussion';
       }
-  
+    
+      // Get all participants UIDs
+      const participants = trip.participants || [];
+      const participantUids = participants.map(p => p.uid);
+      
+      // Create the allowedReaders array for ALL message types
+      const allowedReaders = [
+        user.uid,            // The sender can read it
+        trip.instructorId,   // The instructor can read it
+        ...participantUids   // All participants can read it
+      ];
+      
+      // Remove any duplicates
+      const uniqueAllowedReaders = [...new Set(allowedReaders)];
+      
       let readTracking = {};
       if (messageType === 'trip_broadcast') {
-        const participants = trip.participants || [];
         readTracking = {
           readBy: [user.uid],
           readStatus: participants.reduce((acc, participant) => {
@@ -197,9 +321,27 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
         text: text.trim(),
         timestamp: new Date(),
         type: messageType,
+        // Add explicit flags for better message handling
+        isBroadcast: messageType === 'trip_broadcast', 
+        isTripMessaging: true,
+        courseId: null,
+        isInstructor: isInstructor,
+        // ALWAYS include allowedReaders for ALL message types
+        allowedReaders: uniqueAllowedReaders,
         ...(recipientId && { recipientId }),
         ...(messageType === 'trip_broadcast' && readTracking)
       };
+      
+      // ADD THIS DEBUGGING CODE RIGHT HERE
+      console.log('About to send trip message:', {
+        tripId: trip.id,
+        messageType: messageType,
+        type: messageType,
+        allowedReaders: uniqueAllowedReaders?.length,
+        recipientId: recipientId
+      });
+      
+      console.log('Sending message with data:', messageData);
       
       if (file) {
         await sendMessageWithFile(messageData, file);
@@ -208,13 +350,16 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      setSendError(error);
+      if (typeof error === 'object' && error !== null) {
+        setSendError({ message: error.message || 'Unknown error' });
+      } else {
+        setSendError({ message: String(error) });
+      }
     } finally {
       setIsSending(false);
     }
   };
   
-
   const handleDeleteMessage = async (messageId) => {
     try {
       const message = messages.find(msg => msg.id === messageId);
@@ -241,17 +386,38 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
   const filteredMessages = messages.filter(msg => {
     switch (activeTab) {
       case 'broadcast':
+        // Only show broadcasts in broadcast tab
         return msg.type === 'trip_broadcast';
+        
       case 'discussion':
+        // ONLY discussion messages, not broadcasts
         return msg.type === 'trip_discussion';
+        
       case 'private':
-        return msg.type === 'trip_private' && 
-          (msg.senderId === user?.uid || msg.recipientId === user?.uid ||
-           (isInstructor && (msg.senderId === selectedParticipant || msg.recipientId === selectedParticipant)));
+        // Private messaging logic
+        if (isInstructor && selectedParticipant) {
+          return msg.type === 'trip_private' && 
+            ((msg.senderId === user?.uid && msg.recipientId === selectedParticipant) ||
+             (msg.senderId === selectedParticipant && msg.recipientId === user?.uid));
+        } else if (!isInstructor) {
+          return msg.type === 'trip_private' && 
+            ((msg.senderId === user?.uid && msg.recipientId === trip.instructorId) ||
+             (msg.senderId === trip.instructorId && msg.recipientId === user?.uid));
+        }
+        return false;
+        
       default:
         return false;
     }
   });
+
+  // Add this debugging to see message types
+  console.log('Filtered messages:', filteredMessages.map(msg => ({
+    id: msg.id,
+    type: msg.type,
+    isBroadcast: msg.type?.includes('broadcast') || msg.isBroadcast,
+    text: msg.text?.substring(0, 20)
+  })));
 
   const filteredParticipants = trip?.participants?.filter(participant =>
     participant.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -291,7 +457,8 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                   tripId: trip.id,
                   messageType: activeTab === 'broadcast' 
                     ? 'trip_broadcast' 
-                    : 'trip_discussion'
+                    : 'trip_discussion',
+                  currentUserId: user.uid
                 };
                 subscribeToMessages(params);
               }
@@ -301,21 +468,21 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
 
           {/* Tabs */}
           <div className="flex px-6 border-b">
-            {isInstructor && (
-              <button
-                onClick={() => setActiveTab('broadcast')}
-                className={`px-5 py-3 flex items-center gap-2 border-b-2 transition-colors
-                  ${activeTab === 'broadcast' 
-                    ? 'border-[#4460F1] text-[#4460F1]' 
-                    : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              >
-                <Megaphone size={18} />
-                <span>Broadcasts</span>
-              </button>
-            )}
+            {/* Show broadcast tab for everyone, but only allow instructors to send broadcasts */}
+            <button
+              onClick={() => setActiveTab('broadcast')}
+              className={`px-5 py-3 flex items-center gap-2 border-b-2 transition-colors
+                ${activeTab === 'broadcast' 
+                  ? 'border-[#4460F1] text-[#4460F1]' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <Megaphone size={18} />
+              <span>Broadcasts</span>
+            </button>
+            
             <button
               onClick={() => setActiveTab('discussion')}
-              className={`px-5 py-3 ${!isInstructor ? '' : 'ml-6'} flex items-center gap-2 border-b-2 transition-colors
+              className={`px-5 py-3 ml-6 flex items-center gap-2 border-b-2 transition-colors
                 ${activeTab === 'discussion' 
                   ? 'border-[#4460F1] text-[#4460F1]' 
                   : 'border-transparent text-gray-500 hover:text-gray-700'}`}
@@ -323,6 +490,7 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
               <MessageSquare size={18} />
               <span>Trip Discussion</span>
             </button>
+            
             <button
               onClick={() => setActiveTab('private')}
               className={`px-5 py-3 ml-6 flex items-center gap-2 border-b-2 transition-colors
@@ -363,7 +531,11 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto">
                 <MessageList
-                  messages={filteredMessages}
+                  messages={filteredMessages.map(msg => ({
+                    ...msg,
+                    // Force the broadcast flag for trip_broadcast messages
+                    isBroadcast: true
+                  }))}
                   currentUserId={user?.uid}
                   onDeleteMessage={handleDeleteMessage}
                   onEditMessage={handleEditMessage}
@@ -377,12 +549,14 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                   onLoadMore={handleLoadMore}
                 />
                 
-                {/* Add typing indicator */}
-                <TypingIndicator 
-                  typingUsers={typingUsers} 
-                  userProfiles={userProfiles}
-                  currentUserId={user?.uid}
-                />
+                {/* Add typing indicator with conditional rendering */}
+                {typingUsers && typingUsers.length > 0 && (
+                  <TypingIndicator 
+                    typingUsers={typingUsers} 
+                    userProfiles={userProfiles}
+                    currentUserId={user?.uid}
+                  />
+                )}
               </div>
                 {isInstructor && (
                   <div className="flex-shrink-0">
@@ -413,18 +587,20 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                   loading={loading}
                   loadingMore={loadingMore}
                   error={error}
-                  showBroadcastIndicator={true}
+                  showBroadcastIndicator={false}
                   isInstructor={isInstructor}
                   hasMore={hasMore}
                   onLoadMore={handleLoadMore}
                 />
                 
-                {/* Add typing indicator */}
-                <TypingIndicator 
-                  typingUsers={typingUsers} 
-                  userProfiles={userProfiles}
-                  currentUserId={user?.uid}
-                />
+                {/* Add typing indicator with conditional rendering */}
+                {typingUsers && typingUsers.length > 0 && (
+                  <TypingIndicator 
+                    typingUsers={typingUsers} 
+                    userProfiles={userProfiles}
+                    currentUserId={user?.uid}
+                  />
+                )}
               </div>
                 <div className="flex-shrink-0">
                 <MessageInput
@@ -506,18 +682,20 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                             loading={loading}
                             loadingMore={loadingMore}
                             error={error}
-                            showBroadcastIndicator={true}
+                            showBroadcastIndicator={false}
                             isInstructor={isInstructor}
                             hasMore={hasMore}
                             onLoadMore={handleLoadMore}
                           />
                           
-                          {/* Add typing indicator */}
-                          <TypingIndicator 
-                            typingUsers={typingUsers} 
-                            userProfiles={userProfiles}
-                            currentUserId={user?.uid}
-                          />
+                          {/* Add typing indicator with conditional rendering */}
+                          {typingUsers && typingUsers.length > 0 && (
+                            <TypingIndicator 
+                              typingUsers={typingUsers} 
+                              userProfiles={userProfiles}
+                              currentUserId={user?.uid}
+                            />
+                          )}
                         </div>
                           <div className="flex-shrink-0">
                           <MessageInput
@@ -528,7 +706,8 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                             typingParams={{
                               type: 'trip',
                               tripId: trip.id,
-                              messageType: 'trip_private'
+                              messageType: 'trip_private',
+                              recipientId: selectedParticipant  // This is the critical field for private messaging!
                             }}
                             onTypingStatus={setTypingStatus}
                           />
@@ -556,28 +735,31 @@ const TripMessaging = ({ trip, isOpen, onClose }) => {
                       loading={loading}
                       loadingMore={loadingMore}
                       error={error}
-                      showBroadcastIndicator={true}
+                      showBroadcastIndicator={false}
                       isInstructor={isInstructor}
                       hasMore={hasMore}
                       onLoadMore={handleLoadMore}
                     />
                     
-                    {/* Add typing indicator */}
-                    <TypingIndicator 
-                      typingUsers={typingUsers} 
-                      userProfiles={userProfiles}
-                      currentUserId={user?.uid}
-                    />
+                    {/* Add typing indicator with conditional rendering */}
+                    {typingUsers && typingUsers.length > 0 && (
+                      <TypingIndicator 
+                        typingUsers={typingUsers} 
+                        userProfiles={userProfiles}
+                        currentUserId={user?.uid}
+                      />
+                    )}
                   </div>
                   <MessageInput
-                    onSend={(text, file) => handleSendMessage(text, file, 'private', selectedParticipant)}
-                    placeholder="Message participant..."
+                    onSend={(text, file) => handleSendMessage(text, file, 'private', trip.instructorId)}
+                    placeholder="Message trip leader..."
                     isSending={isSending}
                     sendError={sendError}
                     typingParams={{
                       type: 'trip',
                       tripId: trip.id,
-                      messageType: 'trip_private'
+                      messageType: 'trip_private',
+                      recipientId: trip.instructorId  // This is the critical field for private messaging!
                     }}
                     onTypingStatus={setTypingStatus}
                   />

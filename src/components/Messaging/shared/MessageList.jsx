@@ -129,10 +129,15 @@ const MessageList = ({
     );
   }
 
+  // Properly handle error objects
   if (error) {
     return (
       <Alert variant="destructive" className="m-4">
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>
+          {typeof error === 'object' && error !== null 
+            ? error.message || 'An unknown error occurred' 
+            : error}
+        </AlertDescription>
       </Alert>
     );
   }
@@ -147,8 +152,12 @@ const MessageList = ({
     return groups;
   }, {});
 
+  // IMPROVED: More robust broadcast checking
   const isBroadcast = (message) => {
-    return message.type?.includes('broadcast');
+    return message.isBroadcast === true || 
+           message.type?.includes('broadcast') || 
+           message.type === 'trip_broadcast' || 
+           message.type === 'course_broadcast';
   };
 
   // Safely get reactions for display
@@ -196,6 +205,15 @@ const MessageList = ({
               const broadcastMessage = isBroadcast(message);
               const isEditing = editingMessageId === message.id;
               const reactions = getMessageReactions(message);
+
+              // Debug info
+              if (broadcastMessage) {
+                console.log('Rendering broadcast message:', {
+                  id: message.id,
+                  type: message.type,
+                  isBroadcast: message.isBroadcast
+                });
+              }
 
               return (
                 <div

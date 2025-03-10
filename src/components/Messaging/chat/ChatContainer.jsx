@@ -12,6 +12,7 @@ import ChatHeader from './ChatHeader';
 import NewChatModal from './NewChatModal';
 import { ArrowLeft } from 'lucide-react';
 import FilePreview from '../shared/FilePreview';
+import NotificationService from '../../../services/NotificationService';
 
 const ChatContainer = () => {
   const { user } = useAuth();
@@ -56,6 +57,15 @@ const ChatContainer = () => {
       type: 'chat',
       chatId: selectedChat
     });
+
+    // Mark notifications as read when chat is opened
+    // This fixes Issue #2 - notifications not clearing on Message tab
+    NotificationService.markTabNotificationsAsRead(
+      user.uid,
+      'chat',
+      selectedChat,
+      'chat'  // tabType parameter
+    );
 
     return () => unsubscribe();
   }, [selectedChat, user, subscribeToMessages]);
@@ -214,12 +224,22 @@ const ChatContainer = () => {
     }
   };
 
+  // Handle chat selection and mark notifications as read
+  const handleSelectChat = (chatId) => {
+    setSelectedChat(chatId);
+    
+    // Mark notifications as read when selecting a chat
+    if (user?.uid && chatId) {
+      NotificationService.markTabNotificationsAsRead(user.uid, 'chat', chatId, 'chat');
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] flex bg-white rounded-lg shadow-md overflow-hidden">
       <div className="w-1/3 border-r flex flex-col bg-gray-50">
         <ChatSidebar
           selectedChatId={selectedChat}
-          onChatSelect={setSelectedChat}
+          onChatSelect={handleSelectChat}
           onNewChat={() => setShowNewChatModal(true)}
         />
       </div>

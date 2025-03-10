@@ -72,13 +72,32 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
 
   // For instructors, show detailed modal
   const readUsers = Object.entries(readStatus)
-    .filter(([_, statusObj]) => statusObj.read)
-    .sort((a, b) => {
-      // Handle potential missing readAt fields
-      const dateA = a[1]?.readAt ? new Date(a[1].readAt) : new Date(0);
-      const dateB = b[1]?.readAt ? new Date(b[1].readAt) : new Date(0);
-      return dateB - dateA; // Most recent first
-    });
+  .filter(([_, statusObj]) => statusObj.read)
+  .sort((a, b) => {
+    // Properly handle Firestore timestamps
+    const getTime = (timestamp) => {
+      if (!timestamp) return 0;
+      // Check if it's a Firestore Timestamp (has toDate method)
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+        return timestamp.toDate().getTime();
+      }
+      // Already a Date object
+      if (timestamp instanceof Date) {
+        return timestamp.getTime();
+      }
+      // Try to parse it as a string timestamp
+      try {
+        return new Date(timestamp).getTime();
+      } catch (e) {
+        console.warn('Invalid timestamp format:', timestamp);
+        return 0;
+      }
+    };
+
+    const timeA = getTime(a[1]?.readAt);
+    const timeB = getTime(b[1]?.readAt);
+    return timeB - timeA; // Most recent first
+  });
 
   const unreadUsers = Object.entries(readStatus)
     .filter(([_, statusObj]) => !statusObj.read);
@@ -106,7 +125,11 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
                 <div key={userId} className="flex justify-between items-center text-sm">
                   <span>{readStatus[userId]?.name || 'Unknown User'}</span>
                   <span className="text-xs text-gray-500">
-                    {statusObj.readAt ? format(new Date(statusObj.readAt), 'MMM d, h:mm a') : 'Time unknown'}
+                  {statusObj.readAt ? format(
+  statusObj.readAt.toDate ? statusObj.readAt.toDate() : 
+  (statusObj.readAt instanceof Date ? statusObj.readAt : new Date(statusObj.readAt)), 
+  'MMM d, h:mm a'
+) : 'Time unknown'}
                   </span>
                 </div>
               ))}

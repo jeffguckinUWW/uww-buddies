@@ -25,24 +25,14 @@ import {
   deleteObject
 } from 'firebase/storage';
 import { handleError, AppError, ErrorTypes } from '../lib/utils';
+import NotificationService from './NotificationService';
+import { MessageTypes } from './MessageConstants';
+
+// Re-export MessageTypes for backward compatibility
+export { MessageTypes };
 
 const MESSAGES_PER_PAGE = 25;
 const INITIAL_MESSAGES_LIMIT = 50;
-
-export const MessageTypes = {
-  // Buddy-to-buddy messaging
-  CHAT: 'chat',                     // Regular chat between buddies
-  
-  // Course messaging
-  COURSE_DISCUSSION: 'course_discussion',  // Group chat for everyone in course
-  COURSE_PRIVATE: 'course_private',        // Student/Assistant -> Instructor or vice versa
-  COURSE_BROADCAST: 'course_broadcast',    // Instructor announcements to all
-  
-  // Trip messaging
-  TRIP_DISCUSSION: 'trip_discussion',      // Group chat for everyone in trip
-  TRIP_PRIVATE: 'trip_private',            // Participant -> Trip leader or vice versa
-  TRIP_BROADCAST: 'trip_broadcast'         // Trip leader announcements to all
-};
 
 class MessageService {
   static async fetchOlderMessages(params, lastMessage) {
@@ -755,7 +745,7 @@ class MessageService {
         }
       
         const tripData = tripDoc.data();
-        const isTripLeader = tripData.leaderId === messageData.senderId;
+        const isTripLeader = tripData.instructorId === messageData.senderId;
         const isTripParticipant = tripData.participants?.some(p => p.uid === messageData.senderId);
       
         if (messageData.type === MessageTypes.TRIP_BROADCAST && !isTripLeader) {
@@ -765,9 +755,10 @@ class MessageService {
         if (!isTripLeader && !isTripParticipant) {
           throw new Error('Not authorized to send messages in this trip');
         }
-  
+      
         if (messageData.type === MessageTypes.TRIP_PRIVATE) {
-          const isLeaderInvolved = isTripLeader || messageData.recipientId === tripData.leaderId;
+          // THIS IS THE FIX - Using instructorId instead of leaderId
+          const isLeaderInvolved = isTripLeader || messageData.recipientId === tripData.instructorId;
           if (!isLeaderInvolved) {
             const areBuddies = await this.checkBuddyStatus(messageData.senderId, messageData.recipientId);
             if (areBuddies) {
@@ -787,16 +778,36 @@ class MessageService {
           ...baseMessage,
           ...messageData
         };
+
+          // NEW CODE: Add safety check for allowedReaders on ALL trip message types
+        if (!newMessage.allowedReaders && (
+          newMessage.type === MessageTypes.TRIP_DISCUSSION || 
+          newMessage.type === MessageTypes.TRIP_BROADCAST ||
+          newMessage.type === MessageTypes.TRIP_PRIVATE
+        )) {
+          // Get all participants UIDs
+          const participantUids = tripData.participants?.map(p => p.uid) || [];
+          
+          // Add allowedReaders property
+          newMessage.allowedReaders = [
+            newMessage.senderId,         // The sender can read it
+            tripData.instructorId,       // The instructor can read it
+            ...participantUids           // All participants can read it
+          ];
+          
+          // Remove any duplicates
+          newMessage.allowedReaders = [...new Set(newMessage.allowedReaders)];
+          
+          console.log('Added allowedReaders to trip message:', newMessage.type, newMessage.allowedReaders);
+        }
       
         const messageRef = await addDoc(collection(db, 'messages'), newMessage);
         console.log('Message added with ID:', messageRef.id);
-  
+
         let recipients = [];
-        let notificationType = 'trip_message';
-  
+
         if (messageData.type === MessageTypes.TRIP_BROADCAST) {
           recipients = tripData.participants?.map(p => p.uid) || [];
-          notificationType = 'trip_broadcast';
         }
         else if (messageData.type === MessageTypes.TRIP_DISCUSSION) {
           recipients = tripData.participants?.map(p => p.uid) || [];
@@ -805,24 +816,30 @@ class MessageService {
         else if (messageData.recipientId) {
           recipients = [messageData.recipientId];
         }
-      
+
+        // ADD THIS DEBUGGING CODE RIGHT HERE
+        console.log('Creating trip message notifications:', {
+          messageType: messageData.type,
+          senderId: messageData.senderId,
+          tripId: messageData.tripId,
+          recipientsCount: recipients.length,
+          recipients: recipients
+        });
+
         await Promise.all(recipients.map(recipientId => 
-          addDoc(collection(db, 'notifications'), {
-            type: notificationType,
-            fromUser: messageData.senderId,
-            fromUserName: senderName,
-            toUser: recipientId,
+          NotificationService.createMessageNotification({
+            id: messageRef.id,
+            type: messageData.type,
+            senderId: messageData.senderId,
+            senderName,
+            text: messageData.text,
             tripId: messageData.tripId,
-            messageId: messageRef.id,
-            messagePreview: messageData.text.substring(0, 50),
-            timestamp: serverTimestamp(),
-            read: false,
-            urgent: messageData.type === MessageTypes.TRIP_BROADCAST
-          })
+            tripName: tripData.name || tripData.location
+          }, recipientId)
         ));
-      
+
         return { id: messageRef.id, ...newMessage };
-      } 
+      }
       // Handle Course Messages
       else if (messageData.courseId) {
         const courseDoc = await getDoc(doc(db, 'courses', messageData.courseId));
@@ -868,14 +885,12 @@ class MessageService {
         const messageRef = await addDoc(collection(db, 'messages'), newMessage);
   
         let recipients = [];
-        let notificationType = 'course_message';
   
         if (messageData.type === MessageTypes.COURSE_BROADCAST) {
           recipients = [
             ...(courseData.students?.map(s => s.uid) || []),
             ...(courseData.assistants?.map(a => a.uid) || [])
           ];
-          notificationType = 'course_broadcast';
         }
         else if (messageData.type === MessageTypes.COURSE_DISCUSSION) {
           recipients = [
@@ -888,18 +903,15 @@ class MessageService {
         }
   
         await Promise.all(recipients.map(recipientId => 
-          addDoc(collection(db, 'notifications'), {
-            type: notificationType,
-            fromUser: messageData.senderId,
-            fromUserName: senderName,
-            toUser: recipientId,
+          NotificationService.createMessageNotification({
+            id: messageRef.id,
+            type: messageData.type,
+            senderId: messageData.senderId,
+            senderName,
+            text: messageData.text,
             courseId: messageData.courseId,
-            messageId: messageRef.id,
-            messagePreview: messageData.text.substring(0, 50),
-            timestamp: serverTimestamp(),
-            read: false,
-            urgent: messageData.type === MessageTypes.COURSE_BROADCAST
-          })
+            courseName: courseData.name
+          }, recipientId)
         ));
   
         return { id: messageRef.id, ...newMessage };
@@ -942,17 +954,14 @@ class MessageService {
   
         // Send notifications
         await Promise.all(recipients.map(recipientId => 
-          addDoc(collection(db, 'notifications'), {
-            type: 'new_message',
-            fromUser: messageData.senderId,
-            fromUserName: senderName,
-            toUser: recipientId,
-            chatId: messageData.chatId,
-            messageId: messageRef.id,
-            messagePreview: messageData.text.substring(0, 50),
-            timestamp: serverTimestamp(),
-            read: false
-          })
+          NotificationService.createMessageNotification({
+            id: messageRef.id,
+            type: MessageTypes.CHAT,
+            senderId: messageData.senderId,
+            senderName,
+            text: messageData.text,
+            chatId: messageData.chatId
+          }, recipientId)
         ));
   
         // Update chat metadata

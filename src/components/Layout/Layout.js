@@ -1,15 +1,22 @@
 // src/components/Layout/Layout.js
 import React, { useState, useEffect } from 'react';
-import { Menu, Home, BookOpen, MessageSquare, Compass, Book, User, X, ShieldCheck, GraduationCap, Award, Users } from 'lucide-react';
+import { Menu, Home, BookOpen, MessageSquare, Compass, Book, User, X, ShieldCheck, GraduationCap, Award, Users, Brain } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../Navigation/LogoutButton';
+import NotificationService from '../../services/NotificationService';
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({
+    messages: 0,
+    training: 0,
+    travel: 0,
+    total: 0
+  });
 
   // Check for user on mount
   useEffect(() => {
@@ -18,10 +25,32 @@ const Layout = ({ children }) => {
     }
   }, [user, navigate]);
 
+  // Subscribe to unread notification counts
+  useEffect(() => {
+    if (!user) return;
+    
+    console.log("Setting up notification counter subscription for user:", user.uid);
+    
+    // Add this line to reset negative counters
+    NotificationService.resetNegativeCounters(user.uid);
+    
+    const unsubscribe = NotificationService.subscribeToUnreadCounters(
+      user.uid,
+      (counts) => {
+        console.log("Received updated counters:", counts);
+        setUnreadCounts(counts);
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [user]);
+
   const handleNavigation = (path) => {
     navigate(path);
     setIsMenuOpen(false);
   };
+
+  // Badge Component for notification indicators
 
   const renderMenu = () => {
     if (!isMenuOpen) return null;
@@ -50,6 +79,13 @@ const Layout = ({ children }) => {
               >
                 <User size={20} />
                 <span>Profile</span>
+              </button>
+              <button
+                onClick={() => handleNavigation('/knowledge')}
+                className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+              >
+                <Brain size={20} />
+                <span>Knowledge Hub</span>
               </button>
               
               {/* Buddies menu item */}
@@ -130,43 +166,68 @@ const Layout = ({ children }) => {
       </main>
 
       {/* Bottom Navigation - Fixed */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t bg-white">
-        <button 
-          className={`flex flex-col items-center p-2 ${location.pathname === '/' ? 'text-blue-600' : 'text-gray-600'}`}
-          onClick={() => handleNavigation('/')}
-        >
-          <Home size={20} />
-          <span className="text-xs mt-1">Home</span>
-        </button>
-        <button 
-          className={`flex flex-col items-center p-2 ${location.pathname === '/training' ? 'text-blue-600' : 'text-gray-600'}`}
-          onClick={() => handleNavigation('/training')}
-        >
-          <BookOpen size={20} />
-          <span className="text-xs mt-1">Training</span>
-        </button>
-        <button 
-          className={`flex flex-col items-center p-2 ${location.pathname === '/messages' ? 'text-blue-600' : 'text-gray-600'}`}
-          onClick={() => handleNavigation('/messages')}
-        >
-          <MessageSquare size={20} />
-          <span className="text-xs mt-1">Messages</span>
-        </button>
-        <button 
-          className={`flex flex-col items-center p-2 ${location.pathname === '/travel' ? 'text-blue-600' : 'text-gray-600'}`}
-          onClick={() => handleNavigation('/travel')}
-        >
-          <Compass size={20} />
-          <span className="text-xs mt-1">Travel</span>
-        </button>
-        <button 
-          className={`flex flex-col items-center p-2 ${location.pathname === '/logbook' ? 'text-blue-600' : 'text-gray-600'}`}
-          onClick={() => handleNavigation('/logbook')}
-        >
-          <Book size={20} />
-          <span className="text-xs mt-1">Logbook</span>
-        </button>
-      </nav>
+        <nav className="fixed bottom-0 left-0 right-0 z-40 grid grid-cols-5 border-t bg-white">
+          <button 
+            className={`flex flex-col items-center p-2 ${location.pathname === '/' ? 'text-blue-600' : 'text-gray-600'}`}
+            onClick={() => handleNavigation('/')}
+          >
+            <Home size={20} />
+            <span className="text-xs mt-1">Home</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center p-2 ${location.pathname === '/training' ? 'text-blue-600' : 'text-gray-600'}`}
+            onClick={() => handleNavigation('/training')}
+          >
+            <div className="relative inline-flex">
+              <BookOpen size={20} />
+              {unreadCounts.training > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCounts.training > 9 ? '9+' : unreadCounts.training}
+                </span>
+              )}
+            </div>
+            <span className="text-xs mt-1">Training</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center p-2 ${location.pathname === '/messages' ? 'text-blue-600' : 'text-gray-600'}`}
+            onClick={() => handleNavigation('/messages')}
+          >
+            <div className="relative inline-flex">
+              <MessageSquare size={20} />
+              {unreadCounts.messages > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCounts.messages > 9 ? '9+' : unreadCounts.messages}
+                </span>
+              )}
+            </div>
+            <span className="text-xs mt-1">Messages</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center p-2 ${location.pathname === '/travel' ? 'text-blue-600' : 'text-gray-600'}`}
+            onClick={() => handleNavigation('/travel')}
+          >
+            <div className="relative inline-flex">
+              <Compass size={20} />
+              {unreadCounts.travel > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadCounts.travel > 9 ? '9+' : unreadCounts.travel}
+                </span>
+              )}
+            </div>
+            <span className="text-xs mt-1">Travel</span>
+          </button>
+          
+          <button 
+            className={`flex flex-col items-center p-2 ${location.pathname === '/logbook' ? 'text-blue-600' : 'text-gray-600'}`}
+            onClick={() => handleNavigation('/logbook')}
+          >
+            <Book size={20} />
+            <span className="text-xs mt-1">Logbook</span>
+          </button>
+        </nav>
     </div>
   );
 };

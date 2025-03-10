@@ -1,3 +1,4 @@
+// src/services/NotificationService.js
 import { db } from '../firebase/config';
 import { 
   collection, 
@@ -9,135 +10,543 @@ import {
   updateDoc,
   serverTimestamp,
   doc,
+  getDocs,
+  increment,
+  getDoc,
   writeBatch,
-  arrayUnion,
-  arrayRemove,
-  getDocs
+  setDoc,
+  limit
 } from 'firebase/firestore';
+import { MessageTypes } from './MessageConstants';
 
-// Message type constants
-export const MessageTypes = {
-  DIRECT: 'direct',
-  GROUP: 'group',
-  COURSE: 'course',
-  COURSE_BROADCAST: 'course_broadcast'
-};
-
-class MessageService {
-  static subscribeToMessages(params, callback) {
-    let messageQuery;
-
-    if (params.type === 'course') {
-      messageQuery = query(
-        collection(db, 'messages'),
-        where('courseId', '==', params.courseId),
-        where('type', 'in', ['course', 'course_broadcast']),
-        orderBy('timestamp', 'asc')
-      );
-    } else {
-      messageQuery = query(
-        collection(db, 'messages'),
-        where('chatId', '==', params.chatId),
-        where('type', 'in', ['direct', 'group']),
-        orderBy('timestamp', 'asc')
-      );
-    }
-
-    return onSnapshot(messageQuery, 
-      (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate() || new Date()
-        }));
-        callback({ messages });
-      },
-      (error) => {
-        callback({ error: 'Failed to load messages' });
-      }
-    );
-  }
-
-  static async sendMessage(messageData) {
+class NotificationService {
+  // Create a notification in the database
+  static async createNotification(data) {
     try {
-      const baseMessage = {
+      console.log('Creating notification with data:', data);
+      
+      // Filter out undefined values
+      const cleanData = {};
+      Object.keys(data).forEach(key => {
+        if (data[key] !== undefined) {
+          cleanData[key] = data[key];
+        }
+      });
+      
+      const notificationData = {
+        ...cleanData,
         timestamp: serverTimestamp(),
-        readBy: [messageData.senderId],
-        deletedFor: []
+        read: false
       };
-
-      const newMessage = {
-        ...baseMessage,
-        ...messageData
+      
+      // Check if a similar notification already exists and is unread
+      // This prevents duplicate notifications for the same message
+      const existingQuery = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', data.toUser),
+        where('read', '==', false),
+        where('messageId', '==', data.messageId),
+        limit(1)
+      );
+      
+      const existingDocs = await getDocs(existingQuery);
+      if (!existingDocs.empty) {
+        // If similar notification exists, don't create a new one
+        console.log('Similar notification already exists, skipping creation');
+        return existingDocs.docs[0].id;
+      }
+      
+      const docRef = await addDoc(collection(db, 'notifications'), notificationData);
+      console.log('Notification document created with ID:', docRef.id);
+      
+      // Also update the unread counters collection to track unread counts by category
+      await this.incrementUnreadCounters(data);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      throw new Error('Failed to create notification');
+    }
+  }
+  
+  // Handle different notification types and create appropriate notifications
+  static async createMessageNotification(messageData, recipientId) {
+    try {
+      console.log('NotificationService.createMessageNotification called with:', {
+        messageData,
+        recipientId
+      });
+      
+      const { senderId, senderName, text, type, courseId, courseName, tripId, tripName, chatId, id } = messageData;
+      
+      // Skip if sender is recipient
+      if (senderId === recipientId) {
+        console.log('Skipping notification - sender is recipient');
+        return;
+      }
+      
+      let notificationType;
+      let targetRoute;
+      
+      // Determine notification type and route based on message type
+      if (type.startsWith('course_')) {
+        if (type === MessageTypes.COURSE_BROADCAST) {
+          notificationType = 'course_broadcast';
+          targetRoute = `/training?courseId=${courseId}`;
+        } else if (type === MessageTypes.COURSE_DISCUSSION) {
+          notificationType = 'course_message';
+          targetRoute = `/training?courseId=${courseId}`;
+        } else if (type === MessageTypes.COURSE_PRIVATE) {
+          notificationType = 'course_direct';
+          targetRoute = `/training?courseId=${courseId}`;
+        }
+      } else if (type.startsWith('trip_')) {
+        if (type === MessageTypes.TRIP_BROADCAST) {
+          notificationType = 'trip_broadcast';
+          targetRoute = `/travel?tripId=${tripId}`;
+        } else if (type === MessageTypes.TRIP_DISCUSSION) {
+          notificationType = 'trip_message';
+          targetRoute = `/travel?tripId=${tripId}`;
+        } else if (type === MessageTypes.TRIP_PRIVATE) {
+          notificationType = 'trip_direct';
+          targetRoute = `/travel?tripId=${tripId}`;
+        }
+        
+        // ADD THIS DEBUGGING CODE RIGHT HERE
+        console.log('Creating trip notification:', {
+          tripId: tripId,
+          originalType: type,
+          notificationType: notificationType, 
+          recipientId: recipientId,
+          senderId: senderId
+        });
+      } else if (type === MessageTypes.CHAT) {
+        notificationType = 'new_message';
+        targetRoute = `/messages/${chatId}`;
+      }
+      
+      console.log('Determined notification type:', {
+        originalType: type,
+        mappedType: notificationType,
+        targetRoute
+      });
+      
+      if (!notificationType) {
+        console.warn('Could not determine notification type for:', type);
+        return;
+      }
+      
+      // Create a clean notification object without undefined values
+      const notificationData = {
+        type: notificationType,
+        fromUser: senderId,
+        fromUserName: senderName,
+        toUser: recipientId,
+        messageId: id,
+        messagePreview: text && text.length > 100 ? `${text.substring(0, 100)}...` : text,
+        targetRoute,
+        timestamp: serverTimestamp(),
+        urgent: type === MessageTypes.COURSE_BROADCAST || type === MessageTypes.TRIP_BROADCAST
       };
-
-      const messageRef = await addDoc(collection(db, 'messages'), newMessage);
-
-      if (messageData.type === 'direct' || messageData.type === 'group') {
-        await updateDoc(doc(db, 'chats', messageData.chatId), {
-          lastMessageAt: serverTimestamp()
+      
+      // Only add these fields if they are defined
+      if (chatId) notificationData.chatId = chatId;
+      if (courseId) notificationData.courseId = courseId;
+      if (courseName) notificationData.courseName = courseName;
+      if (tripId) notificationData.tripId = tripId;
+      if (tripName) notificationData.tripName = tripName;
+      
+      console.log('Creating notification with data:', notificationData);
+      
+      try {
+        await this.createNotification(notificationData);
+        console.log('Notification created successfully');
+      } catch (error) {
+        console.error('Error in createNotification:', error);
+      }
+    } catch (error) {
+      console.error('Error creating message notification:', error);
+    }
+  }
+  
+  // Create a buddy request notification
+  static async createBuddyRequestNotification(requestData) {
+    try {
+      const { fromUser, fromUserName, toUser, requestId } = requestData;
+      
+      const notificationData = {
+        type: 'buddy_request',
+        fromUser,
+        fromUserName,
+        toUser,
+        requestId,
+        targetRoute: '/buddies/requests',
+        read: false
+      };
+      
+      await this.createNotification(notificationData);
+    } catch (error) {
+      console.error('Error creating buddy request notification:', error);
+    }
+  }
+  
+  // Track unread counts by category (messages, courses, trips)
+  static async incrementUnreadCounters(notificationData) {
+    try {
+      const { toUser, type } = notificationData;
+      console.log('Incrementing unread counters for user:', toUser);
+      
+      const countersRef = doc(db, 'unreadCounters', toUser);
+      
+      // Get current counters or create if doesn't exist
+      const counterDoc = await getDoc(countersRef);
+      if (!counterDoc.exists()) {
+        await setDoc(countersRef, {
+          messages: 0,
+          training: 0,
+          travel: 0,
+          total: 0
         });
       }
-
-      return { id: messageRef.id, ...newMessage };
-    } catch (error) {
-      console.error('Error sending message:', error);
-      throw new Error('Failed to send message');
-    }
-  }
-
-  static async markAsRead(messageId, userId) {
-    try {
-      const messageRef = doc(db, 'messages', messageId);
-      await updateDoc(messageRef, {
-        readBy: arrayUnion(userId)
+      
+      // Update appropriate counter based on notification type
+      let counterField = null;
+      if (type === 'new_message') {
+        counterField = 'messages';
+      } else if (type.startsWith('course_')) {
+        counterField = 'training';
+      } else if (type.startsWith('trip_')) {
+        counterField = 'travel';
+      } else if (type === 'buddy_request') {
+        // Buddy requests should show on messages tab
+        counterField = 'messages';
+      }
+      
+      console.log('Counter updates:', {
+        type: type,
+        categoryUpdated: counterField,
+        increment: 1
       });
-    } catch (error) {
-      console.error('Error marking message as read:', error);
-      throw new Error('Failed to mark message as read');
-    }
-  }
-
-  static async deleteMessage(messageId, userId) {
-    try {
-      const messageRef = doc(db, 'messages', messageId);
-      await updateDoc(messageRef, {
-        deletedFor: arrayUnion(userId)
+      
+      // ADD THIS DEBUGGING CODE RIGHT HERE
+      console.log('Notification data for counter increment:', {
+        toUser: toUser,
+        type: type,
+        counterField: counterField,
+        tripId: notificationData.tripId,
+        courseId: notificationData.courseId,
+        chatId: notificationData.chatId,
+        fromUser: notificationData.fromUser
       });
+      
+      if (counterField) {
+        console.log(`Incrementing ${counterField} counter for user ${toUser}`);
+        await updateDoc(countersRef, {
+          [counterField]: increment(1),
+          total: increment(1)
+        });
+      }
     } catch (error) {
-      console.error('Error deleting message:', error);
-      throw new Error('Failed to delete message');
+      console.error('Error incrementing unread counters:', error);
     }
   }
-
-  static async deleteChat(chatId, userId) {
+  
+  // Subscribe to unread counter updates
+  static subscribeToUnreadCounters(userId, callback) {
+    if (!userId) return () => {};
+    
+    const countersRef = doc(db, 'unreadCounters', userId);
+    
+    return onSnapshot(countersRef, (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.data());
+      } else {
+        callback({
+          messages: 0,
+          training: 0,
+          travel: 0,
+          total: 0
+        });
+      }
+    }, (error) => {
+      console.error('Error subscribing to unread counters:', error);
+      callback({
+        messages: 0,
+        training: 0,
+        travel: 0,
+        total: 0,
+        error: true
+      });
+    });
+  }
+  
+  // Get unread counts for a specific category (used to show badge on tabs)
+  static async getUnreadCountsForCategory(userId, category, itemId) {
+    try {
+      // For specific items (courses, trips, chats), count unread notifications
+      const q = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', userId),
+        where('read', '==', false),
+        where(category + 'Id', '==', itemId)
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.size;
+    } catch (error) {
+      console.error('Error getting unread counts for category:', error);
+      return 0;
+    }
+  }
+  
+  // Subscribe to notifications for a specific category/item
+  static subscribeToItemNotifications(userId, itemType, itemId, callback) {
+    if (!userId || !itemId) return () => {};
+    
+    const field = `${itemType}Id`;
+    
+    const q = query(
+      collection(db, 'notifications'),
+      where('toUser', '==', userId),
+      where('read', '==', false),
+      where(field, '==', itemId),
+      orderBy('timestamp', 'desc')
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+      const notifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate()
+      }));
+      
+      // Group notifications by type to show badges on tabs
+      const tabCounts = {
+        broadcast: notifications.filter(n => n.type.includes('broadcast')).length,
+        discussion: notifications.filter(n => (
+          n.type.includes('message') && !n.type.includes('direct')
+        )).length,
+        direct: notifications.filter(n => n.type.includes('direct')).length
+      };
+      
+      callback({
+        notifications,
+        tabCounts,
+        totalCount: notifications.length
+      });
+    }, (error) => {
+      console.error(`Error subscribing to ${itemType} notifications:`, error);
+      callback({
+        notifications: [],
+        tabCounts: { broadcast: 0, discussion: 0, direct: 0 },
+        totalCount: 0,
+        error: true
+      });
+    });
+  }
+  
+  // Mark all notifications as read for a specific tab - THIS IS THE UPDATED METHOD
+  static async markTabNotificationsAsRead(userId, itemType, itemId, tabType) {
+    try {
+      const batch = writeBatch(db);
+      const countersRef = doc(db, 'unreadCounters', userId);
+      
+      // Get current counter values before updating
+      const counterDoc = await getDoc(countersRef);
+      const currentCounters = counterDoc.exists() ? counterDoc.data() : {
+        messages: 0,
+        training: 0,
+        travel: 0,
+        total: 0
+      };
+      
+      // Get all unread notifications for this tab
+      const field = `${itemType}Id`;
+      
+      let typeConditions = [];
+      if (tabType === 'broadcast') {
+        typeConditions = ['course_broadcast', 'trip_broadcast'];
+      } else if (tabType === 'discussion') {
+        typeConditions = ['course_message', 'trip_message'];
+      } else if (tabType === 'direct') {
+        typeConditions = ['course_direct', 'trip_direct'];
+      } else if (tabType === 'chat') {
+        typeConditions = ['new_message'];
+      }
+      
+      // Get the notifications
+      const q = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', userId),
+        where('read', '==', false),
+        where(field, '==', itemId),
+        where('type', 'in', typeConditions)
+      );
+      
+      const snapshot = await getDocs(q);
+      
+      // Mark each notification as read
+      let count = 0;
+      snapshot.forEach(doc => {
+        batch.update(doc.ref, { read: true });
+        count++;
+      });
+      
+      console.log(`Marking ${count} ${tabType} notifications as read for ${itemType} ${itemId}`);
+      
+      // Update counters
+      let counterField = '';
+      if (itemType === 'course') {
+        counterField = 'training';
+      } else if (itemType === 'trip') {
+        counterField = 'travel';
+      } else if (itemType === 'chat') {
+        counterField = 'messages';
+      }
+      
+      if (counterField && count > 0) {
+        // Get current value for this counter
+        const currentCounterValue = currentCounters[counterField] || 0;
+        
+        // Calculate safe decrement value (don't go below zero)
+        const safeDecrement = Math.min(count, Math.max(0, currentCounterValue));
+        
+        console.log(`Decrementing ${counterField} counter by ${safeDecrement} (from ${currentCounterValue})`);
+        
+        if (safeDecrement > 0) {
+          // Decrement the appropriate counter by the safe amount
+          batch.update(countersRef, {
+            [counterField]: increment(-safeDecrement),
+            total: increment(-safeDecrement)
+          });
+        }
+      }
+      
+      await batch.commit();
+      return count;
+    } catch (error) {
+      console.error('Error marking tab notifications as read:', error);
+      return 0;
+    }
+  }
+  
+  // Mark one notification as read
+  static async markNotificationAsRead(notificationId, userId) {
+    try {
+      const notificationRef = doc(db, 'notifications', notificationId);
+      const notificationDoc = await getDoc(notificationRef);
+      
+      if (!notificationDoc.exists() || notificationDoc.data().read) {
+        return; // Already read or doesn't exist
+      }
+      
+      const notificationData = notificationDoc.data();
+      
+      // Update notification
+      await updateDoc(notificationRef, { read: true });
+      
+      // Update counter
+      const countersRef = doc(db, 'unreadCounters', userId);
+      
+      // Get current counter values before updating
+      const counterDoc = await getDoc(countersRef);
+      const currentCounters = counterDoc.exists() ? counterDoc.data() : {
+        messages: 0,
+        training: 0,
+        travel: 0,
+        total: 0
+      };
+      
+      // Determine which counter to decrement
+      let counterField = '';
+      if (notificationData.type === 'new_message' || notificationData.type === 'buddy_request') {
+        counterField = 'messages';
+      } else if (notificationData.type.startsWith('course_')) {
+        counterField = 'training';
+      } else if (notificationData.type.startsWith('trip_')) {
+        counterField = 'travel';
+      }
+      
+      if (counterField) {
+        // Make sure we don't decrement below zero
+        const currentValue = currentCounters[counterField] || 0;
+        if (currentValue > 0) {
+          await updateDoc(countersRef, {
+            [counterField]: increment(-1),
+            total: increment(-1)
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  }
+  
+  // Clear all notifications for a user
+  static async clearAllNotifications(userId) {
     try {
       const batch = writeBatch(db);
       
-      const chatRef = doc(db, 'chats', chatId);
-      batch.update(chatRef, {
-        [`participants.${userId}.active`]: false,
-        activeParticipants: arrayRemove(userId)
-      });
-
-      const messagesQuery = query(
-        collection(db, 'messages'),
-        where('chatId', '==', chatId)
+      // Get all unread notifications
+      const q = query(
+        collection(db, 'notifications'),
+        where('toUser', '==', userId),
+        where('read', '==', false)
       );
-      const messages = await getDocs(messagesQuery);
       
-      messages.forEach(message => {
-        batch.update(doc(db, 'messages', message.id), {
-          deletedFor: arrayUnion(userId)
-        });
+      const snapshot = await getDocs(q);
+      
+      // Mark each notification as read
+      snapshot.forEach(doc => {
+        batch.update(doc.ref, { read: true });
       });
-
+      
+      // Reset counters
+      const countersRef = doc(db, 'unreadCounters', userId);
+      batch.update(countersRef, {
+        messages: 0,
+        training: 0,
+        travel: 0,
+        total: 0
+      });
+      
       await batch.commit();
     } catch (error) {
-      console.error('Error deleting chat:', error);
-      throw new Error('Failed to delete chat');
+      console.error('Error clearing all notifications:', error);
+    }
+  }
+  
+  // Fix the negative counters for a specific user
+  static async resetNegativeCounters(userId) {
+    try {
+      const countersRef = doc(db, 'unreadCounters', userId);
+      const counterDoc = await getDoc(countersRef);
+      
+      if (counterDoc.exists()) {
+        const counters = counterDoc.data();
+        const needsReset = 
+          counters.messages < 0 ||
+          counters.training < 0 ||
+          counters.travel < 0 ||
+          counters.total < 0;
+        
+        if (needsReset) {
+          console.log(`Resetting negative counters for user ${userId}`);
+          await updateDoc(countersRef, {
+            messages: Math.max(0, counters.messages),
+            training: Math.max(0, counters.training),
+            travel: Math.max(0, counters.travel),
+            total: Math.max(0, counters.total)
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Error resetting negative counters:', error);
+      return false;
     }
   }
 }
 
-export default MessageService;
+export default NotificationService;
