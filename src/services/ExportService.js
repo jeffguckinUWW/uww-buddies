@@ -23,7 +23,49 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
     `;
   };
 
+  const renderDiveFields = (diveTitle, diveData) => {
+    if (!diveData) return '';
+    
+    const fields = diveData.fields || {};
+    
+    return `
+      <div class="dive-fields">
+        <div class="dive-header">
+          <span class="verification">
+            <span class="checkmark">✓</span>
+            ${new Date(diveData.date).toLocaleDateString()} • ${diveData.instructorName}
+          </span>
+        </div>
+        <div class="dive-details">
+          ${fields['Dive Date'] ? `<div><strong>Date:</strong> ${fields['Dive Date']}</div>` : ''}
+          ${fields['Dive Location'] ? `<div><strong>Location:</strong> ${fields['Dive Location']}</div>` : ''}
+          ${fields['Max Depth'] ? `<div><strong>Max Depth:</strong> ${fields['Max Depth']}</div>` : ''}
+          ${fields['Dive Time'] ? `<div><strong>Time:</strong> ${fields['Dive Time']}</div>` : ''}
+        </div>
+      </div>
+    `;
+  };
+
   const renderSkills = (section, skills) => {
+    // Special handling for dive format sections with special fields
+    if (section === 'Open Water Dives' && trainingRecord.id === 'certification-dive') {
+      return `
+        <div class="skills-section">
+          ${trainingRecord.sections
+            .find(s => s.title === 'Open Water Dives')
+            .dives.map(dive => `
+              <div class="skill-item">
+                <div class="skill-content">
+                  <span class="skill-name">${dive.title}</span>
+                  ${progress[section]?.[dive.title] ? renderDiveFields(dive.title, progress[section][dive.title]) : ''}
+                </div>
+              </div>
+            `).join('')}
+        </div>
+      `;
+    }
+
+    // Standard skills rendering
     return `
       <div class="skills-section">
         ${skills.map(skill => `
@@ -126,6 +168,22 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
             border-top: 2px solid #0066B3;
             padding-top: 20px;
           }
+          .dive-fields {
+            margin-top: 8px;
+            padding: 8px;
+            background-color: #f9fafb;
+            border-radius: 4px;
+          }
+          .dive-header {
+            margin-bottom: 8px;
+          }
+          .dive-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 0.9em;
+            color: #4b5563;
+          }
         </style>
       </head>
       <body>
@@ -160,7 +218,7 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
 
           ${localNotes ? `
             <div class="notes">
-              <div class="section-title">Instructor Comments</div>
+              <div class="section-title">${trainingRecord.notes?.title || "Instructor Comments"}</div>
               <p>${localNotes}</p>
             </div>
           ` : ''}

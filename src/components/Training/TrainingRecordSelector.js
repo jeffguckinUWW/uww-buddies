@@ -10,12 +10,77 @@ import {
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 
-// Start with just two record types for testing
+// Training record types including the updated Certification Dive Addendum
 const TRAINING_RECORD_TYPES = [
   {
     id: 'certification-dive',
     name: 'Certification Dive Addendum',
-    description: 'Basic certification dive requirements and verification'
+    description: 'Basic certification dive requirements and verification',
+    sections: [
+      {
+        title: 'Pre-Dive Verification',
+        skills: [
+          'Confined Water Training Passed, Verification',
+          'Written Test Passed, Verification',
+          'Medical Waiver Checked',
+          'Liability Waiver w/ Certifying Instructor Listed'
+        ]
+      },
+      {
+        title: 'Open Water Dives',
+        // Using a custom format for dives with multiple fields
+        diveFormat: true,
+        dives: [
+          {
+            title: 'Open Water Dive #1',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Open Water Dive #2',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Open Water Dive #3',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Open Water Dive #4',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          }
+        ],
+        // Adding these as skills also to ensure compatibility with the existing verification system
+        skills: [
+          'Open Water Dive #1',
+          'Open Water Dive #2',
+          'Open Water Dive #3',
+          'Open Water Dive #4'
+        ]
+      }
+    ],
+    notes: {
+      title: 'Instructor Notes and Observations',
+      type: 'textarea'
+    }
   },
   {
     id: 'naui-scuba',
@@ -146,6 +211,112 @@ const TRAINING_RECORD_TYPES = [
     ],
     notes: {
       title: 'Instructor Notes and Observations',
+      type: 'textarea'
+    }
+  },
+  {
+    id: 'sdi-scuba',
+    name: 'Open Water SCUBA Diver, SDI',
+    description: 'SDI SCUBA certification requirements',
+    sections: [
+      {
+        title: 'Academics',
+        skills: [
+          'Aquatic Environment',
+          'Marine Life Injuries',
+          'Physics & Physiology',
+          'SCUBA Equipment',
+          'Dive Planning',
+          'Underwater Navigation',
+          'eLearning',
+          'Final Written Exam'
+        ]
+      },
+      {
+        title: 'Swimming Evaluation',
+        skills: [
+          'Distance Swim, 300m Nonstop, w/ Mask Fins and Snorkel',
+          '10min Survival Swim'
+        ]
+      },
+      {
+        title: 'SCUBA Skills',
+        subsections: [
+          {
+            title: 'Pre-Dive Skills',
+            skills: [
+              'SCUBA System Assembly/Disassembly',
+              'Pre-Dive Check Self/Buddy',
+              'Weight System Adjustment w/ Proper Weighting'
+            ]
+          },
+          {
+            title: 'In-Water Skills',
+            skills: [
+              'Removal/Replacement of Weights on Surface',
+              'Removal/Replacement of Weights at Depth',
+              'Partial Mask Clear at Depth',
+              'Full Mask Clear at Depth',
+              'Breathing & Swimming U/W w/o Mask',
+              'Underwater Swimming w/ Proper Use of Fins',
+              'Snorkel Use; Adjustment',
+              'Snorkel Use; Clearing Blast Method',
+              'Snorkel Use; Regulator Exchange on the Surface',
+              'Surface Snorkel Swim in Full SCUBA Equipment'
+            ]
+          },
+          {
+            title: 'Buoyancy Skills',
+            skills: [
+              'BCD; Inflate/Deflate on Surface',
+              'BCD; Inflate/Deflate at Depth',
+              'BCD; Don/Doff on the Surface',
+              'BCD;Don/Doff at Depth',
+              'Buoyancy Control; Hovering',
+              'Buoyancy Control; Ascent',
+              'Buoyancy Control; Descent'
+            ]
+          },
+          {
+            title: 'Regulator Skills',
+            skills: [
+              'Regulator, Breath, Clear and Recover on Surface',
+              'Regulator Breath, Clear and Recover at Depth'
+            ]
+          },
+          {
+            title: 'Exits and Entry Skills',
+            skills: [
+              'Entries/Exits; Controlled Seated Entry',
+              'Entries/Exits; Giant Stride Entry',
+              'Entries/Exits; Shallow Water Exit',
+              'Entries/Exits; Deep Water Exit'
+            ]
+          },
+          {
+            title: 'Dive Planning',
+            skills: [
+              'Computer Use; Understanding the Functions of Computer',
+              'Use of Gauges',
+              'Underwater Communication',
+              'Underwater Navigation',
+              'Calculate a No Deco Repetitive Dive w/ Tables or Computer'
+            ]
+          },
+          {
+            title: 'Dive Emergencies',
+            skills: [
+              'Rescue Techniques; Tired Diver Tows',
+              'Rescue Techniques; Cramp Relief',
+              'Out of Air Emergency; Cont. Swimming Ascent',
+              'Out of Air Emergency; Alternate Air Source Use'
+            ]
+          }
+        ]
+      }
+    ],
+    notes: {
+      title: 'Instructor Notes and Observation',
       type: 'textarea'
     }
   }

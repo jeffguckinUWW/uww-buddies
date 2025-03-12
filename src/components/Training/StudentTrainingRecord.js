@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,10 @@ const StudentTrainingRecord = ({
   const [isRecordLocked, setIsRecordLocked] = useState(false);
   const [signOffData, setSignOffData] = useState(null);
   const [courseData, setCourseData] = useState(null);
+  
+  // Add state for all dive fields at the component level
+  const [localDiveFields, setLocalDiveFields] = useState({});
+  const [savingDiveFields, setSavingDiveFields] = useState({});
 
   useEffect(() => {
     const loadData = async () => {
@@ -75,6 +79,24 @@ const StudentTrainingRecord = ({
           setIsRecordLocked(!!studentRecord?.signOff?.locked);
           setSignOffData(studentRecord?.signOff);
           setCourseData(courseData);
+          
+          // Initialize local dive fields from progress data
+          const diveFieldsData = {};
+          const progressData = studentRecord?.progress || {};
+          
+          // Only do this for certification-dive record type
+          if (trainingRecord?.id === 'certification-dive' && trainingRecord?.sections) {
+            const openWaterDivesSection = trainingRecord.sections.find(s => s.title === 'Open Water Dives');
+            if (openWaterDivesSection && openWaterDivesSection.dives) {
+              openWaterDivesSection.dives.forEach(dive => {
+                // Get the saved fields for this dive or initialize empty
+                const fields = progressData['Open Water Dives']?.[dive.title]?.fields || {};
+                diveFieldsData[dive.title] = fields;
+              });
+            }
+          }
+          
+          setLocalDiveFields(diveFieldsData);
         }
         setLoading(false);
       } catch (err) {
@@ -87,7 +109,7 @@ const StudentTrainingRecord = ({
     if (isOpen) {
       loadData();
     }
-  }, [isOpen, course, student?.uid]);
+  }, [isOpen, course, student?.uid, trainingRecord]);
 
   const handleSkillToggle = async (sectionTitle, skillName) => {
     if (readOnly) return;
@@ -195,28 +217,26 @@ const StudentTrainingRecord = ({
     }
   };
 
-  const debouncedSave = useCallback(
-    async (notes) => {
-      if (isRecordLocked) {
-        setError('Record is locked. Contact instructor to make changes.');
-        return;
-      }
-      
-      try {
-        setIsSaving(true);
-        const courseRef = doc(db, 'courses', course.id);
-        await updateDoc(courseRef, {
-          [`studentRecords.${student.uid}.notes`]: notes
-        });
-      } catch (err) {
-        console.error('Error updating notes:', err);
-        setError('Failed to update notes');
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [course.id, student.uid, isRecordLocked]
-  );
+  const handleSaveNotes = async () => {
+    if (isRecordLocked) {
+      setError('Record is locked. Contact instructor to make changes.');
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      const courseRef = doc(db, 'courses', course.id);
+      await updateDoc(courseRef, {
+        [`studentRecords.${student.uid}.notes`]: localNotes
+      });
+      setError(null); // Clear any existing errors
+      setIsSaving(false);
+    } catch (err) {
+      console.error('Error updating notes:', err);
+      setError('Failed to update notes');
+      setIsSaving(false);
+    }
+  };
 
   const handleSignOff = async () => {
     try {
@@ -300,6 +320,173 @@ const StudentTrainingRecord = ({
     }
   };
 
+  // Handle local dive field changes
+  const handleDiveFieldChange = (diveTitle, fieldName, value) => {
+    setLocalDiveFields(prev => ({
+      ...prev,
+      [diveTitle]: {
+        ...(prev[diveTitle] || {}),
+        [fieldName]: value
+      }
+    }));
+  };
+
+  // Save all fields for a specific dive
+  const saveDiveFields = async (section, dive) => {
+    if (readOnly || isRecordLocked) {
+      setError('Record is locked. Contact instructor to make changes.');
+      return;
+    }
+    
+    try {
+      // Mark this specific dive as saving
+      setSavingDiveFields(prev => ({
+        ...prev,
+        [dive.title]: true
+      }));
+      
+      const newProgress = { ...progress };
+      
+      // Create section and dive entry if they don't exist
+      if (!newProgress[section.title]) {
+        newProgress[section.title] = {};
+      }
+      
+      if (!newProgress[section.title][dive.title]) {
+        newProgress[section.title][dive.title] = {
+          date: new Date().toISOString(),
+          instructorName: instructorProfile?.name || 'Unknown Instructor',
+          instructorId: instructorProfile?.uid || 'unknown',
+          verifiedAt: new Date().toISOString(),
+          fields: {}
+        };
+      }
+      
+      // Create fields object if it doesn't exist
+      if (!newProgress[section.title][dive.title].fields) {
+        newProgress[section.title][dive.title].fields = {};
+      }
+      
+      // Update all fields at once
+      newProgress[section.title][dive.title].fields = localDiveFields[dive.title] || {};
+      
+      // Update in Firestore - once for all fields
+      const courseRef = doc(db, 'courses', course.id);
+      await updateDoc(courseRef, {
+        [`studentRecords.${student.uid}.progress`]: newProgress
+      });
+      
+      setProgress(newProgress);
+      onProgressUpdate({
+        ...course,
+        studentRecords: {
+          ...course.studentRecords,
+          [student.uid]: {
+            ...course.studentRecords?.[student.uid],
+            progress: newProgress
+          }
+        }
+      });
+      
+      setError(null); // Clear any previous errors
+      
+      // Clear the "saving" state for this dive
+      setSavingDiveFields(prev => ({
+        ...prev,
+        [dive.title]: false
+      }));
+    } catch (err) {
+      console.error('Error updating dive fields:', err);
+      setError('Failed to update dive information');
+      setSavingDiveFields(prev => ({
+        ...prev,
+        [dive.title]: false
+      }));
+    }
+  };
+
+  const renderDiveFields = (section, dive, diveIndex) => {
+    // Get the verification data for this dive
+    const diveVerification = progress[section.title]?.[dive.title] || {};
+    
+    // Render the verification checkbox for the dive itself
+    const isVerified = !!diveVerification.date;
+    
+    // Get the local fields for this dive
+    const diveFields = localDiveFields[dive.title] || {};
+    
+    // Check if this dive is currently saving
+    const isSavingFields = savingDiveFields[dive.title] || false;
+    
+    return (
+      <div key={dive.title} className="mb-4 border-b pb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-3">
+            {readOnly ? (
+              <div className="h-5 w-5 flex items-center justify-center">
+                {isVerified ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            ) : (
+              <input
+                type="checkbox"
+                checked={isVerified}
+                onChange={() => handleSkillToggle(section.title, dive.title)}
+                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                disabled={isRecordLocked}
+              />
+            )}
+            <span className="text-gray-900 font-medium">{dive.title}</span>
+          </div>
+          
+          {isVerified && (
+            <div className="text-sm text-gray-600">
+              Verified {new Date(diveVerification.date).toLocaleDateString()} by {diveVerification.instructorName}
+            </div>
+          )}
+        </div>
+        
+        {/* Dive Fields */}
+        <div className="ml-8 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {dive.fields.map((field) => (
+            <div key={field.name} className="flex flex-col">
+              <label className="text-sm text-gray-600 mb-1">{field.name}</label>
+              <input
+                type={field.type}
+                value={diveFields[field.name] || ''}
+                onChange={(e) => handleDiveFieldChange(dive.title, field.name, e.target.value)}
+                className="p-2 border rounded text-sm"
+                disabled={isRecordLocked || readOnly}
+                placeholder={field.type === 'date' ? 'YYYY-MM-DD' : ''}
+              />
+            </div>
+          ))}
+        </div>
+        
+        {/* Save Button */}
+        {!isRecordLocked && !readOnly && (
+          <div className="mt-3 flex justify-end ml-8">
+            <Button 
+              onClick={() => saveDiveFields(section, dive)}
+              variant="outline"
+              className="bg-white"
+              disabled={isSavingFields}
+            >
+              {isSavingFields ? 'Saving...' : 'Save Dive Details'}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSkillItem = (section, skill, verification) => (
     <div 
       key={skill} 
@@ -361,6 +548,32 @@ const StudentTrainingRecord = ({
   );
 
   const renderSection = (section) => {
+    // Special handling for dive format sections
+    if (section.diveFormat && section.dives) {
+      return (
+        <div key={section.title} className="bg-white border rounded-lg shadow-sm">
+          <div className="px-6 py-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              {section.title}
+            </h3>
+            {section.subheader && (
+              <p className="text-sm text-gray-600 mb-4 italic">{section.subheader}</p>
+            )}
+            
+            <div className="space-y-4">
+              {section.dives.map((dive, index) => 
+                renderDiveFields(section, dive, index)
+              )}
+            </div>
+            
+            <div className="mt-2 text-sm text-gray-600 text-right">
+              {Object.keys(progress[section.title] || {}).length} of {section.dives.length} dives verified
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (section.subsections) {
       return (
         <div key={section.title} className="bg-white border rounded-lg shadow-sm">
@@ -452,24 +665,28 @@ const StudentTrainingRecord = ({
             <div className="bg-white border rounded-lg shadow-sm mt-6">
               <div className="px-6 py-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Instructor Notes and Observations
+                  {trainingRecord.notes?.title || "Instructor Notes and Observations"}
                 </h3>
                 <textarea
                   value={localNotes}
-                  onChange={(e) => {
-                    setLocalNotes(e.target.value);
-                    const timeoutId = setTimeout(() => {
-                      debouncedSave(e.target.value);
-                    }, 1000);
-                    return () => clearTimeout(timeoutId);
-                  }}
+                  onChange={(e) => setLocalNotes(e.target.value)}
                   className="w-full h-32 p-2 border rounded-md"
                   placeholder="Add notes and observations here..."
                   disabled={isRecordLocked}
                 />
-                {isSaving && (
-                  <p className="text-sm text-gray-500 mt-1">Saving...</p>
+                {!isRecordLocked && (
+                  <div className="mt-3 flex justify-end">
+                    <Button 
+                      onClick={handleSaveNotes}
+                      variant="outline"
+                      className="bg-white"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? 'Saving...' : 'Save Notes'}
+                    </Button>
+                  </div>
                 )}
+                {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
               </div>
             </div>
 
