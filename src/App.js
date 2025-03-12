@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'r
 import Profile from './components/Profile/Profile';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import EmailVerification from './components/Auth/EmailVerification';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MessageProvider } from './context/MessageContext';
 import Logbook from './components/Logbook/Logbook';
@@ -22,10 +24,13 @@ import Travel from './pages/Travel';
 import KnowledgePage from './pages/KnowledgePage';
 import LearningResources from './components/Knowledge/LearningResources';
 import ResourceViewer from './components/Knowledge/ResourceViewer';
+import { getVerificationSetting } from './utils/verificationSettings';
 
 function AuthRoutes() {
   const location = useLocation();
   const [error, setError] = useState('');
+  const { user } = useAuth();
+  const requireEmailVerification = getVerificationSetting();
   
   useEffect(() => {
     const errorMessage = localStorage.getItem('instructorAccessError');
@@ -40,6 +45,11 @@ function AuthRoutes() {
       return () => clearTimeout(timer);
     }
   }, [location.pathname]);
+  
+  // If email verification is required and email is not verified, redirect to verification page
+  if (requireEmailVerification && user && !user.emailVerified) {
+    return <Navigate to="/verify-email" />;
+  }
   
   return (
     <Layout>
@@ -75,10 +85,10 @@ function AuthRoutes() {
             </RequireLoyaltyAccess>
           } 
         />
-        <Route path="*" element={<Navigate to="/" />} />
         <Route path="/knowledge/*" element={<KnowledgePage />} />
         <Route path="/knowledge/resources" element={<LearningResources />} />
         <Route path="/knowledge/resources/:resourceId" element={<ResourceViewer />} />
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Layout>
   );
@@ -86,22 +96,35 @@ function AuthRoutes() {
 
 function MainContent() {
   const { user } = useAuth();
+  const requireEmailVerification = getVerificationSetting();
   console.log("Current user state:", user);
   console.log("Current path:", window.location.pathname);
+  console.log("Email verification required:", requireEmailVerification);
 
-  // If user is not logged in, show login or register pages
+  // If user is not logged in, show login, register, or forgot password pages
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-100">
         <Routes>
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="*" element={<Login />} />
         </Routes>
       </div>
     );
   }
 
-  // If user is logged in, show protected routes
+  // If email verification is required, user is logged in but needs to verify
+  if (requireEmailVerification && user && !user.emailVerified) {
+    return (
+      <Routes>
+        <Route path="/verify-email" element={<EmailVerification />} />
+        <Route path="*" element={<Navigate to="/verify-email" />} />
+      </Routes>
+    );
+  }
+
+  // Show protected routes
   return <AuthRoutes />;
 }
 

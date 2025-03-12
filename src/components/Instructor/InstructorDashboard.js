@@ -2,21 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import InstructorPinSetup from './InstructorPinSetup';
 import TripSection from './TripSection';
 import CourseSection from './CourseSection';
+import { generateUniqueSignature } from '../../utils/signatureUtils';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
-  const [hasPin, setHasPin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [instructorProfile, setInstructorProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('courses');
-
-  useEffect(() => {
-    console.log('Current instructorProfile:', instructorProfile);
-  }, [instructorProfile]);
+  const [generatingSignature, setGeneratingSignature] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -31,9 +27,8 @@ const InstructorDashboard = () => {
               ...profileData,
               uid: user.uid
             });
-            setHasPin(!!profileData.instructorPin?.pin);
         
-            if (profileData.instructorPin?.pin && (!profileData.role || profileData.role !== 'instructor')) {
+            if (!profileData.role || profileData.role !== 'instructor') {
               await updateDoc(profileRef, { role: 'instructor' });
             }
           }
@@ -48,6 +43,40 @@ const InstructorDashboard = () => {
     
     init();
   }, [user]);
+
+  const handleCreateSignature = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setGeneratingSignature(true);
+      
+      // Generate a unique signature
+      const signature = await generateUniqueSignature(db);
+      
+      // Save to Firestore
+      const profileRef = doc(db, 'profiles', user.uid);
+      await updateDoc(profileRef, {
+        instructorSignature: {
+          code: signature,
+          createdAt: new Date().toISOString()
+        }
+      });
+      
+      // Update local state
+      setInstructorProfile(prev => ({
+        ...prev,
+        instructorSignature: {
+          code: signature,
+          createdAt: new Date().toISOString()
+        }
+      }));
+    } catch (err) {
+      console.error('Error generating signature:', err);
+      setError('Failed to generate signature. Please try again.');
+    } finally {
+      setGeneratingSignature(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -67,18 +96,8 @@ const InstructorDashboard = () => {
     );
   }
 
-  if (!hasPin) {
-    return (
-      <div className="max-w-2xl mx-auto p-4">
-        <div className="bg-yellow-50 p-4 rounded-md mb-4">
-          <p className="text-yellow-700">
-            Welcome to the Instructor Portal! Please set up your PIN to continue.
-          </p>
-        </div>
-        <InstructorPinSetup onPinSet={() => setHasPin(true)} />
-      </div>
-    );
-  }
+  // Check if the instructor has a signature
+  const hasSignature = instructorProfile?.instructorSignature?.code;
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -86,6 +105,39 @@ const InstructorDashboard = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Instructor Dashboard</h2>
+        </div>
+
+        {/* Signature Section */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-lg font-medium text-gray-900 mb-3">Instructor Signature</h3>
+          
+          {hasSignature ? (
+            <div className="space-y-2">
+              <p className="text-gray-600">Your unique instructor signature is:</p>
+              <div className="bg-white p-4 rounded-md border border-gray-200 flex items-center">
+                <span className="font-mono text-lg font-bold tracking-wider">{instructorProfile.instructorSignature.code}</span>
+                <div className="ml-4 text-sm text-gray-500">
+                  Use this signature to sign certification documents and training records.
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Created on {new Date(instructorProfile.instructorSignature.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-600">
+                You need to generate a unique instructor signature to sign certification documents and training records.
+              </p>
+              <button
+                onClick={handleCreateSignature}
+                disabled={generatingSignature}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              >
+                {generatingSignature ? 'Generating...' : 'Create Signature'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation Tabs */}
@@ -120,17 +172,6 @@ const InstructorDashboard = () => {
         ) : (
           <TripSection user={user} instructorProfile={instructorProfile} />
         )}
-
-        {/* Settings Section */}
-        <div className="mt-6 pt-6 border-t">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Settings</h3>
-          <button
-            onClick={() => setHasPin(false)}
-            className="text-blue-700 hover:text-blue-900 underline"
-          >
-            Reset PIN
-          </button>
-        </div>
       </div>
     </div>
   );

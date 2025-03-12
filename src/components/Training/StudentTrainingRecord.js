@@ -28,7 +28,7 @@ const StudentTrainingRecord = ({
   const [localNotes, setLocalNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isSignOffModalOpen, setIsSignOffModalOpen] = useState(false);
-  const [instructorPin, setInstructorPin] = useState('');
+  const [signatureCode, setSignatureCode] = useState('');
   const [isRecordLocked, setIsRecordLocked] = useState(false);
   const [signOffData, setSignOffData] = useState(null);
   const [courseData, setCourseData] = useState(null);
@@ -228,8 +228,8 @@ const StudentTrainingRecord = ({
       const instructorRef = doc(db, 'profiles', String(instructorProfile.uid));
       const instructorDoc = await getDoc(instructorRef);
       
-      if (!instructorDoc.exists() || instructorDoc.data().instructorPin?.pin !== instructorPin) {
-        setError('Invalid PIN');
+      if (!instructorDoc.exists() || instructorDoc.data().instructorSignature?.code !== signatureCode) {
+        setError('Invalid signature code');
         return;
       }
   
@@ -266,7 +266,7 @@ const StudentTrainingRecord = ({
       });
   
       setIsSignOffModalOpen(false);
-      setInstructorPin('');
+      setSignatureCode('');
       setError(null);
   
     } catch (err) {
@@ -281,8 +281,8 @@ const StudentTrainingRecord = ({
       const instructorDoc = await getDoc(instructorRef);
       
       if (!instructorDoc.exists() || 
-          instructorDoc.data().instructorPin?.pin !== instructorPin) {
-        setError('Invalid PIN');
+          instructorDoc.data().instructorSignature?.code !== signatureCode) {
+        setError('Invalid signature code');
         return;
       }
 
@@ -293,7 +293,7 @@ const StudentTrainingRecord = ({
 
       setIsRecordLocked(false);
       setIsSignOffModalOpen(false);
-      setInstructorPin('');
+      setSignatureCode('');
     } catch (err) {
       console.error('Error unlocking record:', err);
       setError('Failed to unlock record');
@@ -560,17 +560,17 @@ const StudentTrainingRecord = ({
             </DialogTitle>
             <DialogDescription>
               {isRecordLocked 
-                ? "Enter your instructor PIN to unlock this student's training record. Once unlocked, you can make changes to the record."
-                : "Enter your instructor PIN to sign off on this student's training record. This will lock the record from further changes."
+                ? "Enter your instructor signature code to unlock this student's training record. Once unlocked, you can make changes to the record."
+                : "Enter your instructor signature code to sign off on this student's training record. This will lock the record from further changes."
               }
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <input
-              type="password"
-              placeholder="Enter PIN"
-              value={instructorPin}
-              onChange={(e) => setInstructorPin(e.target.value)}
+              type="text"
+              placeholder="Enter signature code"
+              value={signatureCode}
+              onChange={(e) => setSignatureCode(e.target.value)}
               className="w-full p-2 border rounded"
             />
             {error && <p className="text-red-600 text-sm">{error}</p>}

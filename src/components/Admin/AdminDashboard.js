@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { db, storage } from '../../firebase/config';
 import { 
   collection, getDocs, doc, updateDoc, Timestamp, query, 
-  where
+  where, deleteField
 } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import KnowledgeAdmin from '../Knowledge/Admin/KnowledgeAdmin';
+import TestCreator from './TestCreator'; // Use relative path in same directory
+
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -240,6 +242,37 @@ const AdminDashboard = () => {
     }
   };
 
+  const resetInstructorSignature = async (userId) => {
+    if (!window.confirm('Are you sure you want to reset this instructor\'s signature? They will need to generate a new one before they can sign documents.')) {
+      return;
+    }
+
+    try {
+      const userRef = doc(db, 'profiles', userId);
+      
+      // Remove both signature and PIN
+      await updateDoc(userRef, {
+        instructorSignature: deleteField(),
+        instructorPin: deleteField()
+      });
+
+      // Update local state
+      setUsers(users.map(u => {
+        if (u.id === userId) {
+          // Create a new object without the signature and PIN
+          const updatedUser = {...u};
+          delete updatedUser.instructorSignature;
+          delete updatedUser.instructorPin;
+          return updatedUser;
+        }
+        return u;
+      }));
+    } catch (err) {
+      setError('Error resetting instructor signature');
+      console.error('Error:', err);
+    }
+  };
+
   const handleViewReports = (instructor) => {
     setSelectedInstructor(instructor);
     setShowReportsModal(true);
@@ -349,6 +382,9 @@ const AdminDashboard = () => {
                       Instructor Access
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Instructor Signature
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Pending Reports
                     </th>
                   </tr>
@@ -398,6 +434,51 @@ const AdminDashboard = () => {
                         </label>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        {user.instructorAccess?.hasAccess ? (
+                          <div className="flex flex-col space-y-2">
+                            {user.instructorSignature?.code ? (
+                              <>
+                                <div className="text-sm">
+                                  <span className="font-mono font-medium">{user.instructorSignature.code}</span>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Created: {new Date(user.instructorSignature.createdAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <Button 
+                                  onClick={() => resetInstructorSignature(user.id)}
+                                  variant="destructive" 
+                                  size="sm"
+                                  className="text-xs"
+                                >
+                                  Reset Signature
+                                </Button>
+                              </>
+                            ) : user.instructorPin?.pin ? (
+                              <>
+                                <div className="text-sm text-amber-600">
+                                  Using legacy PIN
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Updated: {new Date(user.instructorPin.lastUpdated).toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <Button 
+                                  onClick={() => resetInstructorSignature(user.id)}
+                                  variant="destructive" 
+                                  size="sm"
+                                  className="text-xs"
+                                >
+                                  Reset PIN
+                                </Button>
+                              </>
+                            ) : (
+                              <span className="text-sm text-yellow-600">No signature</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {user.instructorAccess?.hasAccess && (
                           <div className="flex items-center">
                             {user.courseEndReports?.length > 0 ? (
@@ -426,6 +507,10 @@ const AdminDashboard = () => {
           
           {/* Use the KnowledgeAdmin component for both quizzes and resources tabs */}
           <TabsContent value="quizzes">
+            {/* Test Creator for NAUI certification tests */}
+            <div className="mb-6">
+              <TestCreator db={db} />
+            </div>
             <KnowledgeAdmin 
               quizCategories={quizCategories}
               setQuizCategories={setQuizCategories}

@@ -6,8 +6,16 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  GoogleAuthProvider,
+  signInWithPopup,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from 'firebase/auth';
+import { getVerificationSetting } from '../utils/verificationSettings';
 
 const AuthContext = createContext({});
 
@@ -16,6 +24,9 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Initialize Google provider
+  const googleProvider = new GoogleAuthProvider();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -70,7 +81,7 @@ export const AuthProvider = ({ children }) => {
         await setDoc(profileRef, {
           name: user.displayName || user.email,
           email: user.email,
-          photoURL: '',
+          photoURL: user.photoURL || '',
           phone: '',
           bio: '',
           city: '',
@@ -107,6 +118,7 @@ export const AuthProvider = ({ children }) => {
           transactions: [],
           joinDate: new Date().toISOString(),
           createdAt: new Date().toISOString(),
+          emailVerified: user.emailVerified || false
         });
       }
     } catch (error) {
@@ -121,10 +133,74 @@ export const AuthProvider = ({ children }) => {
   const signup = async (email, password) => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Only send verification email if required
+      if (getVerificationSetting()) {
+        await sendEmailVerification(userCredential.user);
+      }
+      
       await checkAndCreateUserDocuments(userCredential.user);
       return userCredential;
     } catch (error) {
       console.error("Error during signup:", error);
+      throw error;
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      // The user documents will be created in the auth state change handler
+      return result;
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+      throw error;
+    }
+  };
+
+  const sendVerificationEmail = async () => {
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user found");
+    }
+    
+    try {
+      await sendEmailVerification(auth.currentUser);
+      return true;
+    } catch (error) {
+      console.error("Error sending verification email:", error);
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      return true;
+    } catch (error) {
+      console.error("Error sending password reset email:", error);
+      throw error;
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user found");
+    }
+    
+    try {
+      // Re-authenticate user before changing password
+      const credential = EmailAuthProvider.credential(
+        auth.currentUser.email,
+        currentPassword
+      );
+      
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      
+      // Change password
+      await updatePassword(auth.currentUser, newPassword);
+      return true;
+    } catch (error) {
+      console.error("Error changing password:", error);
       throw error;
     }
   };
@@ -165,8 +241,12 @@ export const AuthProvider = ({ children }) => {
     user,
     login,
     signup,
+    signInWithGoogle,
     logout,
-    updateUserProfile
+    updateUserProfile,
+    sendVerificationEmail,
+    resetPassword,
+    changePassword
   };
 
   return (

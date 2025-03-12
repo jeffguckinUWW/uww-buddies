@@ -78,7 +78,7 @@ const initialFormData = {
 };
 
 const initialInstructorSignature = {
-  pinNumber: '',
+  code: '',
   instructorId: '',
   instructorName: '',
   signatureDate: null,
@@ -106,6 +106,7 @@ const Logbook = () => {
   const [formData, setFormData] = useState(initialFormData);
   const [isLoading, setIsLoading] = useState(initialLoadingState);
   const [error, setError] = useState('');
+
   const updateProfileDiveCount = async (userId, diveCount) => {
     try {
       const profileRef = doc(db, 'profiles', userId);
@@ -125,6 +126,7 @@ const Logbook = () => {
       console.error('Error updating profile dive count:', error);
     }
   };
+
   const renderTypeOrEquipment = (items) => {
     if (!items) return 'Not specified';
     
@@ -243,9 +245,9 @@ const Logbook = () => {
     }
   }, [user?.uid, fetchLogs, calculateNextDiveNumber]);
 
-  const verifyInstructorPin = async (pin) => {
-    if (!pin || pin.length !== 6) {
-      return { verified: false, error: 'PIN must be 6 digits' };
+  const verifyInstructorSignature = async (signatureCode) => {
+    if (!signatureCode) {
+      return { verified: false, error: 'Signature code is required' };
     }
 
     try {
@@ -253,7 +255,7 @@ const Logbook = () => {
       const q = query(
         profilesRef,
         where('role', '==', 'instructor'),
-        where('instructorPin.pin', '==', pin)
+        where('instructorSignature.code', '==', signatureCode)
       );
 
       const querySnapshot = await getDocs(q);
@@ -270,7 +272,7 @@ const Logbook = () => {
       
       return { 
         verified: false, 
-        error: 'Invalid PIN. Please check and try again.' 
+        error: 'Invalid signature code. Please check and try again.' 
       };
     } catch (error) {
       console.error('Verification error:', error);
@@ -278,7 +280,7 @@ const Logbook = () => {
         verified: false, 
         error: error.code === 'permission-denied' 
           ? 'Permission denied. Please check your instructor status.'
-          : 'Error verifying PIN. Please try again.'
+          : 'Error verifying signature code. Please try again.'
       };
     }
   };
@@ -289,11 +291,11 @@ const Logbook = () => {
     setIsLoading(prev => ({ ...prev, signature: true }));
   
     try {
-      if (!instructorSignature.pinNumber || instructorSignature.pinNumber.length !== 6) {
-        throw new Error('Please enter a valid 6-digit PIN');
+      if (!instructorSignature.code) {
+        throw new Error('Please enter a valid signature code');
       }
     
-      const verification = await verifyInstructorPin(instructorSignature.pinNumber);
+      const verification = await verifyInstructorSignature(instructorSignature.code);
       
       if (verification.verified) {
         const signatureDate = new Date();
@@ -317,7 +319,7 @@ const Logbook = () => {
         
         setShowSignatureModal(false);
       } else {
-        throw new Error(verification.error || 'Invalid instructor PIN. Please try again.');
+        throw new Error(verification.error || 'Invalid instructor signature code. Please try again.');
       }
     } catch (error) {
       setSignatureError(error.message);
@@ -537,30 +539,28 @@ const Logbook = () => {
           <form onSubmit={handleSignature} className="space-y-4">
             <div>
               <label 
-                htmlFor="instructor-pin"
+                htmlFor="instructor-signature"
                 className="block text-sm font-medium text-gray-700"
               >
-                Instructor PIN
+                Instructor Signature Code
               </label>
               <input
-                id="instructor-pin"
+                id="instructor-signature"
                 type="text"
-                inputMode="numeric"
-                value={instructorSignature.pinNumber}
+                value={instructorSignature.code}
                 onChange={(e) => setInstructorSignature(prev => ({
                   ...prev,
-                  pinNumber: e.target.value.replace(/\D/g, '').slice(0, 6)
+                  code: e.target.value
                 }))}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                placeholder="Enter 6-digit PIN"
-                maxLength={6}
+                placeholder="Enter your signature code"
                 disabled={isLoading.signature}
-                aria-describedby="pin-error"
+                aria-describedby="signature-error"
               />
             </div>
   
             {signatureError && (
-              <p id="pin-error" className="text-red-600 text-sm" role="alert">
+              <p id="signature-error" className="text-red-600 text-sm" role="alert">
                 {signatureError}
               </p>
             )}
