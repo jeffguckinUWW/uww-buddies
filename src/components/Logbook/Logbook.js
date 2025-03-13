@@ -519,7 +519,7 @@ const Logbook = () => {
     });
     setInstructorSignature(initialInstructorSignature);
     setError('');
-  }, [nextDiveNumber])
+  }, [nextDiveNumber]);
 
   // Memoized SignatureModal component
   const SignatureModal = memo(({ isVisible }) => {
@@ -527,12 +527,12 @@ const Logbook = () => {
   
     return (
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         role="dialog"
         aria-modal="true"
         aria-labelledby="signature-modal-title"
       >
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md">
           <h3 id="signature-modal-title" className="text-lg font-semibold mb-4">
             Instructor Signature
           </h3>
@@ -552,7 +552,7 @@ const Logbook = () => {
                   ...prev,
                   code: e.target.value
                 }))}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full p-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                 placeholder="Enter your signature code"
                 disabled={isLoading.signature}
                 aria-describedby="signature-error"
@@ -565,18 +565,18 @@ const Logbook = () => {
               </p>
             )}
   
-            <div className="flex justify-end space-x-3">
+            <div className="flex flex-col sm:flex-row justify-end sm:space-x-3 space-y-2 sm:space-y-0">
               <button
                 type="button"
                 onClick={() => setShowSignatureModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md order-2 sm:order-1"
                 disabled={isLoading.signature}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 order-1 sm:order-2"
                 disabled={isLoading.signature}
               >
                 {isLoading.signature ? 'Signing...' : 'Sign Log'}
@@ -591,8 +591,8 @@ const Logbook = () => {
   SignatureModal.displayName = 'SignatureModal';
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="max-w-6xl mx-auto p-2 sm:p-4">
+      <div className="bg-white rounded-lg shadow-md p-3 sm:p-6">
         {/* Global Error Display */}
         {error && (
           <div 
@@ -604,10 +604,10 @@ const Logbook = () => {
         )}
 
         {/* Tab Navigation */}
-        <nav className="flex gap-4 mb-6" role="navigation" aria-label="Main navigation">
+        <nav className="flex flex-wrap gap-2 mb-6" role="navigation" aria-label="Main navigation">
           <button
             onClick={() => setActiveTab(TABS.LOGBOOK)}
-            className={`px-4 py-2 rounded-md ${
+            className={`px-3 py-2 text-sm sm:text-base sm:px-4 rounded-md ${
               activeTab === TABS.LOGBOOK 
                 ? 'bg-blue-600 text-white' 
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -618,7 +618,7 @@ const Logbook = () => {
           </button>
           <button
             onClick={() => setActiveTab(TABS.STATS)}
-            className={`px-4 py-2 rounded-md ${
+            className={`px-3 py-2 text-sm sm:text-base sm:px-4 rounded-md ${
               activeTab === TABS.STATS 
                 ? 'bg-blue-600 text-white' 
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -633,7 +633,7 @@ const Logbook = () => {
               setEditingLog(null);
               resetForm();
             }}
-            className={`px-4 py-2 rounded-md ${
+            className={`px-3 py-2 text-sm sm:text-base sm:px-4 rounded-md ${
               activeTab === TABS.NEW_DIVE 
                 ? 'bg-blue-600 text-white' 
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -653,37 +653,37 @@ const Logbook = () => {
 
         {/* Stats View */}
         {activeTab === TABS.STATS && !isLoading.logs && (
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-6" role="region" aria-label="Dive statistics">
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-700">Total Dives</h3>
-      <p className="text-3xl font-bold text-blue-600">{stats.totalDives}</p>
-    </div>
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-700">Max Depth</h3>
-      <p className="text-3xl font-bold text-blue-600">{stats.maxDepth} ft</p>
-    </div>
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-700">Total Bottom Time</h3>
-      <p className="text-3xl font-bold text-blue-600">{stats.totalBottomTime} min</p>
-    </div>
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-700">Last Dive</h3>
-      <p className="text-3xl font-bold text-blue-600">
-        {stats.lastDive ? new Date(stats.lastDive).toLocaleDateString() : 'No dives'}
-      </p>
-    </div>
-  </div>
-)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6" role="region" aria-label="Dive statistics">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-700">Total Dives</h3>
+              <p className="text-2xl sm:text-3xl font-bold text-blue-600">{stats.totalDives}</p>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-700">Max Depth</h3>
+              <p className="text-2xl sm:text-3xl font-bold text-blue-600">{stats.maxDepth} ft</p>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-700">Total Bottom Time</h3>
+              <p className="text-2xl sm:text-3xl font-bold text-blue-600">{stats.totalBottomTime} min</p>
+            </div>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-gray-700">Last Dive</h3>
+              <p className="text-2xl sm:text-3xl font-bold text-blue-600">
+                {stats.lastDive ? new Date(stats.lastDive).toLocaleDateString() : 'No dives'}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Logbook View */}
         {activeTab === TABS.LOGBOOK && !isLoading.logs && (
           <div role="region" aria-label="Dive logs">
             {/* Search and Filter Controls */}
-            <div className="mb-6 flex flex-wrap gap-4">
+            <div className="mb-6 flex flex-col sm:flex-row gap-4">
               <input
                 type="text"
                 placeholder="Search by location, notes, or buddy"
-                className="flex-1 min-w-[200px] px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border rounded-md"
                 value={searchFilters.keyword}
                 onChange={(e) => setSearchFilters(prev => ({ 
                   ...prev, 
@@ -691,12 +691,12 @@ const Logbook = () => {
                 }))}
                 aria-label="Search dive logs"
               />
-              <div className="flex gap-4">
-                <div>
+              <div className="flex flex-wrap gap-4">
+                <div className="w-full sm:w-auto">
                   <label className="block text-sm text-gray-600">From</label>
                   <input
                     type="date"
-                    className="px-3 py-2 border rounded-md"
+                    className="w-full sm:w-auto px-3 py-2 border rounded-md"
                     value={searchFilters.dateFrom}
                     onChange={(e) => setSearchFilters(prev => ({ 
                       ...prev, 
@@ -705,11 +705,11 @@ const Logbook = () => {
                     aria-label="Filter from date"
                   />
                 </div>
-                <div>
+                <div className="w-full sm:w-auto">
                   <label className="block text-sm text-gray-600">To</label>
                   <input
                     type="date"
-                    className="px-3 py-2 border rounded-md"
+                    className="w-full sm:w-auto px-3 py-2 border rounded-md"
                     value={searchFilters.dateTo}
                     onChange={(e) => setSearchFilters(prev => ({ 
                       ...prev, 
@@ -722,130 +722,130 @@ const Logbook = () => {
             </div>
 
             {/* Dive Log List */}
-{filteredLogs.length === 0 ? (
-  <p className="text-center text-gray-600 py-8">
-    No dive logs found matching your criteria.
-  </p>
-) : (
-  <div className="space-y-4">
-    {filteredLogs.map((log) => (
-      <div 
-        key={log.id} 
-        className="border rounded-lg p-4 hover:shadow-lg transition-shadow bg-white"
-        role="article"
-        aria-label={`Dive ${log.diveNumber} at ${log.location}`}
-      >
-        {/* Header with Log Number, Location, and Actions */}
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <h3 className="text-lg font-semibold text-blue-600 flex items-center gap-2">
-              #{log.diveNumber} • {log.location}
-              <span className="text-sm font-normal text-gray-600">
-                {new Date(log.diveDate).toLocaleDateString()}
-              </span>
-            </h3>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleEdit(log)}
-              className="px-2.5 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"
-              aria-label={`Edit dive ${log.diveNumber}`}
-              disabled={isLoading.delete}
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => handleDelete(log.id)}
-              className="px-2.5 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
-              aria-label={`Delete dive ${log.diveNumber}`}
-              disabled={isLoading.delete}
-            >
-              {isLoading.delete ? 'Deleting...' : 'Delete'}
-            </button>
-          </div>
-        </div>
+            {filteredLogs.length === 0 ? (
+              <p className="text-center text-gray-600 py-8">
+                No dive logs found matching your criteria.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {filteredLogs.map((log) => (
+                  <div 
+                    key={log.id} 
+                    className="border rounded-lg p-3 sm:p-4 hover:shadow-lg transition-shadow bg-white"
+                    role="article"
+                    aria-label={`Dive ${log.diveNumber} at ${log.location}`}
+                  >
+                    {/* Header with Log Number, Location, and Actions */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start mb-3 gap-2">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-blue-600 flex flex-wrap items-center gap-2">
+                          #{log.diveNumber} • {log.location}
+                          <span className="text-sm font-normal text-gray-600">
+                            {new Date(log.diveDate).toLocaleDateString()}
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="flex gap-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={() => handleEdit(log)}
+                          className="px-2.5 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"
+                          aria-label={`Edit dive ${log.diveNumber}`}
+                          disabled={isLoading.delete}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(log.id)}
+                          className="px-2.5 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
+                          aria-label={`Delete dive ${log.diveNumber}`}
+                          disabled={isLoading.delete}
+                        >
+                          {isLoading.delete ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
 
-        {/* Main Info Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
-          <div>
-            <span className="text-gray-600">Buddy:</span>
-            <span className="ml-2 font-medium">{log.buddy || 'Solo'}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Bottom Time:</span>
-            <span className="ml-2 font-medium">{log.bottomTime} min</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Max Depth:</span>
-            <span className="ml-2 font-medium">{log.maxDepth} ft</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Visibility:</span>
-            <span className="ml-2 font-medium">{log.visibility} ft</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Water Temp:</span>
-            <span className="ml-2 font-medium">{log.waterTemp}°F</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Gas Used:</span>
-            <span className="ml-2 font-medium">
-              {log.tankPressureStart && log.tankPressureEnd 
-                ? `${log.tankPressureStart - log.tankPressureEnd} psi`
-                : 'N/A'}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-600">Tank Size:</span>
-            <span className="ml-2 font-medium">{log.tankVolume || 'N/A'}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Weather:</span>
-            <span className="ml-2 font-medium capitalize">
-              {log.weather?.condition}
-              {log.weather?.windSpeed ? ` (${log.weather.windSpeed}kt)` : ''}
-            </span>
-          </div>
-        </div>
+                    {/* Main Info Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-2 sm:gap-y-3 text-sm">
+                      <div>
+                        <span className="text-gray-600">Buddy:</span>
+                        <span className="ml-2 font-medium">{log.buddy || 'Solo'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Bottom Time:</span>
+                        <span className="ml-2 font-medium">{log.bottomTime} min</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Max Depth:</span>
+                        <span className="ml-2 font-medium">{log.maxDepth} ft</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Visibility:</span>
+                        <span className="ml-2 font-medium">{log.visibility} ft</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Water Temp:</span>
+                        <span className="ml-2 font-medium">{log.waterTemp}°F</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Gas Used:</span>
+                        <span className="ml-2 font-medium">
+                          {log.tankPressureStart && log.tankPressureEnd 
+                            ? `${log.tankPressureStart - log.tankPressureEnd} psi`
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Tank Size:</span>
+                        <span className="ml-2 font-medium">{log.tankVolume || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Weather:</span>
+                        <span className="ml-2 font-medium capitalize">
+                          {log.weather?.condition}
+                          {log.weather?.windSpeed ? ` (${log.weather.windSpeed}kt)` : ''}
+                        </span>
+                      </div>
+                    </div>
 
-        {/* Bottom Section: Dive Type, Equipment, and Notes */}
-        <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-        <div className="space-y-2">
-      <div>
-        <span className="text-gray-600">Dive Type:</span>
-        <span className="ml-2">
-          {renderTypeOrEquipment(log.diveType)}
-        </span>
-      </div>
-      <div>
-        <span className="text-gray-600">Equipment:</span>
-        <span className="ml-2">
-          {renderTypeOrEquipment(log.equipment)}
-        </span>
-      </div>
-    </div>
-          
-          {log.notes && (
-            <div className="text-gray-700 bg-gray-50 p-2 rounded">
-              <span className="text-gray-600 block mb-1">Notes:</span>
-              {log.notes}
-            </div>
-          )}
-        </div>
+                    {/* Bottom Section: Dive Type, Equipment, and Notes */}
+                    <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-gray-600">Dive Type:</span>
+                          <span className="ml-2">
+                            {renderTypeOrEquipment(log.diveType)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Equipment:</span>
+                          <span className="ml-2">
+                            {renderTypeOrEquipment(log.equipment)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {log.notes && (
+                        <div className="text-gray-700 bg-gray-50 p-2 rounded">
+                          <span className="text-gray-600 block mb-1">Notes:</span>
+                          {log.notes}
+                        </div>
+                      )}
+                    </div>
 
-        {/* Signature Information (if exists) */}
-        {log.signature && (
-          <div className="mt-3 pt-2 border-t text-sm text-gray-600">
-            ✓ Signed by {log.signature.instructorName} • {log.signature.certificationLevel} • 
-            {log.signature.signatureDate && log.signature.signatureDate.toDate 
-              ? log.signature.signatureDate.toDate().toLocaleDateString()
-              : new Date(log.signature.signatureDate).toLocaleDateString()}
-          </div>
-        )}
-      </div>
-    ))}
-  </div>
-)}
+                    {/* Signature Information */}
+                    {log.signature && (
+                      <div className="mt-3 pt-2 border-t text-xs sm:text-sm text-gray-600 break-words">
+                        ✓ Signed by {log.signature.instructorName} • {log.signature.certificationLevel} • 
+                        {log.signature.signatureDate && log.signature.signatureDate.toDate 
+                          ? log.signature.signatureDate.toDate().toLocaleDateString()
+                          : new Date(log.signature.signatureDate).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -925,7 +925,7 @@ const Logbook = () => {
               </div>
 
               {/* Form Actions */}
-              <div className="flex justify-end space-x-3 mt-6">
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-6">
                 <button
                   type="button"
                   onClick={() => {
@@ -933,14 +933,14 @@ const Logbook = () => {
                     setEditingLog(null);
                     resetForm();
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                  className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md order-2 sm:order-1"
                   disabled={isLoading.submission}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 order-1 sm:order-2"
                   disabled={isLoading.submission}
                 >
                   {isLoading.submission 

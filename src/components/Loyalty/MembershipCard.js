@@ -1,143 +1,180 @@
-import React, { useState } from 'react';
-import { Shield, Award, Calendar, UserSquare2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Shield } from 'lucide-react';
 
-const MembershipCard = ({ tier, memberName, memberId, joinDate }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isFlipped, setIsFlipped] = useState(false);
+const MembershipCard = ({ 
+  tier, 
+  memberName, 
+  memberId, 
+  joinDate,
+  certificationLevel,
+  redeemablePoints
+}) => {
+  const [showBack, setShowBack] = useState(false);
+  const [cardImage, setCardImage] = useState(null);
+  const [displayTier, setDisplayTier] = useState(tier);
+
+  // Define paths to card images - memoized to avoid dependency issues
+  const tierCardImages = useMemo(() => ({
+    OCEANIC_SILVER: '/images/Loyalty/OSM.png',
+    MARINER_GOLD: '/images/Loyalty/MGM.png',
+    NAUTILUS_PLATINUM: '/images/Loyalty/NPM.png',
+    TRIDENT_ELITE: '/images/Loyalty/TEM.png',
+    LIFETIME_ELITE: '/images/Loyalty/TEL.png'
+  }), []);
+
+  const specialCardImages = useMemo(() => ({
+    INSTRUCTOR: '/images/Loyalty/INST.png',
+    DIVEMASTER: '/images/Loyalty/DM.png'
+  }), []);
+
+  // Determine which card to display based on certification level
+  useEffect(() => {
+    // Check if user is an instructor or divemaster
+    const isInstructor = certificationLevel === "Instructor" || certificationLevel === "Assistant Instructor";
+    const isDivemaster = certificationLevel === "Divemaster";
+    
+    // Set the appropriate display tier and card image
+    if (isInstructor) {
+      setDisplayTier('INSTRUCTOR');
+      setCardImage(specialCardImages.INSTRUCTOR);
+    } else if (isDivemaster) {
+      setDisplayTier('DIVEMASTER');
+      setCardImage(specialCardImages.DIVEMASTER);
+    } else {
+      // Default to tier-based card
+      setDisplayTier(tier);
+      setCardImage(tierCardImages[tier]);
+    }
+  }, [tier, certificationLevel, tierCardImages, specialCardImages]);
 
   const handleClick = () => {
-    if (isExpanded) {
-      setIsFlipped(!isFlipped);
-    } else {
-      setIsExpanded(true);
+    setShowBack(!showBack);
+  };
+
+  // Format points display
+  const formattedPoints = typeof redeemablePoints === 'number' 
+    ? `${redeemablePoints.toLocaleString()} pts` 
+    : 'Check your account';
+
+  // Generate simple barcode pattern based on member ID
+  const generateBarcodeBars = () => {
+    if (!memberId) return [];
+    
+    const bars = [];
+    // Use the member ID to generate a deterministic barcode pattern
+    // This ensures the same ID always generates the same barcode
+    const idString = String(memberId);
+    
+    for (let i = 0; i < 30; i++) {
+      // Use the characters in the ID to determine bar width
+      const charIndex = i % idString.length;
+      const charCode = idString.charCodeAt(charIndex);
+      const width = (charCode % 4) + 1; // Width between 1-4 based on character code
+      const space = i * 7;
+      
+      bars.push(
+        <rect 
+          key={i} 
+          x={space} 
+          y="5" 
+          width={width} 
+          height="40" 
+          fill="black" 
+        />
+      );
     }
+    
+    return bars;
   };
 
-  const cardColors = {
-    OCEANIC_SILVER: 'from-gray-100 to-gray-300',
-    MARINER_GOLD: 'from-amber-100 to-amber-300',
-    NAUTILUS_PLATINUM: 'from-slate-300 to-slate-500',
-    TRIDENT_ELITE: 'from-indigo-300 to-indigo-500',
-    LIFETIME_ELITE: 'from-purple-300 to-purple-500'
-  };
-
-  const textColors = {
-    OCEANIC_SILVER: 'text-gray-800',
-    MARINER_GOLD: 'text-amber-900',
-    NAUTILUS_PLATINUM: 'text-white',
-    TRIDENT_ELITE: 'text-white',
-    LIFETIME_ELITE: 'text-white'
-  };
-
-  const borderColors = {
-    OCEANIC_SILVER: 'border-gray-200',
-    MARINER_GOLD: 'border-amber-200',
-    NAUTILUS_PLATINUM: 'border-slate-400',
-    TRIDENT_ELITE: 'border-indigo-400',
-    LIFETIME_ELITE: 'border-purple-400'
-  };
-
+  // Simplified card with direct front/back toggle
   return (
     <div 
-      className={`
-        relative transition-all duration-300 ease-in-out
-        ${isExpanded ? 'h-80' : 'h-48'}
-      `}
+      className="relative w-full cursor-pointer rounded-xl shadow-md overflow-hidden"
+      style={{ aspectRatio: '1.6/1' }}
+      onClick={handleClick}
     >
-      <div 
-        onClick={handleClick}
-        className={`
-          cursor-pointer absolute inset-0
-          [perspective:1000px] transform-gpu
-          transition-transform duration-300 ease-in-out
-          ${isExpanded ? 'scale-105' : ''}
-        `}
-      >
-        <div
-          className={`
-            relative w-full h-full
-            transition-transform duration-500 ease-in-out
-            transform-gpu preserve-3d
-            ${isFlipped ? 'rotate-y-180' : ''}
-          `}
-        >
-          {/* Front of card */}
-          <div
-            className={`
-              absolute inset-0 backface-hidden
-              rounded-xl bg-gradient-to-br ${cardColors[tier]} 
-              border-2 ${borderColors[tier]} shadow-lg p-4
-              flex flex-col justify-between
-            `}
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-5 h-5" />
-                  <span className={`font-semibold ${textColors[tier]}`}>
-                    {tier?.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                  </span>
-                </div>
-                <p className={`text-sm mt-1 ${textColors[tier]}`}>Membership Card</p>
+      {/* Front of card - only visible when showBack is false */}
+      {!showBack && (
+        <div className="w-full h-full">
+          {cardImage ? (
+            <img 
+              src={cardImage} 
+              alt={`${getTierName(displayTier)} Membership Card`}
+              className="w-full h-full object-cover" 
+            />
+          ) : (
+            <div className="w-full h-full bg-blue-600 flex items-center justify-center">
+              <p className="text-white text-xl">Membership Card</p>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Back of card - only visible when showBack is true */}
+      {showBack && (
+        <div className="w-full h-full bg-white border border-gray-200 p-4 overflow-y-auto">
+          <div className="flex flex-col justify-between h-full">
+            {/* Header */}
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-semibold text-gray-800">Underwater World</h3>
+              <div className="w-8 h-8 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-blue-600" />
               </div>
-              <Award className={`w-8 h-8 ${textColors[tier]}`} />
             </div>
             
-            <div className={textColors[tier]}>
-              <p className="font-bold text-lg">{memberName}</p>
-              <p className="text-sm opacity-75">Member #{memberId}</p>
-            </div>
-          </div>
-
-          {/* Back of card */}
-          <div
-            className={`
-              absolute inset-0 backface-hidden rotate-y-180
-              rounded-xl bg-gradient-to-br ${cardColors[tier]} 
-              border-2 ${borderColors[tier]} shadow-lg p-4
-              flex flex-col justify-between
-            `}
-          >
-            <div className={`space-y-4 ${textColors[tier]}`}>
-              <h3 className="font-semibold">Membership Details</h3>
+            {/* Member information */}
+            <div className="py-2 space-y-2 flex-grow">
+              <div>
+                <p className="text-xs text-gray-500">Name</p>
+                <p className="font-medium text-gray-800">{memberName || 'Member'}</p>
+              </div>
               
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <UserSquare2 className="w-4 h-4" />
-                  <div>
-                    <p className="text-sm opacity-75">Member ID</p>
-                    <p className="font-medium">{memberId}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Calendar className="w-4 h-4" />
-                  <div>
-                    <p className="text-sm opacity-75">Member Since</p>
-                    <p className="font-medium">{new Date(joinDate).toLocaleDateString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Shield className="w-4 h-4" />
-                  <div>
-                    <p className="text-sm opacity-75">Current Tier</p>
-                    <p className="font-medium">
-                      {tier?.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                    </p>
-                  </div>
-                </div>
+              <div>
+                <p className="text-xs text-gray-500">Date Joined</p>
+                <p className="font-medium text-gray-800">
+                  {joinDate ? new Date(joinDate).toLocaleDateString() : 'N/A'}
+                </p>
+              </div>
+              
+              <div>
+                <p className="text-xs text-gray-500">Redeemable Rewards Points</p>
+                <p className="font-medium text-gray-800">{formattedPoints}</p>
               </div>
             </div>
-
-            <p className={`text-xs ${textColors[tier]} opacity-75 text-center mt-2`}>
+            
+            {/* Barcode - reduced size to fit better on mobile */}
+            <div className="mt-1 pt-2 border-t">
+              <div className="flex flex-col items-center">
+                <svg width="180" height="40" className="barcode mb-1" viewBox="0 0 210 50" preserveAspectRatio="xMidYMid meet">
+                  <rect x="0" y="0" width="210" height="50" fill="white" />
+                  {generateBarcodeBars()}
+                </svg>
+                <p className="text-sm text-gray-700 font-mono text-center break-all">
+                  {memberId || 'MEMBER-ID'}
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-400 text-center mt-2">
               Click card to flip
             </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
+};
+
+// Helper function to get tier name for display
+const getTierName = (tierKey) => {
+  if (tierKey === 'INSTRUCTOR') return 'Instructor';
+  if (tierKey === 'DIVEMASTER') return 'Divemaster';
+  
+  // Format regular tier names
+  return tierKey?.split('_')
+    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(' ');
 };
 
 export default MembershipCard;

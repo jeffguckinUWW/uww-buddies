@@ -1,13 +1,13 @@
-// LogbookEntry.js
+// LogbookEntry.js with mobile-responsive improvements
 import React from 'react';
 import { Sun, Cloud, CloudRain, Wind, Thermometer, Clock, Droplet } from 'lucide-react';
 
 const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => {
     const weatherIcons = {
-      sunny: <Sun className="w-6 h-6 text-yellow-500" />,
-      cloudy: <Cloud className="w-6 h-6 text-gray-500" />,
-      rainy: <CloudRain className="w-6 h-6 text-blue-500" />,
-      windy: <Wind className="w-6 h-6 text-gray-500" />
+      sunny: <Sun className="w-5 h-5 md:w-6 md:h-6 text-yellow-500" />,
+      cloudy: <Cloud className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />,
+      rainy: <CloudRain className="w-5 h-5 md:w-6 md:h-6 text-blue-500" />,
+      windy: <Wind className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
     };
   
     // Validate and handle bottom time changes
@@ -25,30 +25,30 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
     };
   
     return (
-      <div className="bg-white rounded-lg p-6">
-        <div className="paper-texture bg-white border-2 border-gray-200 rounded-lg p-8">
+      <div className="bg-white rounded-lg p-2 sm:p-4 md:p-6">
+        <div className="paper-texture bg-white border-2 border-gray-200 rounded-lg p-3 sm:p-5 md:p-8">
           {/* Basic Information Section */}
-          <div className="grid grid-cols-2 gap-6 mb-8">
-            <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex gap-3">
               <div>
                 <label className="text-sm font-semibold text-gray-600">Dive #</label>
                 <input
                   type="number"
                   value={formData.diveNumber}
                   onChange={(e) => setFormData(prev => ({ ...prev, diveNumber: e.target.value }))}
-                  className="mt-1 w-24 p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="mt-1 w-20 sm:w-24 p-2 border rounded focus:ring-2 focus:ring-blue-500"
                   readOnly={readOnly}
                   min="1"
                   required
                 />
               </div>
-              <div>
+              <div className="flex-grow">
                 <label className="text-sm font-semibold text-gray-600">Date</label>
                 <input
                   type="date"
                   value={formData.diveDate}
                   onChange={(e) => setFormData(prev => ({ ...prev, diveDate: e.target.value }))}
-                  className="mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                  className="mt-1 w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
                   readOnly={readOnly}
                   required
                 />
@@ -59,7 +59,7 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
           {/* Main Content Following Specified Order */}
           <div className="space-y-6">
             {/* Location and Buddy */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <label className="text-sm font-semibold text-gray-600">Location</label>
                 <input
@@ -85,13 +85,13 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
             </div>
   
             {/* Dive Times */}
-            <div className="border rounded-lg p-4 bg-gray-50">
+            <div className="border rounded-lg p-3 sm:p-4 bg-gray-50">
               <h3 className="font-semibold mb-3 flex items-center">
                 <Clock className="w-5 h-5 text-gray-500 mr-2" />
                 Dive Times
               </h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm text-gray-600">Time In (optional)</label>
                     <input
@@ -135,60 +135,60 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
             </div>
   
             {/* Tank Information */}
-<div className="border rounded-lg p-4">
-  <h3 className="font-semibold mb-3">Tank Information</h3>
-  <div className="grid grid-cols-3 gap-4">  {/* Changed to grid-cols-3 */}
-    <div>
-      <label className="text-sm text-gray-600">Tank Start (PSI)</label>
-      <input
-        type="number"
-        value={formData.tankPressureStart}
-        onChange={(e) => setFormData(prev => ({
-          ...prev,
-          tankPressureStart: e.target.value
-        }))}
-        className="mt-1 w-full p-2 border rounded"
-        min="0"
-        readOnly={readOnly}
-      />
-    </div>
-    <div>
-      <label className="text-sm text-gray-600">Tank End (PSI)</label>
-      <input
-        type="number"
-        value={formData.tankPressureEnd}
-        onChange={(e) => setFormData(prev => ({
-          ...prev,
-          tankPressureEnd: e.target.value
-        }))}
-        className="mt-1 w-full p-2 border rounded"
-        min="0"
-        readOnly={readOnly}
-      />
-    </div>
-    <div>
-      <label className="text-sm text-gray-600">Tank Size (cu ft)</label>
-      <input
-        type="number"
-        value={formData.tankVolume}
-        onChange={(e) => setFormData(prev => ({
-          ...prev,
-          tankVolume: e.target.value
-        }))}
-        className="mt-1 w-full p-2 border rounded"
-        min="0"
-        readOnly={readOnly}
-      />
-    </div>
-  </div>
-</div>
+            <div className="border rounded-lg p-3 sm:p-4">
+              <h3 className="font-semibold mb-3">Tank Information</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600">Tank Start (PSI)</label>
+                  <input
+                    type="number"
+                    value={formData.tankPressureStart}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      tankPressureStart: e.target.value
+                    }))}
+                    className="mt-1 w-full p-2 border rounded"
+                    min="0"
+                    readOnly={readOnly}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Tank End (PSI)</label>
+                  <input
+                    type="number"
+                    value={formData.tankPressureEnd}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      tankPressureEnd: e.target.value
+                    }))}
+                    className="mt-1 w-full p-2 border rounded"
+                    min="0"
+                    readOnly={readOnly}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Tank Size (cu ft)</label>
+                  <input
+                    type="number"
+                    value={formData.tankVolume}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      tankVolume: e.target.value
+                    }))}
+                    className="mt-1 w-full p-2 border rounded"
+                    min="0"
+                    readOnly={readOnly}
+                  />
+                </div>
+              </div>
+            </div>
   
             {/* Dive Type */}
-            <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-3 sm:p-4">
               <h3 className="font-semibold mb-3">Dive Type</h3>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {formData.diveType && Object.entries(formData.diveType).map(([type, checked]) => (
-                  <label key={type} className="flex items-center space-x-2">
+                  <label key={type} className="flex items-center space-x-2 p-1">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -199,7 +199,7 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
                           [type]: !prev.diveType[type]
                         }
                       }))}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 h-4 w-4"
                       disabled={readOnly}
                     />
                     <span className="text-sm capitalize">{type}</span>
@@ -209,9 +209,9 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
             </div>
   
             {/* Weather Conditions */}
-            <div className="border rounded-lg p-4 bg-gray-50">
+            <div className="border rounded-lg p-3 sm:p-4 bg-gray-50">
               <h3 className="font-semibold mb-3">Weather Conditions</h3>
-              <div className="flex gap-4 justify-around mb-4">
+              <div className="flex flex-wrap gap-2 justify-around mb-4">
                 {Object.entries(weatherIcons).map(([condition, icon]) => (
                   <button
                     key={condition}
@@ -228,6 +228,7 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
                     disabled={readOnly}
                   >
                     {icon}
+                    <span className="block text-xs capitalize mt-1">{condition}</span>
                   </button>
                 ))}
               </div>
@@ -251,8 +252,8 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
             </div>
   
             {/* Depth and Temperature */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="border rounded-lg p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="border rounded-lg p-3 sm:p-4">
                 <h3 className="font-semibold mb-3 flex items-center">
                   <Droplet className="w-5 h-5 text-blue-500 mr-2" />
                   Depth Information
@@ -290,7 +291,7 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
                 </div>
               </div>
   
-              <div className="border rounded-lg p-4">
+              <div className="border rounded-lg p-3 sm:p-4">
                 <h3 className="font-semibold mb-3 flex items-center">
                   <Thermometer className="w-5 h-5 text-red-500 mr-2" />
                   Temperature
@@ -327,11 +328,11 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
             </div>
   
             {/* Equipment */}
-            <div className="border rounded-lg p-4">
+            <div className="border rounded-lg p-3 sm:p-4">
               <h3 className="font-semibold mb-3">Equipment</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {Object.entries(formData.equipment).map(([gear, checked]) => (
-                  <label key={gear} className="flex items-center space-x-2">
+                  <label key={gear} className="flex items-center space-x-2 p-1">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -342,7 +343,7 @@ const LogbookEntry = ({ formData, setFormData, readOnly, handleTimeChange }) => 
                           [gear]: !prev.equipment[gear]
                         }
                       }))}
-                      className="rounded border-gray-300"
+                      className="rounded border-gray-300 h-4 w-4"
                       disabled={readOnly}
                     />
                     <span className="text-sm capitalize">{gear}</span>

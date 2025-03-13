@@ -9,13 +9,194 @@ import {
   getDocs 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { AlertTriangle, MapPin, Award, Clock, Droplet } from 'lucide-react';
+import { 
+  AlertTriangle, 
+  MapPin, 
+  Clock, 
+  Droplet, 
+  Edit2, 
+  Camera, 
+  Trash2, 
+  Save,
+  X, 
+  Check,
+  UserCircle,
+  Clipboard,
+  Shield,
+  Map,
+  Award,
+  Settings,
+  Phone,
+  Mail,
+  Globe,
+  Instagram,
+  Facebook,
+  Youtube,
+  Twitter,
+  AlertCircle,
+  Calendar,
+  CheckCircle2
+} from 'lucide-react';
 import Badges from './Badges';
 import { Alert, AlertDescription } from '../../components/ui/alert';
-import MembershipCard from '../Loyalty/MembershipCard';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import SecuritySettings from '../Auth/SecuritySettings';
+import { Button } from '../ui/button';
+import RewardsSection from './RewardsSection';
 
+// TIER_LEVELS definition moved outside component
+const TIER_LEVELS = {
+  OCEANIC_SILVER: { min: 0, max: 9999, multiplier: 1.0, name: 'Oceanic Silver' },
+  MARINER_GOLD: { min: 10000, max: 19999, multiplier: 1.2, name: 'Mariner Gold' },
+  NAUTILUS_PLATINUM: { min: 20000, max: 49999, multiplier: 1.5, name: 'Nautilus Platinum' },
+  TRIDENT_ELITE: { min: 50000, max: 99999, multiplier: 2.0, name: 'Trident Elite' },
+  LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
+};
+
+// Enhanced ProfileHeader component
+const ProfileHeader = ({ 
+  profile, 
+  photoURL, 
+  handleEditClick, 
+  isEditing,
+  onImageChange,
+  onDeletePhoto
+}) => {
+  return (
+    <div className="relative">
+      {/* Cover Background with gradient overlay */}
+      <div className="h-48 bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-600 rounded-t-xl relative overflow-hidden">
+        {/* Use the CSS class for background pattern instead of an image */}
+        <div className="absolute inset-0 opacity-20 dive-pattern-bg"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/30 mix-blend-overlay"></div>
+      </div>
+      
+      {/* Profile content positioned over the cover */}
+      <div className="relative px-6 md:px-8 pb-6 -mt-24">
+        <div className="flex flex-col md:flex-row md:items-end space-y-4 md:space-y-0 md:space-x-6">
+          {/* Profile Image */}
+          <div className="relative">
+            {photoURL ? (
+              <img
+                src={photoURL}
+                alt="Profile"
+                className="w-32 h-32 rounded-2xl border-4 border-white object-cover shadow-lg"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-2xl border-4 border-white bg-gradient-to-br from-blue-200 to-blue-50 flex items-center justify-center shadow-lg">
+                <UserCircle className="h-16 w-16 text-blue-500" />
+              </div>
+            )}
+            
+            {isEditing ? (
+              <div className="absolute -bottom-2 -right-2 flex space-x-1">
+                <label className="p-2 bg-blue-600 rounded-full text-white cursor-pointer hover:bg-blue-700 transition-colors shadow-md">
+                  <Camera className="h-4 w-4" />
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={onImageChange} 
+                  />
+                </label>
+                {photoURL && (
+                  <button 
+                    onClick={onDeletePhoto}
+                    className="p-2 bg-red-600 rounded-full text-white hover:bg-red-700 transition-colors shadow-md"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button 
+                onClick={handleEditClick}
+                className="absolute -bottom-2 -right-2 p-2 bg-blue-600 rounded-full text-white hover:bg-blue-700 transition-colors shadow-md"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          
+          {/* Name & Basic Info */}
+          <div className="flex-1 pt-3 md:pt-0">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+              {profile.name || 'New Diver'}
+            </h1>
+            
+            {profile.certificationLevel && (
+              <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium my-2">
+                <Shield className="w-4 h-4 mr-1" />
+                {profile.certificationLevel}
+              </div>
+            )}
+            
+            {/* Location & Contact in flex layout */}
+            <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-600">
+              {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
+                <div className="flex items-center">
+                  <MapPin className="h-4 w-4 mr-1 text-gray-400" />
+                  {[profile.city, profile.state].filter(Boolean).join(', ')}
+                </div>
+              )}
+              
+              {!profile.privacySettings?.hideEmail && profile.email && (
+                <div className="flex items-center">
+                  <Mail className="h-4 w-4 mr-1 text-gray-400" />
+                  {profile.email}
+                </div>
+              )}
+              
+              {!profile.privacySettings?.hidePhone && profile.phone && (
+                <div className="flex items-center">
+                  <Phone className="h-4 w-4 mr-1 text-gray-400" />
+                  {profile.phone}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Quick Stats in cards format - only on desktop */}
+          {!profile.privacySettings?.hideStats && profile.divingStats && (
+            <div className="hidden md:flex space-x-3">
+              <div className="text-center bg-blue-50 rounded-lg px-4 py-2 border border-blue-100">
+                <div className="flex items-center justify-center text-blue-500 mb-1">
+                  <Clipboard className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">Dives</span>
+                </div>
+                <p className="text-xl font-semibold text-gray-900">
+                  {profile.divingStats.totalDives || 0}
+                </p>
+              </div>
+              
+              <div className="text-center bg-blue-50 rounded-lg px-4 py-2 border border-blue-100">
+                <div className="flex items-center justify-center text-blue-500 mb-1">
+                  <Droplet className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">Max Depth</span>
+                </div>
+                <p className="text-xl font-semibold text-gray-900">
+                  {profile.divingStats.maxDepth || 0}ft
+                </p>
+              </div>
+              
+              <div className="text-center bg-blue-50 rounded-lg px-4 py-2 border border-blue-100">
+                <div className="flex items-center justify-center text-blue-500 mb-1">
+                  <Clock className="w-4 h-4 mr-1" />
+                  <span className="text-sm font-medium">Hours</span>
+                </div>
+                <p className="text-xl font-semibold text-gray-900">
+                  {profile.divingStats.totalTime || 0}h
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Enhanced ProfileCompletionIndicator with animation and cleaner design
 const ProfileCompletionIndicator = ({ profile }) => {
   const calculateCompletion = () => {
     const fields = [
@@ -27,7 +208,7 @@ const ProfileCompletionIndicator = ({ profile }) => {
       'city',
       'state',
       'certificationLevel',
-      'favoriteDiveLocation',
+      'favoritePlace',
       'emergencyContact.name'
     ];
     
@@ -43,48 +224,387 @@ const ProfileCompletionIndicator = ({ profile }) => {
   };
 
   const completion = calculateCompletion();
+  
+  // If completion is 100%, don't render anything
+  if (completion === 100) {
+    return null;
+  }
+  
+  // Determine color based on completion percentage
+  const getColorClass = () => {
+    if (completion < 30) return "bg-red-500";
+    if (completion < 70) return "bg-yellow-500";
+    return "bg-green-500";
+  };
 
   return (
-    <div className="mb-6">
-      <div className="flex justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Profile Completion</span>
-        <span className="text-sm font-medium text-gray-700">{completion}%</span>
+    <div className="mb-6 bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+      <div className="flex justify-between mb-2 items-center">
+        <span className="text-sm font-medium text-gray-700 flex items-center">
+          <Clipboard className="w-4 h-4 mr-1 text-blue-500" />
+          Profile Completion
+        </span>
+        <span className="text-sm font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-full">
+          {completion}%
+        </span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
+      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
         <div 
-          className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+          className={`h-2.5 rounded-full transition-all duration-700 ease-in-out ${getColorClass()}`}
           style={{ width: `${completion}%` }}
         />
       </div>
+      {completion < 70 ? (
+        <div className="mt-2 text-xs text-gray-600 flex items-center">
+          <AlertTriangle className="h-3 w-3 mr-1 text-yellow-500" />
+          Complete your profile to unlock all features
+        </div>
+      ) : (
+        <div className="mt-2 text-xs text-gray-600 flex items-center">
+          <CheckCircle2 className="h-3 w-3 mr-1 text-green-500" />
+          Almost there! Just a few more details to complete.
+        </div>
+      )}
     </div>
   );
 };
 
-
-
+// Enhanced DivingStats with better visuals
 const DivingStats = ({ stats }) => {
   if (!stats) {
     return null;
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+    <div className="grid grid-cols-3 gap-4 p-6 bg-gradient-to-br from-blue-50 to-white rounded-xl border border-blue-100">
       <div className="text-center">
-        <div className="text-2xl font-bold text-blue-600">{stats.totalDives || 0}</div>
-        <div className="text-sm text-gray-600">Total Dives</div>
+        <div className="text-3xl font-bold text-blue-600">{stats.totalDives || 0}</div>
+        <div className="text-sm text-gray-600 mt-1 flex items-center justify-center">
+          <Clipboard className="w-3 h-3 mr-1" />
+          Total Dives
+        </div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-bold text-blue-600">{stats.maxDepth || 0}ft</div>
-        <div className="text-sm text-gray-600">Max Depth</div>
+        <div className="text-3xl font-bold text-blue-600">{stats.maxDepth || 0}ft</div>
+        <div className="text-sm text-gray-600 mt-1 flex items-center justify-center">
+          <Droplet className="w-3 h-3 mr-1" />
+          Max Depth
+        </div>
       </div>
       <div className="text-center">
-        <div className="text-2xl font-bold text-blue-600">{stats.totalTime || 0}h</div>
-        <div className="text-sm text-gray-600">Bottom Time</div>
+        <div className="text-3xl font-bold text-blue-600">{stats.totalTime || 0}h</div>
+        <div className="text-sm text-gray-600 mt-1 flex items-center justify-center">
+          <Clock className="w-3 h-3 mr-1" />
+          Bottom Time
+        </div>
       </div>
     </div>
   );
 };
 
+// Enhanced InfoCard component for consistent card styling
+const InfoCard = ({ title, icon: Icon, children, className = "" }) => (
+  <div className={`bg-white rounded-xl border border-gray-100 shadow-sm p-5 ${className}`}>
+    <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      {Icon && <Icon className="h-5 w-5 text-blue-500 mr-2" />}
+      {title}
+    </h2>
+    {children}
+  </div>
+);
+
+// Mobile-optimized ProfileView with revised section order
+const ProfileView = ({ 
+  profile, 
+  loyaltyData, 
+  handleEditClick, 
+  isLogbookSynced 
+}) => {
+  const { user } = useAuth();
+
+  // Calculate profile completion percentage for conditional display
+  const calculateCompletion = () => {
+    const fields = [
+      'name',
+      'phone',
+      'email',
+      'photoURL',
+      'bio',
+      'city',
+      'state',
+      'certificationLevel',
+      'favoritePlace',
+      'emergencyContact.name'
+    ];
+    
+    const completedFields = fields.filter(field => {
+      if (field.includes('.')) {
+        const [parent, child] = field.split('.');
+        return profile[parent]?.[child];
+      }
+      return profile[field];
+    });
+    
+    return Math.round((completedFields.length / fields.length) * 100);
+  };
+
+  const completionPercentage = calculateCompletion();
+
+  // Get social icons based on platform
+  const getSocialIcon = (platform) => {
+    switch(platform) {
+      case 'instagram': return Instagram;
+      case 'facebook': return Facebook;
+      case 'youtube': return Youtube;
+      case 'twitter': return Twitter;
+      default: return Globe;
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 rounded-xl shadow overflow-hidden">
+      {/* Profile Header Section */}
+      <ProfileHeader 
+        profile={profile}
+        photoURL={profile.photoURL}
+        handleEditClick={handleEditClick}
+        isEditing={false}
+      />
+      
+      {/* Profile Content */}
+      <div className="px-4 md:px-8 py-6 space-y-6">
+        {/* Profile Completion - Only shown if not 100% complete */}
+        {completionPercentage < 100 && (
+          <ProfileCompletionIndicator profile={profile} />
+        )}
+        
+        {/* Using flex-col for mobile and md:grid for desktop to control section order */}
+        <div className="flex flex-col md:grid md:grid-cols-2 md:gap-6 space-y-6 md:space-y-0">
+          {/* ===== SECTION ORDER FOR MOBILE (follows the flex-col order) ===== */}
+          
+          {/* 1. Diving Stats - Shown first */}
+          {!profile.privacySettings?.hideStats && profile.divingStats && (
+            <div className="md:order-1">
+              <InfoCard title="Diving Statistics" icon={Clipboard}>
+                <DivingStats stats={profile.divingStats} />
+              </InfoCard>
+            </div>
+          )}
+          
+          {/* 2. Not synced alert - Right after stats */}
+          {!isLogbookSynced && (
+            <div className="md:order-2 md:col-span-2">
+              <Alert className="bg-blue-50 border-blue-200">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-blue-700">
+                  Your profile dive count is being synced with your logbook.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+          
+          {/* 3. Certifications */}
+          <div className="md:order-3">
+            <InfoCard title="Certifications" icon={Shield}>
+              {/* Main Certification */}
+              <div className="mb-6">
+                <h3 className="text-md font-medium text-gray-700 mb-3">
+                  Certification Level
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-100 text-blue-800 font-medium">
+                    {profile.certificationLevel || 'Uncertified'}
+                  </span>
+                  {profile.certificationLevel === "Instructor" && 
+                    profile.instructorCertifications?.map((cert, index) => (
+                    <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-50 text-blue-700">
+                      {cert.agency} #{cert.number}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Specialties */}
+              {profile.specialties?.length > 0 && (
+                <div>
+                  <h3 className="text-md font-medium text-gray-700 mb-3">
+                    Specialties
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.specialties.map((specialty, index) => (
+                      <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-green-50 text-green-700">
+                        {specialty}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </InfoCard>
+          </div>
+          
+          {/* 4. Badges Section */}
+          <div className="md:order-4">
+            <InfoCard title="Badges & Achievements" icon={Award}>
+              <Badges 
+                certificationLevel={profile.certificationLevel}
+                specialties={profile.specialties}
+                numberOfDives={profile.divingStats?.totalDives}
+              />
+            </InfoCard>
+          </div>
+          
+          {/* 5. Dive Experience */}
+          {(profile.favoritePlace || profile.diveTrips?.length > 0) && (
+            <div className="md:order-5">
+              <InfoCard title="Experience" icon={Map}>
+                {profile.favoritePlace && (
+                  <div className="mb-4">
+                    <h3 className="text-md font-medium text-gray-700 mb-2">
+                      Favorite Location
+                    </h3>
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <p className="text-gray-800">
+                        {profile.favoritePlace}
+                        {profile.favoriteDivesite && ` - ${profile.favoriteDivesite}`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                {profile.diveTrips?.length > 0 && (
+                  <div>
+                    <h3 className="text-md font-medium text-gray-700 mb-2">
+                      Recent Trips
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {profile.diveTrips
+                        .sort((a, b) => b.year - a.year)
+                        .slice(0, 6)
+                        .map((trip, index) => (
+                          <div key={index} className="px-3 py-2 rounded-lg text-sm bg-gray-50 border border-gray-100 flex items-center">
+                            <Calendar className="w-3 h-3 mr-2 text-gray-400" />
+                            <span className="font-medium">{trip.year}:</span> {trip.location}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </InfoCard>
+            </div>
+          )}
+          
+          {/* 6. Bio Section */}
+          {profile.bio && (
+            <div className="md:order-6">
+              <InfoCard title="About" icon={UserCircle}>
+                <p className="text-gray-600 leading-relaxed">{profile.bio}</p>
+              </InfoCard>
+            </div>
+          )}
+          
+          {/* 7. Social Links */}
+          {!profile.privacySettings?.hideSocial && 
+            profile.socialLinks && 
+            Object.entries(profile.socialLinks).some(([_, url]) => Boolean(url)) && (
+            <div className="md:order-7">
+              <InfoCard title="Connect" icon={Globe}>
+                <div className="flex flex-wrap gap-4">
+                  {Object.entries(profile.socialLinks).map(([platform, url]) => {
+                    if (!url) return null;
+                    const SocialIcon = getSocialIcon(platform);
+                    return (
+                      <a
+                        key={platform}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-800 flex items-center transition-colors border border-gray-200"
+                      >
+                        <SocialIcon className="h-4 w-4 mr-2 text-gray-600" />
+                        <span className="font-medium">{platform.charAt(0).toUpperCase() + platform.slice(1)}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </InfoCard>
+            </div>
+          )}
+          
+          {/* 8. Dive Rewards Section - Last as requested */}
+          <div className="md:order-8 md:col-span-2">
+            <RewardsSection 
+              loyaltyData={loyaltyData}
+              profile={profile}
+              userId={user?.uid}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Improved form fields with better UX
+const FormSection = ({ title, icon: Icon, children }) => (
+  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
+    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      {Icon && <Icon className="h-5 w-5 text-blue-500 mr-2" />}
+      {title}
+    </h3>
+    {children}
+  </div>
+);
+
+// Emergency Contact Fields Component
+const EmergencyContactFields = ({ contact, onChange }) => (
+  <div className="space-y-4">
+    <h3 className="text-lg font-medium text-gray-900 mb-2">Emergency Contact</h3>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+        <input
+          type="text"
+          value={contact?.name || ''}
+          onChange={(e) => onChange('name', e.target.value)}
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Emergency Contact Name"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Relationship</label>
+        <input
+          type="text"
+          value={contact?.relationship || ''}
+          onChange={(e) => onChange('relationship', e.target.value)}
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Spouse, Parent, etc."
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+        <input
+          type="tel"
+          value={contact?.phone || ''}
+          onChange={(e) => onChange('phone', e.target.value)}
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Emergency Contact Phone"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <input
+          type="email"
+          value={contact?.email || ''}
+          onChange={(e) => onChange('email', e.target.value)}
+          className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Emergency Contact Email"
+        />
+      </div>
+    </div>
+  </div>
+);
+
+// Instructor Certification Fields Component
 const InstructorCertificationFields = ({ certifications = [], onChange }) => {
   const agencies = ["NAUI", "SDI", "TDI", "PADI", "SSI", "Other"];
 
@@ -105,14 +625,14 @@ const InstructorCertificationFields = ({ certifications = [], onChange }) => {
 
   return (
     <div className="space-y-4">
-      <label className="block text-sm font-medium text-gray-700">Instructor Certifications</label>
+      <h3 className="text-lg font-medium text-gray-900 mb-2">Instructor Certifications</h3>
       
       {certifications.map((cert, index) => (
-        <div key={index} className="flex gap-2 items-start">
+        <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg">
           <select
             value={cert.agency}
             onChange={(e) => updateCertification(index, 'agency', e.target.value)}
-            className="mt-1 block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           >
             <option value="">Select Agency</option>
             {agencies.map(agency => (
@@ -125,15 +645,15 @@ const InstructorCertificationFields = ({ certifications = [], onChange }) => {
             value={cert.number}
             onChange={(e) => updateCertification(index, 'number', e.target.value)}
             placeholder="Certification Number"
-            className="mt-1 block w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           />
           
           <button
             type="button"
             onClick={() => handleRemoveCertification(index)}
-            className="mt-1 text-red-600 hover:text-red-800"
+            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
           >
-            Remove
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       ))}
@@ -141,535 +661,16 @@ const InstructorCertificationFields = ({ certifications = [], onChange }) => {
       <button
         type="button"
         onClick={handleAddCertification}
-        className="text-blue-600 hover:text-blue-800"
+        className="flex items-center text-sm text-blue-600 hover:text-blue-800"
       >
-        + Add Certification
+        <Check className="h-4 w-4 mr-1" />
+        Add Certification
       </button>
     </div>
   );
 };
 
-const SocialLinks = ({ links, onUpdate }) => {
-  const platforms = [
-    { name: 'instagram', label: 'Instagram' },
-    { name: 'facebook', label: 'Facebook' },
-    { name: 'youtube', label: 'YouTube' },
-    { name: 'twitter', label: 'Twitter' }
-  ];
-
-  return (
-    <div className="space-y-3">
-      <h3 className="text-lg font-medium text-gray-900">Social Links</h3>
-      {platforms.map(({ name, label }) => (
-        <div key={name} className="flex items-center space-x-2">
-          <input
-            type="text"
-            value={links[name] || ''}
-            onChange={(e) => onUpdate(name, e.target.value)}
-            placeholder={`${label} URL`}
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const PrivacySettings = ({ settings, onChange }) => (
-  <div className="space-y-4">
-    <h3 className="text-lg font-medium text-gray-900">Privacy Settings</h3>
-    <div className="space-y-2">
-      {[
-        { id: 'hideEmail', label: 'Hide email from other divers' },
-        { id: 'hidePhone', label: 'Hide phone number' },
-        { id: 'hideLocation', label: 'Hide location' },
-        { id: 'hideStats', label: 'Hide diving statistics' },
-        { id: 'hideSocial', label: 'Hide social media links' }
-      ].map(({ id, label }) => (
-        <label key={id} className="flex items-center">
-          <input
-            type="checkbox"
-            checked={settings[id] || false}
-            onChange={(e) => onChange(id, e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <span className="ml-2 text-sm text-gray-600">{label}</span>
-        </label>
-      ))}
-    </div>
-  </div>
-);
-
-const EmergencyContactFields = ({ contact, onChange }) => (
-  <div className="space-y-4">
-    <h3 className="text-lg font-medium text-gray-900">Emergency Contact</h3>
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Name</label>
-        <input
-          type="text"
-          value={contact?.name || ''}
-          onChange={(e) => onChange('name', e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Relationship</label>
-        <input
-          type="text"
-          value={contact?.relationship || ''}
-          onChange={(e) => onChange('relationship', e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Phone</label>
-        <input
-          type="tel"
-          value={contact?.phone || ''}
-          onChange={(e) => onChange('phone', e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Email</label>
-        <input
-          type="email"
-          value={contact?.email || ''}
-          onChange={(e) => onChange('email', e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-    </div>
-  </div>
-);
-const EditForm = ({ 
-  formData, 
-  onInputChange,
-  onEmergencyContactChange,
-  onSocialLinksChange,
-  onPrivacySettingsChange,
-  onSpecialtyChange,
-  onInstructorCertChange,
-  onImageChange,
-  onDeletePhoto,
-  onSubmit,
-  onCancel,
-  isLoading,
-  certificationLevels,
-  specialtyOptions
-}) => (
-  <form onSubmit={onSubmit} className="space-y-6">
-    {/* Profile Picture Section */}
-    <div>
-      <label className="block text-sm font-medium text-gray-700">Profile Picture</label>
-      <div className="mt-2 flex items-center space-x-4">
-        <div className="relative">
-          {formData.photoURL ? (
-            <img
-              src={formData.photoURL}
-              alt="Profile"
-              className="w-24 h-24 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center">
-              <span className="text-3xl text-blue-500">
-                {formData.name ? formData.name[0].toUpperCase() : '?'}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col space-y-2">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={onImageChange}
-            className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-          {formData.photoURL && (
-            <button
-              type="button"
-              onClick={onDeletePhoto}
-              className="text-sm text-red-600 hover:text-red-800"
-            >
-              Delete Photo
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-
-    {/* Basic Info */}
-<div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-  <div>
-    <label className="block text-sm font-medium text-gray-700">Name</label>
-    <input
-      type="text"
-      name="name"
-      value={formData.name || ''}
-      onChange={onInputChange}
-      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-    />
-  </div>
-
-  <div>
-    <label className="block text-sm font-medium text-gray-700">Phone</label>
-    <input
-      type="tel"
-      name="phone"
-      value={formData.phone || ''}
-      onChange={onInputChange}
-      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-    />
-  </div>
-
-  <div>
-    <label className="block text-sm font-medium text-gray-700">Email</label>
-    <input
-      type="email"
-      name="email"
-      value={formData.email || ''}
-      onChange={onInputChange}
-      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-    />
-  </div>
-</div>
-
-{/* Diving Stats Section */}
-<div>
-  <div className="flex items-center justify-between mb-4">
-    <h3 className="text-lg font-medium text-gray-900">Diving Statistics</h3>
-    <label className="relative inline-flex items-center cursor-pointer">
-      <input
-        type="checkbox"
-        className="sr-only peer"
-        name="syncWithLogbook"
-        checked={formData.syncWithLogbook}
-        onChange={onInputChange}
-      />
-      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-      <span className="ml-2 text-sm font-medium text-gray-700">
-        Sync with Logbook
-      </span>
-    </label>
-  </div>
-
-  {!formData.syncWithLogbook ? (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Total Dives</label>
-        <input
-          type="number"
-          name="divingStats.totalDives"
-          value={formData.divingStats?.totalDives || 0}
-          onChange={(e) => {
-            const value = parseInt(e.target.value, 10);
-            onInputChange({
-              target: {
-                name: 'divingStats',
-                value: {
-                  ...formData.divingStats,
-                  totalDives: value >= 0 ? value : 0
-                }
-              }
-            });
-          }}
-          min="0"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Max Depth (ft)</label>
-        <input
-          type="number"
-          name="divingStats.maxDepth"
-          value={formData.divingStats?.maxDepth || 0}
-          onChange={(e) => {
-            const value = parseInt(e.target.value, 10);
-            onInputChange({
-              target: {
-                name: 'divingStats',
-                value: {
-                  ...formData.divingStats,
-                  maxDepth: value >= 0 ? value : 0
-                }
-              }
-            });
-          }}
-          min="0"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Bottom Time (hours)</label>
-        <input
-          type="number"
-          name="divingStats.totalTime"
-          value={formData.divingStats?.totalTime || 0}
-          onChange={(e) => {
-            const value = parseFloat(e.target.value);
-            onInputChange({
-              target: {
-                name: 'divingStats',
-                value: {
-                  ...formData.divingStats,
-                  totalTime: value >= 0 ? value : 0
-                }
-              }
-            });
-          }}
-          min="0"
-          step="0.1"
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-    </div>
-  ) : (
-    <div className="bg-blue-50 border-l-4 border-blue-400 p-4">
-      <div className="flex">
-        <div className="ml-3">
-          <p className="text-sm text-blue-700">
-            Statistics will be automatically calculated from your logbook entries.
-          </p>
-        </div>
-      </div>
-    </div>
-  )}
-</div>
-
-    {/* Location */}
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">City</label>
-        <input
-          type="text"
-          name="city"
-          value={formData.city || ''}
-          onChange={onInputChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">State/Country</label>
-        <input
-          type="text"
-          name="state"
-          value={formData.state || ''}
-          onChange={onInputChange}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        />
-      </div>
-    </div>
-
-    {/* Bio */}
-    <div>
-      <label className="block text-sm font-medium text-gray-700">Bio</label>
-      <textarea
-        name="bio"
-        value={formData.bio || ''}
-        onChange={onInputChange}
-        rows={4}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        placeholder="Tell us about your diving experience..."
-      />
-    </div>
-
-    {/* Certification Level */}
-    <div>
-      <label className="block text-sm font-medium text-gray-700">Certification Level</label>
-      <select
-        name="certificationLevel"
-        value={formData.certificationLevel || ''}
-        onChange={onInputChange}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-      >
-        <option value="">Select Certification Level</option>
-        {certificationLevels.map((level) => (
-          <option key={level} value={level}>{level}</option>
-        ))}
-      </select>
-    </div>
-
-    {/* Instructor Certifications */}
-    {formData.certificationLevel === "Instructor" && (
-      <InstructorCertificationFields
-        certifications={formData.instructorCertifications || []}
-        onChange={onInstructorCertChange}
-      />
-    )}
-
-    {/* Specialties */}
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
-      <div className="space-y-2">
-        {specialtyOptions.map((specialty) => (
-          <label key={specialty} className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.specialties?.includes(specialty) || false}
-              onChange={() => onSpecialtyChange(specialty)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm text-gray-600">{specialty}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-
-    {/* Dive Trips */}
-<div className="space-y-4">
-  <h3 className="text-lg font-medium text-gray-900">Dive Trips</h3>
-  
-  {/* Favorite Place and Dive Site */}
-  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-    <div>
-      <label className="block text-sm font-medium text-gray-700">Favorite Place</label>
-      <input
-        type="text"
-        name="favoritePlace"
-        value={formData.favoritePlace || ''}
-        onChange={onInputChange}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        placeholder="e.g., Cozumel, Mexico"
-      />
-    </div>
-    <div>
-      <label className="block text-sm font-medium text-gray-700">Favorite Dive Site</label>
-      <input
-        type="text"
-        name="favoriteDivesite"
-        value={formData.favoriteDivesite || ''}
-        onChange={onInputChange}
-        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-        placeholder="e.g., Palancar Reef"
-      />
-    </div>
-  </div>
-
-  {/* Trip List */}
-  <div className="mt-4">
-    <label className="block text-sm font-medium text-gray-700 mb-2">Trip History</label>
-    {(formData.diveTrips || []).map((trip, index) => (
-      <div key={index} className="flex gap-4 items-start mb-2">
-        <div className="flex-1">
-          <input
-            type="text"
-            value={trip.location || ''}
-            onChange={(e) => {
-              const currentTrips = [...(formData.diveTrips || [])];
-              currentTrips[index] = { ...currentTrips[index], location: e.target.value };
-              onInputChange({
-                target: { name: 'diveTrips', value: currentTrips }
-              });
-            }}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            placeholder="Location"
-          />
-        </div>
-        <div className="w-32">
-          <input
-            type="number"
-            value={trip.year || new Date().getFullYear()}
-            onChange={(e) => {
-              const currentTrips = [...(formData.diveTrips || [])];
-              currentTrips[index] = { ...currentTrips[index], year: e.target.value };
-              onInputChange({
-                target: { name: 'diveTrips', value: currentTrips }
-              });
-            }}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            placeholder="Year"
-            min="1900"
-            max={new Date().getFullYear()}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const currentTrips = [...(formData.diveTrips || [])];
-            const newTrips = currentTrips.filter((_, i) => i !== index);
-            onInputChange({
-              target: { name: 'diveTrips', value: newTrips }
-            });
-          }}
-          className="text-red-600 hover:text-red-800"
-        >
-          Remove
-        </button>
-      </div>
-    ))}
-    <button
-      type="button"
-      onClick={() => {
-        const currentTrips = formData.diveTrips || [];
-        const newTrips = [...currentTrips, { location: '', year: new Date().getFullYear() }];
-        onInputChange({
-          target: { name: 'diveTrips', value: newTrips }
-        });
-      }}
-      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-    >
-      + Add Trip
-    </button>
-  </div>
-</div>
-
-    {/* Emergency Contact */}
-    <EmergencyContactFields
-      contact={formData.emergencyContact}
-      onChange={onEmergencyContactChange}
-    />
-
-    {/* Social Links */}
-    <SocialLinks
-      links={formData.socialLinks || {}}
-      onUpdate={onSocialLinksChange}
-    />
-
-    {/* Privacy Settings */}
-    <PrivacySettings
-      settings={formData.privacySettings || {}}
-      onChange={onPrivacySettingsChange}
-    />
-
-    {/* Form Actions */}
-    <div className="flex justify-end space-x-3">
-      <button
-        type="button"
-        onClick={onCancel}
-        className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-      >
-        Cancel
-      </button>
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md"
-      >
-        {isLoading ? 'Saving...' : 'Save Changes'}
-      </button>
-    </div>
-  </form>
-);
-
-
-const TIER_LEVELS = {
-  OCEANIC_SILVER: { min: 0, max: 9999, multiplier: 1.0, name: 'Oceanic Silver' },
-  MARINER_GOLD: { min: 10000, max: 19999, multiplier: 1.2, name: 'Mariner Gold' },
-  NAUTILUS_PLATINUM: { min: 20000, max: 49999, multiplier: 1.5, name: 'Nautilus Platinum' },
-  TRIDENT_ELITE: { min: 50000, max: 99999, multiplier: 2.0, name: 'Trident Elite' },
-  LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
-};
-
-const calculateTier = (lifetimePoints) => {
-  return Object.entries(TIER_LEVELS).reduce((acc, [tier, details]) => {
-    if (lifetimePoints >= details.min && lifetimePoints <= details.max) {
-      return { tier, ...details };
-    }
-    return acc;
-  }, TIER_LEVELS.OCEANIC_SILVER);
-};
-
+// Main Profile Component
 function Profile() {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
@@ -727,7 +728,6 @@ function Profile() {
 
   const [profile, setProfile] = useState({ ...formData });
   const [isLogbookSynced, setIsLogbookSynced] = useState(true);
-  const [isTransactionsExpanded, setIsTransactionsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState("profile");
 
   const certificationLevels = [
@@ -756,6 +756,16 @@ function Profile() {
   ];
 
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  // Memoize the calculateTier function to prevent it from causing re-renders
+  const calculateTier = useCallback((lifetimePoints) => {
+    return Object.entries(TIER_LEVELS).reduce((acc, [tier, details]) => {
+      if (lifetimePoints >= details.min && lifetimePoints <= details.max) {
+        return { tier, ...details };
+      }
+      return acc;
+    }, TIER_LEVELS.OCEANIC_SILVER);
+  }, []);
 
   const fetchDiveStats = useCallback(async () => {
     if (!user?.uid) return null;
@@ -798,12 +808,6 @@ function Profile() {
           console.log("Fetching profile for user:", user.uid);
           const docRef = doc(db, 'profiles', user.uid);
           const docSnap = await getDoc(docRef);
-          
-          // Debug log
-          console.log("Profile exists in DB:", docSnap.exists());
-          if (docSnap.exists()) {
-            console.log("Profile data:", docSnap.data());
-          }
           
           let profileData;
           
@@ -877,7 +881,7 @@ function Profile() {
     };
   
     fetchProfileAndDives();
-  }, [user, fetchDiveStats]);
+  }, [user, fetchDiveStats, calculateTier]);
 
   const validateImage = (file) => {
     if (!file) return "No file selected";
@@ -985,30 +989,45 @@ function Profile() {
       return;
     }
     setProfileImage(file);
+    
+    // Create a preview URL
+    const previewURL = URL.createObjectURL(file);
+    setFormData(prev => ({
+      ...prev,
+      photoURL: previewURL
+    }));
   };
 
   const handleDeletePhoto = async () => {
     if (!window.confirm('Are you sure you want to delete your profile picture?')) return;
     
     try {
-      if (formData.photoURL) {
-        const photoRef = ref(storage, formData.photoURL);
+      if (profile.photoURL) {
+        const photoRef = ref(storage, profile.photoURL);
         await deleteObject(photoRef);
       }
       
-      const updatedProfile = {
-        ...profile,
+      setProfileImage(null);
+      setFormData(prev => ({
+        ...prev,
         photoURL: ''
-      };
-      
-      await setDoc(doc(db, 'profiles', user.uid), updatedProfile);
-      setProfile(updatedProfile);
-      setFormData(updatedProfile);
+      }));
       
     } catch (error) {
       console.error('Error deleting photo:', error);
       alert('Failed to delete profile picture. Please try again.');
     }
+  };
+
+  const handleEditClick = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    // Reset form data to profile data
+    setFormData(profile);
+    setProfileImage(null);
+    setIsEditing(false);
   };
 
   const handleSubmit = async (e) => {
@@ -1105,9 +1124,7 @@ function Profile() {
       setFormData(savedData);
       setIsEditing(false);
       setIsLogbookSynced(true);
-      
-      // Show success message
-      alert('Profile saved successfully!');
+      setProfileImage(null);
       
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -1117,334 +1134,509 @@ function Profile() {
     setIsLoading(false);
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-4">
-      {!isLogbookSynced && (
-        <Alert className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Your profile dive count is being synced with your logbook.
-          </AlertDescription>
-        </Alert>
+  // Enhanced edit form with better organization
+  const renderEditForm = () => (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <FormSection title="Profile Information" icon={UserCircle}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6">
+          {/* Profile Image */}
+          <div className="relative">
+            {formData.photoURL ? (
+              <img
+                src={formData.photoURL}
+                alt="Profile"
+                className="w-32 h-32 rounded-2xl border-4 border-white object-cover shadow-lg"
+              />
+            ) : (
+              <div className="w-32 h-32 rounded-2xl border-4 border-white bg-gradient-to-br from-blue-200 to-blue-50 flex items-center justify-center shadow-lg">
+                <UserCircle className="h-16 w-16 text-blue-500" />
+              </div>
+            )}
+            
+            <div className="absolute -bottom-2 -right-2 flex space-x-1">
+              <label className="p-2 bg-blue-600 rounded-full text-white cursor-pointer hover:bg-blue-700 transition-colors shadow-md">
+                <Camera className="h-4 w-4" />
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*" 
+                  onChange={handleImageChange} 
+                />
+              </label>
+              {formData.photoURL && (
+                <button 
+                  type="button"
+                  onClick={handleDeletePhoto}
+                  className="p-2 bg-red-600 rounded-full text-white hover:bg-red-700 transition-colors shadow-md"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex-1 grid grid-cols-1 gap-4 w-full">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name || ''}
+                onChange={handleInputChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="Your Name"
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-6 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email || ''}
+                onChange={handleInputChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="email@example.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone || ''}
+                onChange={handleInputChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="(555) 555-5555"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+            <textarea
+              name="bio"
+              value={formData.bio || ''}
+              onChange={handleInputChange}
+              rows={4}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="Tell us about your diving experience..."
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+              <input
+                type="text"
+                name="city"
+                value={formData.city || ''}
+                onChange={handleInputChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="Your City"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">State/Country</label>
+              <input
+                type="text"
+                name="state"
+                value={formData.state || ''}
+                onChange={handleInputChange}
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                placeholder="Your State or Country"
+              />
+            </div>
+          </div>
+        </div>
+      </FormSection>
+      
+      <FormSection title="Diving Statistics" icon={Clipboard}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                name="syncWithLogbook"
+                checked={formData.syncWithLogbook}
+                onChange={handleInputChange}
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <span className="ml-2 text-sm font-medium text-gray-700">
+                Sync with Logbook
+              </span>
+            </label>
+          </div>
+        </div>
+        
+        {!formData.syncWithLogbook ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Total Dives</label>
+              <input
+                type="number"
+                name="divingStats.totalDives"
+                value={formData.divingStats?.totalDives || 0}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  handleInputChange({
+                    target: {
+                      name: 'divingStats',
+                      value: {
+                        ...formData.divingStats,
+                        totalDives: value >= 0 ? value : 0
+                      }
+                    }
+                  });
+                }}
+                min="0"
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Max Depth (ft)</label>
+              <input
+                type="number"
+                name="divingStats.maxDepth"
+                value={formData.divingStats?.maxDepth || 0}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  handleInputChange({
+                    target: {
+                      name: 'divingStats',
+                      value: {
+                        ...formData.divingStats,
+                        maxDepth: value >= 0 ? value : 0
+                      }
+                    }
+                  });
+                }}
+                min="0"
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Bottom Time (hours)</label>
+              <input
+                type="number"
+                name="divingStats.totalTime"
+                value={formData.divingStats?.totalTime || 0}
+                onChange={(e) => {
+                  const value = parseFloat(e.target.value);
+                  handleInputChange({
+                    target: {
+                      name: 'divingStats',
+                      value: {
+                        ...formData.divingStats,
+                        totalTime: value >= 0 ? value : 0
+                      }
+                    }
+                  });
+                }}
+                min="0"
+                step="0.1"
+                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-md">
+            <div className="flex items-center">
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  Statistics will be automatically calculated from your logbook entries.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </FormSection>
+      
+      <FormSection title="Certifications & Skills" icon={Shield}>
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Certification Level</label>
+          <select
+            name="certificationLevel"
+            value={formData.certificationLevel || ''}
+            onChange={handleInputChange}
+            className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="">Select Certification Level</option>
+            {certificationLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Specialties</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {specialtyOptions.map((specialty) => (
+              <label key={specialty} className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={formData.specialties?.includes(specialty) || false}
+                  onChange={() => handleSpecialtyChange(specialty)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700">{specialty}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </FormSection>
+      
+      <FormSection title="Dive Experience" icon={Map}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Favorite Place</label>
+            <input
+              type="text"
+              name="favoritePlace"
+              value={formData.favoritePlace || ''}
+              onChange={handleInputChange}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="e.g., Cozumel, Mexico"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Favorite Dive Site</label>
+            <input
+              type="text"
+              name="favoriteDivesite"
+              value={formData.favoriteDivesite || ''}
+              onChange={handleInputChange}
+              className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              placeholder="e.g., Palancar Reef"
+            />
+          </div>
+        </div>
+        
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">Dive Trips</label>
+            <button
+              type="button"
+              onClick={() => {
+                const currentTrips = formData.diveTrips || [];
+                const newTrips = [...currentTrips, { location: '', year: new Date().getFullYear() }];
+                handleInputChange({
+                  target: { name: 'diveTrips', value: newTrips }
+                });
+              }}
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center bg-blue-50 px-3 py-1 rounded-lg"
+            >
+              <Check className="h-4 w-4 mr-1" />
+              Add Trip
+            </button>
+          </div>
+          
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+            {(formData.diveTrips || []).map((trip, index) => (
+              <div key={index} className="flex gap-3 items-center bg-gray-50 p-3 rounded-lg">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={trip.location || ''}
+                    onChange={(e) => {
+                      const currentTrips = [...(formData.diveTrips || [])];
+                      currentTrips[index] = { ...currentTrips[index], location: e.target.value };
+                      handleInputChange({
+                        target: { name: 'diveTrips', value: currentTrips }
+                      });
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Location"
+                  />
+                </div>
+                <div className="w-28">
+                  <input
+                    type="number"
+                    value={trip.year || new Date().getFullYear()}
+                    onChange={(e) => {
+                      const currentTrips = [...(formData.diveTrips || [])];
+                      currentTrips[index] = { ...currentTrips[index], year: e.target.value };
+                      handleInputChange({
+                        target: { name: 'diveTrips', value: currentTrips }
+                      });
+                    }}
+                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="Year"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentTrips = [...(formData.diveTrips || [])];
+                    const newTrips = currentTrips.filter((_, i) => i !== index);
+                    handleInputChange({
+                      target: { name: 'diveTrips', value: newTrips }
+                    });
+                  }}
+                  className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            
+            {!formData.diveTrips?.length && (
+              <div className="text-center p-4 text-gray-500 italic bg-gray-50 rounded-lg">
+                No trips added yet
+              </div>
+            )}
+          </div>
+        </div>
+      </FormSection>
+      
+      <FormSection title="Privacy Settings" icon={Settings}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { id: 'hideEmail', label: 'Hide email from other divers', icon: Mail },
+            { id: 'hidePhone', label: 'Hide phone number', icon: Phone },
+            { id: 'hideLocation', label: 'Hide location', icon: MapPin },
+            { id: 'hideStats', label: 'Hide diving statistics', icon: Clipboard },
+            { id: 'hideSocial', label: 'Hide social media links', icon: Globe }
+          ].map(({ id, label, icon: Icon }) => (
+            <label key={id} className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={formData.privacySettings?.[id] || false}
+                onChange={(e) => handlePrivacySettingsChange(id, e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm text-gray-700 flex items-center">
+                <Icon className="h-4 w-4 mr-1 text-gray-400" />
+                {label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </FormSection>
+      
+      {/* Emergency Contact Fields */}
+      <FormSection title="Emergency Contact" icon={AlertTriangle}>
+        <EmergencyContactFields
+          contact={formData.emergencyContact}
+          onChange={handleEmergencyContactChange}
+        />
+      </FormSection>
+
+      {/* Instructor Certifications - conditionally shown */}
+      {formData.certificationLevel === "Instructor" && (
+        <FormSection title="Instructor Certifications" icon={Award}>
+          <InstructorCertificationFields
+            certifications={formData.instructorCertifications || []}
+            onChange={handleInstructorCertChange}
+          />
+        </FormSection>
       )}
-  
+            
+      <FormSection title="Social Media" icon={Globe}>
+        <div className="space-y-4">
+          {[
+            { name: 'instagram', label: 'Instagram', icon: Instagram },
+            { name: 'facebook', label: 'Facebook', icon: Facebook },
+            { name: 'youtube', label: 'YouTube', icon: Youtube },
+            { name: 'twitter', label: 'Twitter', icon: Twitter }
+          ].map(({ name, label, icon: Icon }) => (
+            <div key={name} className="flex items-center space-x-2">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                  <Icon className="h-4 w-4 mr-1 text-gray-500" />
+                  {label}
+                </label>
+                <input
+                  type="text"
+                  value={formData.socialLinks?.[name] || ''}
+                  onChange={(e) => handleSocialLinksChange(name, e.target.value)}
+                  placeholder={`${label} URL`}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </FormSection>
+      
+      <div className="flex justify-end space-x-3 sticky bottom-0 bg-white p-4 shadow-md rounded-lg border border-gray-100 z-10">
+        <Button
+          type="button"
+          onClick={handleCancelEdit}
+          variant="outline"
+          size="sm"
+          className="px-6"
+        >
+          <X className="mr-2 h-4 w-4" />
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={isLoading}
+          size="sm"
+          className="px-6 bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {isLoading ? (
+            <>Loading...</>
+          ) : (
+            <>
+              <Save className="mr-2 h-4 w-4" />
+              Save Changes
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 mb-20">
       <Tabs defaultValue="profile" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-6">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
+          <TabsTrigger value="profile" className="text-sm py-2 flex items-center justify-center">
+            <UserCircle className="h-4 w-4 mr-2" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="security" className="text-sm py-2 flex items-center justify-center">
+            <Settings className="h-4 w-4 mr-2" />
+            Security
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="profile">
+        <TabsContent value="profile" className="focus:outline-none">
           {isEditing ? (
-            <EditForm
-              formData={formData}
-              onInputChange={handleInputChange}
-              onEmergencyContactChange={handleEmergencyContactChange}
-              onSocialLinksChange={handleSocialLinksChange}
-              onPrivacySettingsChange={handlePrivacySettingsChange}
-              onSpecialtyChange={handleSpecialtyChange}
-              onInstructorCertChange={handleInstructorCertChange}
-              onImageChange={handleImageChange}
-              onDeletePhoto={handleDeletePhoto}
-              onSubmit={handleSubmit}
-              onCancel={() => setIsEditing(false)}
-              isLoading={isLoading}
-              certificationLevels={certificationLevels}
-              specialtyOptions={specialtyOptions}
-            />
+            renderEditForm()
           ) : (
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              {/* Cover Photo Area */}
-              <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+            <>
+              <ProfileView 
+                profile={profile}
+                loyaltyData={loyaltyData}
+                handleEditClick={handleEditClick}
+                isLogbookSynced={isLogbookSynced}
+              />
               
-              {/* Main Content */}
-              <div className="px-8 pb-8">
-                {/* Profile Header */}
-                <div className="relative -mt-16 mb-8">
-                  {/* Profile Completion Indicator */}
-                  <div className="mb-4">
-                    <ProfileCompletionIndicator profile={profile} />
-                  </div>
-                  
-                  <div className="flex items-end space-x-6">
-                    {/* Profile Photo */}
-                    {profile.photoURL ? (
-                      <img
-                        src={profile.photoURL}
-                        alt="Profile"
-                        className="w-32 h-32 rounded-xl border-4 border-white object-cover shadow-sm"
-                      />
-                    ) : (
-                      <div className="w-32 h-32 rounded-xl border-4 border-white bg-blue-50 flex items-center justify-center shadow-sm">
-                        <span className="text-4xl text-blue-500">
-                          {profile.name ? profile.name[0].toUpperCase() : '?'}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Basic Info */}
-                    <div className="flex-1 pb-2">
-                      <h1 className="text-2xl font-bold text-gray-900">
-                        {profile.name || 'New Diver'}
-                      </h1>
-                      {profile.certificationLevel && (
-                        <p className="text-blue-600">{profile.certificationLevel}</p>
-                      )}
-                    </div>
-  
-                    {/* Quick Stats */}
-                    {!profile.privacySettings?.hideStats && profile.divingStats && (
-                      <div className="flex space-x-6 pb-2">
-                        <div className="text-center">
-                          <div className="flex items-center justify-center text-gray-500 mb-1">
-                            <Clock className="w-4 h-4 mr-1" />
-                            <span className="text-sm">Bottom Time</span>
-                          </div>
-                          <p className="text-xl font-semibold text-gray-900">
-                            {profile.divingStats.totalTime || 0}h
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <div className="flex items-center justify-center text-gray-500 mb-1">
-                            <Droplet className="w-4 h-4 mr-1" />
-                            <span className="text-sm">Max Depth</span>
-                          </div>
-                          <p className="text-xl font-semibold text-gray-900">
-                            {profile.divingStats.maxDepth || 0}ft
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-  
-                  {/* Badges */}
-                  <div className="mt-4">
-                    <Badges 
-                      certificationLevel={profile.certificationLevel}
-                      specialties={profile.specialties}
-                      numberOfDives={profile.divingStats?.totalDives}
-                    />
-                  </div>
-  
-                  {/* Location & Contact */}
-                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
-                    {!profile.privacySettings?.hideLocation && (profile.city || profile.state) && (
-                      <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {[profile.city, profile.state].filter(Boolean).join(', ')}
-                      </div>
-                    )}
-                    {!profile.privacySettings?.hideEmail && profile.email && (
-                      <div>{profile.email}</div>
-                    )}
-                    {!profile.privacySettings?.hidePhone && profile.phone && (
-                      <div>{profile.phone}</div>
-                    )}
-                  </div>
-                </div>
-  
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* Left Column - Bio & Experience */}
-                  <div className="lg:col-span-2 space-y-8">
-                    {/* Add Diving Stats Component */}
-                    {!profile.privacySettings?.hideStats && (
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-3">Diving Statistics</h2>
-                        <DivingStats stats={profile.divingStats} />
-                      </div>
-                    )}
-                    
-                    {profile.bio && (
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900 mb-3">About</h2>
-                        <p className="text-gray-600">{profile.bio}</p>
-                      </div>
-                    )}
-  
-                    {/* Certifications & Specialties */}
-                    <div className="space-y-6">
-                      {/* Main Certification */}
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                          Certifications
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-100 text-blue-800 font-medium">
-                            {profile.certificationLevel || 'Uncertified'}
-                          </span>
-                          {profile.certificationLevel === "Instructor" && 
-                           profile.instructorCertifications?.map((cert, index) => (
-                            <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-blue-50 text-blue-700">
-                              {cert.agency} #{cert.number}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-  
-                      {/* Specialties */}
-                      {profile.specialties?.length > 0 && (
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                            Specialties
-                          </h3>
-                          <div className="flex flex-wrap gap-2">
-                            {profile.specialties.map((specialty, index) => (
-                              <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-green-50 text-green-700">
-                                {specialty}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-  
-                    {/* Dive Experience */}
-                    {(profile.favoritePlace || profile.diveTrips?.length > 0) && (
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                          Experience
-                        </h3>
-                        {profile.favoritePlace && (
-                          <div className="mb-4">
-                            <p className="text-sm font-medium text-gray-700">
-                              Favorite Location
-                            </p>
-                            <p className="text-gray-600">
-                              {profile.favoritePlace}
-                              {profile.favoriteDivesite && ` - ${profile.favoriteDivesite}`}
-                            </p>
-                          </div>
-                        )}
-                        {profile.diveTrips?.length > 0 && (
-                          <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">
-                              Recent Trips
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {profile.diveTrips
-                                .sort((a, b) => b.year - a.year)
-                                .slice(0, 5)
-                                .map((trip, index) => (
-                                  <span key={index} className="inline-flex items-center px-3 py-1 rounded-lg text-sm bg-gray-100 text-gray-700">
-                                    {trip.year}: {trip.location}
-                                  </span>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-  
-                    {/* Social Links */}
-                    {!profile.privacySettings?.hideSocial && 
-                     profile.socialLinks && 
-                     Object.values(profile.socialLinks).some(Boolean) && (
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900 mb-3">Connect</h2>
-                        <div className="flex flex-wrap gap-4">
-                          {Object.entries(profile.socialLinks).map(([platform, url]) => (
-                            url && (
-                               <a
-                                key={platform}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                {platform.charAt(0).toUpperCase() + platform.slice(1)}
-                              </a>
-                            )
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-  
-                  {/* Right Column - Rewards */}
-                  <div className="lg:col-span-1">
-                    <div className="rounded-xl bg-gradient-to-br from-blue-50 to-white p-6 border border-blue-100">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center">
-                          <Award className="h-5 w-5 text-blue-600 mr-2" />
-                          <h2 className="text-lg font-semibold text-gray-900">Rewards</h2>
-                        </div>
-                      </div>
-  
-                      <div className="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                          <span className="text-gray-500 text-sm">Available</span>
-                          <p className="font-semibold text-gray-900">
-                            {loyaltyData.redeemablePoints.toLocaleString()}
-                            <span className="text-sm text-gray-500 ml-1">pts</span>
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 text-sm">Lifetime</span>
-                          <p className="font-semibold text-gray-900">
-                            {loyaltyData.lifetimePoints.toLocaleString()}
-                            <span className="text-sm text-gray-500 ml-1">pts</span>
-                          </p>
-                        </div>
-                      </div>
-  
-                      <div className="transform hover:scale-[1.02] transition-transform">
-                        <MembershipCard 
-                          tier={loyaltyData.currentTier?.tier}
-                          memberName={profile.name}
-                          memberId={user?.uid?.slice(-6)}
-                          joinDate={loyaltyData.joinDate}
-                        />
-                      </div>
-  
-                      {loyaltyData.transactions?.length > 0 && (
-                        <div className="mt-4">
-                          <button
-                            onClick={() => setIsTransactionsExpanded(!isTransactionsExpanded)}
-                            className="w-full text-sm text-center text-blue-600 hover:text-blue-800"
-                          >
-                            {isTransactionsExpanded ? 'Hide History' : 'View History'}
-                          </button>
-  
-                          {isTransactionsExpanded && (
-                            <div className="mt-4 space-y-3 max-h-48 overflow-y-auto">
-                              {loyaltyData.transactions.map((transaction, index) => (
-                                <div key={index} className="flex justify-between text-sm py-2 border-b border-blue-50 last:border-0">
-                                  <div>
-                                    <p className="text-gray-900">
-                                      {transaction.type === 'earn' ? 'Points Earned' : 'Points Redeemed'}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {new Date(transaction.date?.seconds * 1000).toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                  <span className={transaction.type === 'earn' ? 'text-green-600' : 'text-red-600'}>
-                                    {transaction.type === 'earn' ? '+' : '-'}{transaction.points}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-6 flex justify-center">
+                <Button 
+                  onClick={handleEditClick}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-colors"
+                >
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit Profile
+                </Button>
               </div>
-  
-              {/* Edit Button */}
-              <button
-                onClick={() => setIsEditing(true)}
-                className="mt-8 w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors"
-              >
-                Edit Profile
-              </button>
-            </div>
+            </>
           )}
         </TabsContent>
         
         <TabsContent value="security">
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden p-6">
+          <div className="bg-white rounded-xl shadow overflow-hidden p-6">
             <SecuritySettings />
           </div>
         </TabsContent>
