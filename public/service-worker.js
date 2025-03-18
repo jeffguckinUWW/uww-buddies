@@ -1,13 +1,6 @@
 /* eslint-disable no-restricted-globals */
 
-// This service worker can be customized!
-// See https://developers.google.com/web/tools/workbox/modules
-// for the list of available Workbox modules, or add any other
-// code you'd like.
-// You can also remove this file if you'd prefer not to use a
-// service worker, and the Workbox build step will be skipped.
-
-const CACHE_NAME = 'uww-buddies-cache-v1';
+const CACHE_NAME = 'uww-buddies-cache-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -15,9 +8,12 @@ const urlsToCache = [
   '/static/js/0.chunk.js',
   '/static/js/bundle.js',
   '/manifest.json',
-  '/favicon.ico',
-  '/logo192.png',
-  '/logo512.png'
+  '/favicon-v2.ico',
+  '/favicon-v2.svg',
+  '/favicon-96x96-v2.png',
+  '/apple-touch-icon-v2.png',
+  '/web-app-manifest-192x192-v2.png',
+  '/web-app-manifest-512x512-v2.png'
 ];
 
 // Installation event
