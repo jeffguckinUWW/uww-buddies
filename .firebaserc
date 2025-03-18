@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "uww-buddies"
-  }
+  },
+  "targets": {
+    "uww-buddies": {
+      "hosting": {
+        "uww-buddies": [
+          "uww-buddies"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "uww-buddies",
     "public": "build",
     "ignore": [
       "firebase.json",
