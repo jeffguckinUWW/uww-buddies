@@ -1,8 +1,7 @@
 // src/components/Knowledge/LearningResources.js
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, Book, Compass, Info, Droplet, Thermometer, 
@@ -54,7 +53,6 @@ const LearningResources = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
