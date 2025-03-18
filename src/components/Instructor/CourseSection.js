@@ -6,6 +6,7 @@ import TrainingRecordSelector from '../Training/TrainingRecordSelector';
 import StudentTrainingRecord from '../Training/StudentTrainingRecord';
 import CourseCreationModal from '../Training/CourseCreationModal';
 import CourseEndReport from './CourseEndReport';
+import NotificationService from '../../services/NotificationService';
 
 const CourseSection = ({ user, instructorProfile }) => {
   const [courses, setCourses] = useState([]);
@@ -35,6 +36,7 @@ const CourseSection = ({ user, instructorProfile }) => {
   const [selectedTrainingRecord, setSelectedTrainingRecord] = useState(null);
   const [isTrainingRecordModalOpen, setIsTrainingRecordModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [courseNotifications, setCourseNotifications] = useState({});
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -60,6 +62,33 @@ const CourseSection = ({ user, instructorProfile }) => {
     loadCourses();
   }, [user]);
 
+  // Subscribe to notifications for each course
+  useEffect(() => {
+    if (!user?.uid || !courses.length) return;
+    
+    const unsubscribers = {};
+    
+    // Subscribe to notifications for each course
+    courses.forEach(course => {
+      unsubscribers[course.id] = NotificationService.subscribeToItemNotifications(
+        user.uid,
+        'course',
+        course.id,
+        (notificationData) => {
+          setCourseNotifications(prev => ({
+            ...prev,
+            [course.id]: notificationData
+          }));
+        }
+      );
+    });
+    
+    // Cleanup subscriptions when component unmounts or courses change
+    return () => {
+      Object.values(unsubscribers).forEach(unsubscribe => unsubscribe());
+    };
+  }, [user, courses]);
+
   const calculateStudentProgress = (student, course) => {
     if (!student || !course || !course?.trainingRecord || !course.studentRecords?.[student.uid]?.progress) {
       return 0;
@@ -82,6 +111,26 @@ const CourseSection = ({ user, instructorProfile }) => {
     });
   
     return totalSkills > 0 ? Math.round((completedSkills / totalSkills) * 100) : 0;
+  };
+
+  const clearCourseNotifications = async (courseId, tabType = 'all') => {
+    if (!user?.uid || !courseId) return;
+    
+    try {
+      if (tabType === 'all') {
+        // Clear broadcast notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'course', courseId, 'broadcast');
+        // Clear discussion notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'course', courseId, 'discussion');
+        // Clear direct message notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'course', courseId, 'direct');
+      } else {
+        // Clear specific tab notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'course', courseId, tabType);
+      }
+    } catch (err) {
+      console.error('Error clearing course notifications:', err);
+    }
   };
 
   const handleCreateCourse = async () => {
@@ -463,6 +512,7 @@ const CourseSection = ({ user, instructorProfile }) => {
   const handleManageCourse = (course) => {
     setSelectedCourse(course);
     setIsManageModalOpen(true);
+    clearCourseNotifications(course.id, 'all');
   };
 
   const handleDeleteCourse = async (courseId) => {
@@ -569,7 +619,14 @@ const CourseSection = ({ user, instructorProfile }) => {
                 .map(course => (
                   <div key={course.id} className="bg-white border rounded-lg shadow-sm p-4">
                     <div className="mb-2">
-                      <h4 className="text-lg font-semibold">{course.name}</h4>
+                      <h4 className="text-lg font-semibold">
+                        {course.name}
+                        {courseNotifications[course.id]?.totalCount > 0 && (
+                          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            {courseNotifications[course.id].totalCount}
+                          </span>
+                        )}
+                      </h4>
                       <p className="text-sm text-gray-600">
                         {course.location} • {new Date(course.startDate).toLocaleDateString()} - {new Date(course.endDate).toLocaleDateString()}
                       </p>
@@ -592,10 +649,17 @@ const CourseSection = ({ user, instructorProfile }) => {
                               course: course,
                               recipient: null
                             });
+                            clearCourseNotifications(course.id, 'all');
                           }}
-                          className="text-sm text-gray-600 hover:text-blue-600"
+                          className="text-sm text-gray-600 hover:text-blue-600 relative"
                         >
                           Message Course
+                          {courseNotifications[course.id]?.totalCount > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                            </span>
+                          )}
                         </button>
                       </div>
                       <button 

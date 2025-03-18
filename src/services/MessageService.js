@@ -27,6 +27,8 @@ import {
 import { handleError, AppError, ErrorTypes } from '../lib/utils';
 import NotificationService from './NotificationService';
 import { MessageTypes } from './MessageConstants';
+// REMOVE helper function imports
+// import { getUserData, checkIsBuddy, getMergedBuddyList } from '../utils/UserProfileHelper';
 
 // Re-export MessageTypes for backward compatibility
 export { MessageTypes };
@@ -521,14 +523,13 @@ class MessageService {
     );
   }
 
+  // UPDATED: Get buddies directly from profiles collection
   static async getBuddies(userId) {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (!userDoc.exists()) {
-        return [];
-      }
-      
-      const buddyList = userDoc.data().buddyList || {};
+      // Directly access profiles collection
+      const profileRef = doc(db, 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
       
       // Return only accepted buddies
       return Object.entries(buddyList)
@@ -621,53 +622,61 @@ class MessageService {
     return true;
   }
 
-  static async checkBuddyStatus(userId1, userId2) {
+  // UPDATED: Check buddy status directly from profiles collection
+  static async checkBuddyStatus(userId, buddyId) {
     try {
-      const userDoc = await getDoc(doc(db, 'users', userId1));
-      if (!userDoc.exists()) {
-        return false;
+      // Directly check profiles collection
+      const profileRef = doc(db, 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      
+      if (profileSnap.exists()) {
+        const buddyList = profileSnap.data().buddyList || {};
+        return buddyList[buddyId]?.status === 'accepted';
       }
-
-      const buddyList = userDoc.data().buddyList || {};
-      const buddyData = buddyList[userId2];
-
-      return buddyData && buddyData.status === 'accepted';
+      
+      return false;
     } catch (error) {
       console.error('Error checking buddy status:', error);
       return false;
     }
   }
 
+  // UPDATED: Get or create buddy chat directly using profiles collection
   static async getOrCreateBuddyChat(userId1, userId2) {
     try {
       // First verify they are actually buddies
-      const areBuddies = await this.checkBuddyStatus(userId1, userId2);
+      const profileRef = doc(db, 'profiles', userId1);
+      const profileSnap = await getDoc(profileRef);
+      const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
+      const areBuddies = buddyList[userId2]?.status === 'accepted';
+      
       if (!areBuddies) {
         throw new Error('Users must be buddies to create a chat');
       }
   
-      // Get user names with better fallbacks
-      const [user1Doc, user2Doc, profile1Doc, profile2Doc] = await Promise.all([
-        getDoc(doc(db, 'users', userId1)),
-        getDoc(doc(db, 'users', userId2)),
-        getDoc(doc(db, 'profiles', userId1)),
-        getDoc(doc(db, 'profiles', userId2))
-      ]);
+      // Get user data directly from profiles collection
+      const user1ProfileRef = doc(db, 'profiles', userId1);
+      const user1ProfileSnap = await getDoc(user1ProfileRef);
+      const user1Data = user1ProfileSnap.exists() ? user1ProfileSnap.data() : null;
+      
+      const user2ProfileRef = doc(db, 'profiles', userId2);
+      const user2ProfileSnap = await getDoc(user2ProfileRef);
+      const user2Data = user2ProfileSnap.exists() ? user2ProfileSnap.data() : null;
   
       // Use proper fallback logic for user1
       let user1Name = 'Unknown User';
-      if (profile1Doc.exists() && profile1Doc.data().name) {
-        user1Name = profile1Doc.data().name;
-      } else if (user1Doc.exists() && user1Doc.data().displayName) {
-        user1Name = user1Doc.data().displayName;
+      if (user1Data?.name) {
+        user1Name = user1Data.name;
+      } else if (user1Data?.displayName) {
+        user1Name = user1Data.displayName;
       }
   
       // Use proper fallback logic for user2
       let user2Name = 'Unknown User';
-      if (profile2Doc.exists() && profile2Doc.data().name) {
-        user2Name = profile2Doc.data().name;
-      } else if (user2Doc.exists() && user2Doc.data().displayName) {
-        user2Name = user2Doc.data().displayName;
+      if (user2Data?.name) {
+        user2Name = user2Data.name;
+      } else if (user2Data?.displayName) {
+        user2Name = user2Data.displayName;
       }
   
       // Check existing chats
@@ -715,17 +724,19 @@ class MessageService {
     }
   }
 
+  // UPDATED: Send message using direct profile access
   static async sendMessage(messageData) {
     try {
-      // Get sender name from multiple sources with fallbacks
-      const senderProfile = await getDoc(doc(db, 'profiles', messageData.senderId));
-      const userDoc = await getDoc(doc(db, 'users', messageData.senderId));
+      // Get sender info directly from profiles collection
+      const senderProfileRef = doc(db, 'profiles', messageData.senderId);
+      const senderProfileSnap = await getDoc(senderProfileRef);
+      const senderData = senderProfileSnap.exists() ? senderProfileSnap.data() : null;
   
       let senderName = 'Unknown User';
-      if (senderProfile.exists() && senderProfile.data().name) {
-        senderName = senderProfile.data().name;
-      } else if (userDoc.exists() && userDoc.data().displayName) {
-        senderName = userDoc.data().displayName;
+      if (senderData?.name) {
+        senderName = senderData.name;
+      } else if (senderData?.displayName) {
+        senderName = senderData.displayName;
       } else if (messageData.senderName) {
         senderName = messageData.senderName;
       }
@@ -757,10 +768,15 @@ class MessageService {
         }
       
         if (messageData.type === MessageTypes.TRIP_PRIVATE) {
-          // THIS IS THE FIX - Using instructorId instead of leaderId
+          // Using instructorId instead of leaderId
           const isLeaderInvolved = isTripLeader || messageData.recipientId === tripData.instructorId;
           if (!isLeaderInvolved) {
-            const areBuddies = await this.checkBuddyStatus(messageData.senderId, messageData.recipientId);
+            // Check if users are buddies directly
+            const profileRef = doc(db, 'profiles', messageData.senderId);
+            const profileSnap = await getDoc(profileRef);
+            const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
+            const areBuddies = buddyList[messageData.recipientId]?.status === 'accepted';
+            
             if (areBuddies) {
               const chatId = await this.getOrCreateBuddyChat(messageData.senderId, messageData.recipientId);
               return this.sendMessage({
@@ -779,7 +795,7 @@ class MessageService {
           ...messageData
         };
 
-          // NEW CODE: Add safety check for allowedReaders on ALL trip message types
+        // Add safety check for allowedReaders on ALL trip message types
         if (!newMessage.allowedReaders && (
           newMessage.type === MessageTypes.TRIP_DISCUSSION || 
           newMessage.type === MessageTypes.TRIP_BROADCAST ||
@@ -817,7 +833,6 @@ class MessageService {
           recipients = [messageData.recipientId];
         }
 
-        // ADD THIS DEBUGGING CODE RIGHT HERE
         console.log('Creating trip message notifications:', {
           messageType: messageData.type,
           senderId: messageData.senderId,
@@ -861,10 +876,45 @@ class MessageService {
         }
   
         if (messageData.type === MessageTypes.COURSE_PRIVATE) {
-          const isInstructorInvolved = isInstructor || messageData.recipientId === courseData.instructorId;
+          // Safe string comparison and better logging
+          console.log('COURSE_PRIVATE MESSAGE:', {
+            senderId: messageData.senderId,
+            recipientId: messageData.recipientId,
+            instructorId: courseData.instructorId
+          });
+          
+          // More robust checks
+          const senderIsInstructor = String(messageData.senderId) === String(courseData.instructorId);
+          const recipientIsInstructor = String(messageData.recipientId) === String(courseData.instructorId);
+          
+          // Check if instructor is involved
+          let isInstructorInvolved = senderIsInstructor || recipientIsInstructor;
+          
+          // If no recipientId is specified and sender is a student, assume it's for the instructor
+          if (!messageData.recipientId && isStudent) {
+            isInstructorInvolved = true;
+            // Add the instructor as the recipient (missing in student replies)
+            messageData.recipientId = courseData.instructorId;
+            console.log('Added missing recipientId for student message:', courseData.instructorId);
+          }
+          
+          console.log('INSTRUCTOR INVOLVEMENT CHECK:', {
+            senderIsInstructor,
+            recipientIsInstructor,
+            isInstructorInvolved,
+            adjustedRecipientId: messageData.recipientId
+          });
+          
           if (!isInstructorInvolved) {
-            const areBuddies = await this.checkBuddyStatus(messageData.senderId, messageData.recipientId);
+            // Check buddy status directly
+            console.log('Checking buddy status for student-to-student chat');
+            const profileRef = doc(db, 'profiles', messageData.senderId);
+            const profileSnap = await getDoc(profileRef);
+            const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
+            const areBuddies = buddyList[messageData.recipientId]?.status === 'accepted';
+            
             if (areBuddies) {
+              // If they're buddies, redirect to a buddy chat
               const chatId = await this.getOrCreateBuddyChat(messageData.senderId, messageData.recipientId);
               return this.sendMessage({
                 ...messageData,
@@ -873,8 +923,16 @@ class MessageService {
                 courseId: null
               });
             }
+            
+            console.error('Rejecting student-to-student message (not buddies):', {
+              senderId: messageData.senderId,
+              recipientId: messageData.recipientId
+            });
             throw new Error('Students can only message instructors directly');
           }
+          
+          // Instructor is involved, allow the message
+          console.log('Allowing instructor-involved message');
         }
   
         const newMessage = {

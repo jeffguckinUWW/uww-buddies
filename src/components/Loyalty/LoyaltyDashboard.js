@@ -479,12 +479,6 @@ const LoyaltyDashboard = () => {
         {/* Header */}
         <div className="border-b p-6">
           <h2 className="text-2xl font-bold text-gray-900">Loyalty Program Management</h2>
-          <div className="text-sm text-gray-500 mt-2">
-            Your UID for testing: 
-            <code className="bg-gray-100 px-2 py-1 rounded ml-2 select-all text-gray-900">
-              {user?.uid}
-            </code>
-          </div>
         </div>
 
         {/* Main Content */}
@@ -625,7 +619,7 @@ const LoyaltyDashboard = () => {
                         <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
                           <div className="flex justify-between items-center">
                             <div>
-                              <p className="font-medium text-gray-900">Card: ****{card.number.slice(-4)}</p>
+                            <p className="font-medium text-gray-900">Card: {card.number}</p>
                               <p className="text-sm text-gray-600">Balance: ${card.amount}</p>
                               {card.lastUsed && (
                                 <p className="text-xs text-gray-500">
@@ -765,7 +759,7 @@ const LoyaltyDashboard = () => {
                             )}
                             {transaction.type === 'gift_card_use' && (
                               <p className="text-sm text-gray-600">
-                                Card: ****{transaction.giftCardNumber.slice(-4)}
+                                Card: {transaction.giftCardNumber}
                                 <br />
                                 Amount Used: ${transaction.amountUsed}
                                 <br />
@@ -902,7 +896,7 @@ const LoyaltyDashboard = () => {
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Adjust Gift Card Balance</h3>
-                <p className="text-sm text-gray-600">Card: ****{selectedGiftCard.number.slice(-4)}</p>
+                <p className="text-sm text-gray-600">Card: {selectedGiftCard.number}</p>
               </div>
               <button
                 onClick={() => {

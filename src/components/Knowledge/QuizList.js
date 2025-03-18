@@ -40,7 +40,7 @@ const QuizList = () => {
         const quizList = quizSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          level: doc.data().level || 'beginner' // Default to beginner if level isn't set
+          level: doc.data().difficulty || 'beginner' // Default to beginner if level isn't set
         }));
         
         setQuizzes(quizList);
@@ -60,7 +60,7 @@ const QuizList = () => {
     if (selectedLevel === 'all') {
       setFilteredQuizzes(quizzes);
     } else {
-      setFilteredQuizzes(quizzes.filter(quiz => quiz.level === selectedLevel));
+      setFilteredQuizzes(quizzes.filter(quiz => quiz.difficulty === selectedLevel));
     }
   }, [selectedLevel, quizzes]);
 
@@ -139,9 +139,9 @@ const QuizList = () => {
                     {quiz.title}
                   </h3>
                   <div className="flex items-center mt-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getLevelBadgeColor(quiz.level)}`}>
-                      {quiz.level ? quiz.level.charAt(0).toUpperCase() + quiz.level.slice(1) : 'Beginner'}
-                    </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${getLevelBadgeColor(quiz.difficulty)}`}>
+                    {quiz.difficulty ? quiz.difficulty.charAt(0).toUpperCase() + quiz.difficulty.slice(1) : 'Beginner'}
+                  </span>
                     <span className="mx-2 text-gray-300">•</span>
                     <p className="text-sm text-gray-500">{quiz.questionCount || 0} questions</p>
                   </div>

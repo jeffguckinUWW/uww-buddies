@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import TripMessaging from '../Messaging/trip/TripMessaging';
+import NotificationService from '../../services/NotificationService';
 
 const TripsSection = ({ user, instructorProfile }) => {
   // Main states
@@ -66,6 +67,9 @@ const TripsSection = ({ user, instructorProfile }) => {
     totalDivers: 0,
     totalNonDivers: 0
   });
+
+  // Notification state
+  const [tripNotifications, setTripNotifications] = useState({});
 
   // Helper Functions
   const formatDate = (dateStr) => {
@@ -150,6 +154,27 @@ const TripsSection = ({ user, instructorProfile }) => {
     return trip;
   }, []);
 
+  // Clear trip notifications
+  const clearTripNotifications = async (tripId, tabType = 'all') => {
+    if (!user?.uid || !tripId) return;
+    
+    try {
+      if (tabType === 'all') {
+        // Clear broadcast notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'trip', tripId, 'broadcast');
+        // Clear discussion notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'trip', tripId, 'discussion');
+        // Clear direct message notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'trip', tripId, 'direct');
+      } else {
+        // Clear specific tab notifications
+        await NotificationService.markTabNotificationsAsRead(user.uid, 'trip', tripId, tabType);
+      }
+    } catch (err) {
+      console.error('Error clearing trip notifications:', err);
+    }
+  };
+
   // Load and monitor trips
   useEffect(() => {
     const loadTrips = async () => {
@@ -197,6 +222,33 @@ const TripsSection = ({ user, instructorProfile }) => {
     
     return () => clearInterval(intervalId);
   }, [user, checkAndUpdateTripStatus]);
+
+  // Subscribe to notifications for each trip
+  useEffect(() => {
+    if (!user?.uid || !trips.length) return;
+    
+    const unsubscribers = {};
+    
+    // Subscribe to notifications for each trip
+    trips.forEach(trip => {
+      unsubscribers[trip.id] = NotificationService.subscribeToItemNotifications(
+        user.uid,
+        'trip',
+        trip.id,
+        (notificationData) => {
+          setTripNotifications(prev => ({
+            ...prev,
+            [trip.id]: notificationData
+          }));
+        }
+      );
+    });
+    
+    // Cleanup subscriptions when component unmounts or trips change
+    return () => {
+      Object.values(unsubscribers).forEach(unsubscribe => unsubscribe());
+    };
+  }, [user, trips]);
 
   useEffect(() => {
     tripsRef.current = trips;
@@ -670,6 +722,12 @@ const TripsSection = ({ user, instructorProfile }) => {
     }
   };
 
+  const handleManageTrip = (trip) => {
+    setSelectedTrip(trip);
+    setIsManageModalOpen(true);
+    clearTripNotifications(trip.id, 'all');
+  };
+
   // Loading and Error States
   if (loading) {
     return (
@@ -718,7 +776,14 @@ const TripsSection = ({ user, instructorProfile }) => {
                 .map(trip => (
                   <div key={trip.id} className="bg-white border rounded-lg shadow-sm p-4">
                     <div className="mb-4">
-                      <h4 className="text-lg font-semibold">{trip.location}</h4>
+                      <h4 className="text-lg font-semibold">
+                        {trip.location}
+                        {tripNotifications[trip.id]?.totalCount > 0 && (
+                          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            {tripNotifications[trip.id].totalCount}
+                          </span>
+                        )}
+                      </h4>
                       <p className="text-sm text-gray-600">
                       {trip.resort} • {formatDate(trip.startDate)} - {formatDate(trip.endDate)}                      </p>
                       <div className="mt-2 flex flex-wrap gap-3">
@@ -740,10 +805,7 @@ const TripsSection = ({ user, instructorProfile }) => {
                     <div className="flex justify-between items-center">
                       <div className="flex gap-4">
                         <button 
-                          onClick={() => {
-                            setSelectedTrip(trip);
-                            setIsManageModalOpen(true);
-                          }}
+                          onClick={() => handleManageTrip(trip)}
                           className="text-sm text-gray-600 hover:text-blue-600"
                         >
                           Manage Trip
@@ -755,10 +817,17 @@ const TripsSection = ({ user, instructorProfile }) => {
                               trip: trip,
                               recipient: null
                             });
+                            clearTripNotifications(trip.id, 'all');
                           }}
-                          className="text-sm text-gray-600 hover:text-blue-600"
+                          className="text-sm text-gray-600 hover:text-blue-600 relative"
                         >
                           Message Participants
+                          {tripNotifications[trip.id]?.totalCount > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                            </span>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -794,10 +863,7 @@ const TripsSection = ({ user, instructorProfile }) => {
                     </div>
                     <div className="flex gap-4">
                       <button 
-                        onClick={() => {
-                          setSelectedTrip(trip);
-                          setIsManageModalOpen(true);
-                        }}
+                        onClick={() => handleManageTrip(trip)}
                         className="text-sm text-gray-600 hover:text-blue-600"
                       >
                         View Details

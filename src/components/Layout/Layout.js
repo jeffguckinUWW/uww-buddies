@@ -15,6 +15,7 @@ const Layout = ({ children }) => {
     messages: 0,
     training: 0,
     travel: 0,
+    buddies: 0,
     total: 0
   });
 
@@ -38,6 +39,7 @@ const Layout = ({ children }) => {
       user.uid,
       (counts) => {
         console.log("Received updated counters:", counts);
+        console.log("Buddies count:", counts.buddies);
         setUnreadCounts(counts);
       }
     );
@@ -56,7 +58,7 @@ const Layout = ({ children }) => {
     if (!isMenuOpen) return null;
 
     // Admin check function (matching your Navbar logic)
-    const isAdmin = user?.email === 'test@test.com';
+    const isAdmin = user?.email === 'jeff@diveuww.com';
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50">
@@ -91,43 +93,57 @@ const Layout = ({ children }) => {
               {/* Buddies menu item */}
               <button
                 onClick={() => handleNavigation('/buddies')}
-                className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+                className="flex items-center justify-between w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
               >
-                <Users size={20} />
-                <span>Buddies</span>
+                <div className="flex items-center space-x-2">
+                  <Users size={20} />
+                  <span>Buddies</span>
+                </div>
+                {unreadCounts.buddies > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCounts.buddies > 9 ? '9+' : unreadCounts.buddies}
+                  </span>
+                )}
               </button>
             </div>
 
             {/* Special Access Links */}
             <div className="px-4 mt-4 pt-4 border-t">
-              <button
-                onClick={() => handleNavigation('/instructor')}
-                className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
-              >
-                <GraduationCap size={20} className="text-blue-600" />
-                <span>Instructor Portal</span>
-              </button>
+    <button
+      onClick={() => handleNavigation('/instructor')}
+      className="flex items-center justify-between w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+    >
+      <div className="flex items-center space-x-2">
+        <GraduationCap size={20} className="text-blue-600" />
+        <span>Instructor Portal</span>
+      </div>
+      {unreadCounts.instructor > 0 && (
+        <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+          {unreadCounts.instructor > 9 ? '9+' : unreadCounts.instructor}
+        </span>
+      )}
+    </button>
 
-              {user?.loyaltyAccess?.hasAccess && (
-                <button
-                  onClick={() => handleNavigation('/loyalty')}
-                  className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
-                >
-                  <Award size={20} className="text-blue-600" />
-                  <span>Loyalty Program</span>
-                </button>
-              )}
+    {user?.loyaltyAccess?.hasAccess && (
+      <button
+        onClick={() => handleNavigation('/loyalty')}
+        className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+      >
+        <Award size={20} className="text-blue-600" />
+        <span>Loyalty Program</span>
+      </button>
+    )}
 
-              {isAdmin && (
-                <button
-                  onClick={() => handleNavigation('/admin')}
-                  className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
-                >
-                  <ShieldCheck size={20} className="text-blue-600" />
-                  <span>Admin Dashboard</span>
-                </button>
-              )}
-            </div>
+    {isAdmin && (
+      <button
+        onClick={() => handleNavigation('/admin')}
+        className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+      >
+        <ShieldCheck size={20} className="text-blue-600" />
+        <span>Admin Dashboard</span>
+      </button>
+    )}
+  </div>
 
             {/* Logout Button */}
             <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
@@ -146,9 +162,14 @@ const Layout = ({ children }) => {
     <div className="flex flex-col h-screen">
       {/* Top Navigation - Fixed */}
       <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between p-4 bg-blue-600">
-        <button className="p-2 text-white" onClick={() => setIsMenuOpen(true)}>
-          <Menu size={24} />
-        </button>
+      <button className="p-2 text-white relative" onClick={() => setIsMenuOpen(true)}>
+  <Menu size={24} />
+  {unreadCounts.total > 0 && (
+    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+      {unreadCounts.total > 9 ? '9+' : unreadCounts.total}
+    </span>
+  )}
+</button>
         <div className="flex items-center justify-center flex-1">
           <img src="/logo.png" alt="UWW Buddies Logo" className="h-8" />
         </div>

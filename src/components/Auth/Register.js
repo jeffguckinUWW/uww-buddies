@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { getVerificationSetting } from '../../utils/verificationSettings';
 
 function Register() {
   const [email, setEmail] = useState('');
@@ -9,14 +8,8 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [requireVerification, setRequireVerification] = useState(false);
   const { signup, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
-
-  // Load the verification setting when component mounts
-  useEffect(() => {
-    setRequireVerification(getVerificationSetting());
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,13 +27,8 @@ function Register() {
 
     try {
       await signup(email, password);
-      // If verification is required, redirect to verification page
-      // Otherwise, redirect to profile for first-time users
-      if (requireVerification) {
-        navigate('/verify-email');
-      } else {
-        navigate('/profile');
-      }
+      // Always redirect to verification page since verification is now required
+      navigate('/verify-email');
     } catch (error) {
       console.error('Signup error:', error);
       if (error.code === 'auth/email-already-in-use') {
@@ -63,9 +51,8 @@ function Register() {
     
     try {
       const result = await signInWithGoogle();
-      // If verification is required but Google account isn't verified, go to verification page
-      // Otherwise go to profile
-      if (requireVerification && !result.user.emailVerified) {
+      // If Google account isn't verified, go to verification page
+      if (!result.user.emailVerified) {
         navigate('/verify-email');
       } else {
         navigate('/profile');
@@ -84,11 +71,9 @@ function Register() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Create your UWW Buddies account
           </h2>
-          {requireVerification && (
-            <p className="mt-2 text-center text-sm text-gray-600">
-              You'll need to verify your email address after registration
-            </p>
-          )}
+          <p className="mt-2 text-center text-sm text-gray-600">
+            You'll need to verify your email address after registration
+          </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <div className="text-red-500 text-center">{error}</div>}

@@ -1,10 +1,11 @@
 // src/components/Messaging/BuddyProfile.js
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, addDoc, collection, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, writeBatch, deleteField } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import Badges from '../../components/Profile/Badges';
+import NotificationService from '../../services/NotificationService';
 
 const BuddyProfile = () => {
   const { userId } = useParams();
@@ -33,8 +34,8 @@ const BuddyProfile = () => {
         // Get the profile data
         const profileData = profileDoc.data();
 
-        // Check buddy status from current user's profile
-        const currentUserDoc = await getDoc(doc(db, 'users', user.uid));
+        // Check buddy status from current user's profile (changed from users to profiles)
+        const currentUserDoc = await getDoc(doc(db, 'profiles', user.uid));
         const buddyList = currentUserDoc.data()?.buddyList || {};
         const currentBuddyStatus = buddyList[userId]?.status || 'none';
 
@@ -57,8 +58,8 @@ const BuddyProfile = () => {
     try {
       setLoading(true);
 
-      // Update sender's buddy list
-      const senderRef = doc(db, 'users', user.uid);
+      // Update sender's buddy list (changed from users to profiles)
+      const senderRef = doc(db, 'profiles', user.uid);
       await updateDoc(senderRef, {
         [`buddyList.${userId}`]: {
           status: 'pending',
@@ -67,8 +68,8 @@ const BuddyProfile = () => {
         }
       });
 
-      // Update recipient's buddy list
-      const recipientRef = doc(db, 'users', userId);
+      // Update recipient's buddy list (changed from users to profiles)
+      const recipientRef = doc(db, 'profiles', userId);
       await updateDoc(recipientRef, {
         [`buddyList.${user.uid}`]: {
           status: 'pending',
@@ -78,13 +79,11 @@ const BuddyProfile = () => {
       });
 
       // Create notification
-      await addDoc(collection(db, 'notifications'), {
-        type: 'buddy_request',
+      await NotificationService.createBuddyRequestNotification({
         fromUser: user.uid,
         fromUserName: user.displayName,
         toUser: userId,
-        timestamp: serverTimestamp(),
-        read: false
+        requestId: user.uid
       });
 
       setBuddyStatus('pending');
@@ -102,6 +101,45 @@ const BuddyProfile = () => {
     } catch (err) {
       console.error('Error starting chat:', err);
       setError('Failed to start chat');
+    }
+  };
+  
+  const handleRemoveBuddy = async () => {
+    if (!user || !userId) return;
+    
+    if (!window.confirm('Are you sure you want to remove this buddy? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Use the imported functions from the top of the file
+      const batch = writeBatch(db);
+      
+      // Remove buddy from current user's list
+      const userRef = doc(db, 'profiles', user.uid);
+      batch.update(userRef, {
+        [`buddyList.${userId}`]: deleteField()
+      });
+      
+      // Remove current user from buddy's list
+      const buddyRef = doc(db, 'profiles', userId);
+      batch.update(buddyRef, {
+        [`buddyList.${user.uid}`]: deleteField()
+      });
+      
+      await batch.commit();
+      
+      // Update status locally
+      setBuddyStatus('none');
+      
+    } catch (err) {
+      console.error('Error removing buddy:', err);
+      setError('Failed to remove buddy');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -171,12 +209,21 @@ const BuddyProfile = () => {
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center space-x-4">
           {buddyStatus === 'accepted' ? (
-            <button
-              onClick={handleStartChat}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Message
-            </button>
+            <>
+              <button
+                onClick={handleStartChat}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              >
+                Message
+              </button>
+              <button
+                onClick={handleRemoveBuddy}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                disabled={loading}
+              >
+                Remove Buddy
+              </button>
+            </>
           ) : buddyStatus === 'pending' ? (
             <div className="px-4 py-2 bg-gray-100 text-gray-600 rounded">
               Buddy Request Pending
@@ -201,14 +248,22 @@ const BuddyProfile = () => {
           <div className="mt-6 space-y-6">
             {/* Contact Information */}
             <div className="space-y-2">
-              {!profile?.hideEmail && profile?.email && (
-                <p className="text-gray-600">
-                  <span className="font-medium">Email:</span> {profile.email}
-                </p>
-              )}
-              {!profile?.hidePhone && profile?.phone && (
-                <p className="text-gray-600">
-                  <span className="font-medium">Phone:</span> {profile.phone}
+              {buddyStatus === 'accepted' ? (
+                <>
+                  {!profile?.hideEmail && profile?.email && (
+                    <p className="text-gray-600">
+                      <span className="font-medium">Email:</span> {profile.email}
+                    </p>
+                  )}
+                  {!profile?.hidePhone && profile?.phone && (
+                    <p className="text-gray-600">
+                      <span className="font-medium">Phone:</span> {profile.phone}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-500 italic">
+                  Contact details visible after connecting as buddies
                 </p>
               )}
               {!profile?.hideLocation && (profile?.city || profile?.state) && (

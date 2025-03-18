@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import TripSection from './TripSection';
 import CourseSection from './CourseSection';
 import { generateUniqueSignature } from '../../utils/signatureUtils';
+// import NotificationService from '../../services/NotificationService';
 
 const InstructorDashboard = () => {
   const { user } = useAuth();
@@ -43,6 +44,9 @@ const InstructorDashboard = () => {
     
     init();
   }, [user]);
+
+  // REMOVED: The useEffect that was clearing all instructor notifications
+  // We want notifications to persist until the instructor views the specific messages
 
   const handleCreateSignature = async () => {
     if (!user?.uid) return;

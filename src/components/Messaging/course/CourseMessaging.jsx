@@ -9,9 +9,9 @@ import EnhancedErrorAlert from '../../../components/ui/EnhancedErrorAlert';
 import SearchBar from '../shared/SearchBar';
 import SearchResults from '../shared/SearchResults';
 import TypingIndicator from '../shared/TypingIndicator';
-import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import NotificationService from '../../../services/NotificationService';
+import { doc, getDoc } from 'firebase/firestore';
 
 // Note: Don't wrap the entire component definition in memo
 const CourseMessaging = ({ 
@@ -109,7 +109,7 @@ const CourseMessaging = ({
     };
   }, []);
 
-  // Fetch user profiles for typing users
+  // UPDATED: Now uses getUserData helper function to fetch user profiles
   useEffect(() => {
     if (!typingUsers || typingUsers.length === 0 || !isStable) return;
     
@@ -120,9 +120,15 @@ const CourseMessaging = ({
       for (const userId of typingUsers) {
         if (!userProfiles[userId]) {
           try {
-            const userDoc = await getDoc(doc(db, 'users', userId));
-            if (userDoc.exists() && isComponentMounted.current) {
-              newProfiles[userId] = userDoc.data();
+            // Use transition helper to get user data from either collection
+            const profileRef = doc(db, 'profiles', userId);
+            const profileSnap = await getDoc(profileRef);
+            const userData = profileSnap.exists() ? {
+              ...profileSnap.data(),
+              uid: userId
+            } : null;
+            if (userData && isComponentMounted.current) {
+              newProfiles[userId] = userData;
               hasNewProfiles = true;
             }
           } catch (error) {

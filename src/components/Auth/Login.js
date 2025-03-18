@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { getVerificationSetting, toggleVerificationSetting } from '../../utils/verificationSettings';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [requireVerification, setRequireVerification] = useState(false);
   const { login, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
-
-  // Load the verification setting when component mounts
-  useEffect(() => {
-    setRequireVerification(getVerificationSetting());
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,11 +48,6 @@ function Login() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleToggleVerification = () => {
-    const newSetting = toggleVerificationSetting();
-    setRequireVerification(newSetting);
   };
 
   return (
@@ -113,21 +101,6 @@ function Login() {
                 Forgot your password?
               </Link>
             </div>
-          </div>
-          
-          {/* Verification Toggle - For development only */}
-          <div className="flex items-center p-2 mb-2 bg-yellow-50 border border-yellow-100 rounded">
-            <input
-              id="require-verification"
-              name="require-verification"
-              type="checkbox"
-              checked={requireVerification}
-              onChange={handleToggleVerification}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="require-verification" className="ml-2 block text-xs text-gray-600">
-              Require Email Verification (Developer Setting)
-            </label>
           </div>
 
           <div>

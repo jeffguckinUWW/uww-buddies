@@ -7,11 +7,15 @@ import {
   getDoc, 
   addDoc, 
   serverTimestamp,
-  writeBatch 
+  writeBatch,
+  deleteField,
+  query,
+  where
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import Badges from '../../components/Profile/Badges';
+import NotificationService from '../../services/NotificationService';
 
 export const BuddyList = () => {
   const { user } = useAuth();
@@ -24,6 +28,35 @@ export const BuddyList = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Mark buddy notifications as read when component mounts
+  useEffect(() => {
+    const markBuddyNotificationsAsRead = async () => {
+      if (!user) return;
+      
+      try {
+        // Get all buddy request notifications
+        const q = query(
+          collection(db, 'notifications'),
+          where('toUser', '==', user.uid),
+          where('read', '==', false),
+          where('type', '==', 'buddy_request')
+        );
+        
+        const snapshot = await getDocs(q);
+        console.log(`Found ${snapshot.size} buddy request notifications to mark as read`);
+        
+        // Mark each as read
+        for (const doc of snapshot.docs) {
+          await NotificationService.markNotificationAsRead(doc.id, user.uid);
+        }
+      } catch (err) {
+        console.error('Error marking buddy notifications as read:', err);
+      }
+    };
+    
+    markBuddyNotificationsAsRead();
+  }, [user]);
+
   // Search users - Defined before it's used
   const searchUsers = useCallback(async () => {
     if (!searchQuery || searchQuery.length < 2) return;
@@ -31,6 +64,10 @@ export const BuddyList = () => {
     try {
       setLoading(true);
       setError('');
+      
+      // First get the current user's buddy list
+      const userProfileDoc = await getDoc(doc(db, 'profiles', user.uid));
+      const currentUserBuddyList = userProfileDoc.data()?.buddyList || {};
       
       const profilesRef = collection(db, 'profiles');
       const querySnapshot = await getDocs(profilesRef);
@@ -45,9 +82,13 @@ export const BuddyList = () => {
           const emailMatch = profileData.email?.toLowerCase().includes(searchLower);
           
           if (nameMatch || emailMatch) {
+            // Add buddy status to the user object
+            const buddyStatus = currentUserBuddyList[doc.id]?.status || 'none';
+            
             users.push({ 
               id: doc.id,
-              ...profileData
+              ...profileData,
+              buddyStatus
             });
           }
         }
@@ -85,11 +126,11 @@ export const BuddyList = () => {
   const fetchBuddies = async (userId) => {
     try {
       setLoading(true);
-      const userRef = doc(db, 'users', userId);
+      const userRef = doc(db, 'profiles', userId); // Changed from 'users' to 'profiles'
       const userDoc = await getDoc(userRef);
       
       if (!userDoc.exists()) {
-        console.error('User document not found');
+        console.error('User profile document not found');
         return;
       }
   
@@ -103,16 +144,12 @@ export const BuddyList = () => {
       // Process all buddy relationships
       const buddyPromises = Object.entries(buddyList).map(async ([buddyId, data]) => {
         try {
-          // Get user and profile data
-          const [userDoc, profileDoc] = await Promise.all([
-            getDoc(doc(db, 'users', buddyId)),
-            getDoc(doc(db, 'profiles', buddyId))
-          ]);
+          // Get profile data
+          const profileDoc = await getDoc(doc(db, 'profiles', buddyId));
   
-          if (userDoc.exists() && profileDoc.exists()) {
+          if (profileDoc.exists()) {
             const buddyData = {
               id: buddyId,
-              ...userDoc.data(),
               ...profileDoc.data(),
               requestStatus: data.status,
               initiator: data.initiator
@@ -150,6 +187,7 @@ export const BuddyList = () => {
       setLoading(false);
     }
   };
+
   const handleBuddyRequest = async (buddyId, accept) => {
     if (!user) return;
     
@@ -161,8 +199,8 @@ export const BuddyList = () => {
 
       if (accept) {
         // Update both users' buddy lists to accepted status
-        const userRef = doc(db, 'users', user.uid);
-        const buddyRef = doc(db, 'users', buddyId);
+        const userRef = doc(db, 'profiles', user.uid); 
+        const buddyRef = doc(db, 'profiles', buddyId);
         
         batch.update(userRef, {
           [`buddyList.${buddyId}.status`]: 'accepted'
@@ -173,15 +211,15 @@ export const BuddyList = () => {
         });
       } else {
         // Remove buddy entries for both users
-        const userRef = doc(db, 'users', user.uid);
-        const buddyRef = doc(db, 'users', buddyId);
+        const userRef = doc(db, 'profiles', user.uid);
+        const buddyRef = doc(db, 'profiles', buddyId);
         
         batch.update(userRef, {
-          [`buddyList.${buddyId}`]: null
+          [`buddyList.${buddyId}`]: deleteField()
         });
         
         batch.update(buddyRef, {
-          [`buddyList.${user.uid}`]: null
+          [`buddyList.${user.uid}`]: deleteField()
         });
       }
 
@@ -209,8 +247,7 @@ export const BuddyList = () => {
       const userProfile = userProfileDoc.data();
       
       // Check if request already exists
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const buddyList = userDoc.data()?.buddyList || {};
+      const buddyList = userProfile?.buddyList || {};
       
       if (buddyList[buddyId]) {
         setError('Buddy request already sent or exists');
@@ -220,7 +257,7 @@ export const BuddyList = () => {
       const batch = writeBatch(db);
 
       // Update sender's buddy list
-      const senderRef = doc(db, 'users', user.uid);
+      const senderRef = doc(db, 'profiles', user.uid);
       batch.update(senderRef, {
         [`buddyList.${buddyId}`]: {
           status: 'pending',
@@ -230,7 +267,7 @@ export const BuddyList = () => {
       });
 
       // Update recipient's buddy list
-      const recipientRef = doc(db, 'users', buddyId);
+      const recipientRef = doc(db, 'profiles', buddyId);
       batch.update(recipientRef, {
         [`buddyList.${user.uid}`]: {
           status: 'pending',
@@ -240,25 +277,18 @@ export const BuddyList = () => {
       });
 
       // Create notification
-      const notificationRef = collection(db, 'notifications');
-      batch.set(doc(notificationRef), {
-        type: 'buddy_request',
-        fromUser: user.uid,
-        fromUserName: userProfile?.name || user.displayName || user.email,
-        fromUserProfile: {
-          certificationLevel: userProfile?.certificationLevel || null,
-          numberOfDives: userProfile?.numberOfDives || 0,
-          location: userProfile?.location || null,
-          specialties: userProfile?.specialties || [],
-          email: userProfile?.hideEmail ? null : userProfile?.email
-        },
-        toUser: buddyId,
-        timestamp: serverTimestamp(),
-        read: false
-      });
-
       await batch.commit();
-      setFilteredUsers(users => users.filter(u => u.id !== buddyId));
+
+      // Then create the notification using NotificationService
+      import('../../services/NotificationService').then(module => {
+        const NotificationService = module.default;
+        NotificationService.createBuddyRequestNotification({
+          fromUser: user.uid,
+          fromUserName: userProfile?.name || user.displayName || user.email,
+          toUser: buddyId,
+          requestId: user.uid // Using sender ID as request ID
+        });
+      });
       
       // Refresh buddy lists
       fetchBuddies(user.uid);
@@ -302,6 +332,45 @@ export const BuddyList = () => {
       setLoading(false);
     }
   };
+  
+  const removeBuddy = async (buddyId) => {
+    if (!user) return;
+    
+    if (!window.confirm('Are you sure you want to remove this buddy? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      const batch = writeBatch(db);
+      
+      // Remove buddy from current user's list
+      const userRef = doc(db, 'profiles', user.uid);
+      batch.update(userRef, {
+        [`buddyList.${buddyId}`]: deleteField()
+      });
+      
+      // Remove current user from buddy's list
+      const buddyRef = doc(db, 'profiles', buddyId);
+      batch.update(buddyRef, {
+        [`buddyList.${user.uid}`]: deleteField()
+      });
+      
+      await batch.commit();
+      
+      // Refresh buddy list
+      fetchBuddies(user.uid);
+      
+    } catch (err) {
+      console.error('Error removing buddy:', err);
+      setError('Failed to remove buddy');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   // Helper function to render a buddy card with consistent layout
   const renderBuddyCard = (buddy, buttons) => (
     <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
@@ -332,7 +401,7 @@ export const BuddyList = () => {
         )}
       </div>
       <div className="flex gap-2">
-              <button
+        <button
           onClick={() => navigate(`/buddy/${buddy.id}`)}
           className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
         >
@@ -371,19 +440,29 @@ export const BuddyList = () => {
 
       {/* Search Results */}
       {!loading && filteredUsers.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Search Results</h3>
-          {filteredUsers.map(user => renderBuddyCard(user, (
-            <button
-              onClick={() => sendBuddyRequest(user.id)}
-              className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
-              disabled={loading}
-            >
-              Add Buddy
-            </button>
-          )))}
+  <div className="mb-6">
+    <h3 className="text-lg font-semibold mb-2">Search Results</h3>
+    {filteredUsers.map(user => renderBuddyCard(user, (
+      user.buddyStatus === 'none' ? (
+        <button
+          onClick={() => sendBuddyRequest(user.id)}
+          className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
+          disabled={loading}
+        >
+          Add Buddy
+        </button>
+      ) : user.buddyStatus === 'pending' ? (
+        <div className="px-3 py-1 bg-gray-100 text-gray-600 rounded">
+          Request Pending
         </div>
-      )}
+      ) : (
+        <div className="px-3 py-1 bg-blue-100 text-blue-600 rounded">
+          Already Buddies
+        </div>
+      )
+    )))}
+  </div>
+)}
 
       {!loading && searchQuery.length >= 2 && filteredUsers.length === 0 && (
         <div className="text-center py-4 text-gray-500">
@@ -437,13 +516,22 @@ export const BuddyList = () => {
           <p className="text-gray-500">No buddies yet</p>
         ) : (
           buddies.map(buddy => renderBuddyCard(buddy, (
-            <button
-              onClick={() => startChat(buddy.id)}
-              className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
-              disabled={loading}
-            >
-              Message
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => startChat(buddy.id)}
+                className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
+                disabled={loading}
+              >
+                Message
+              </button>
+              <button
+                onClick={() => removeBuddy(buddy.id)}
+                className="px-3 py-1 bg-red-500 text-white rounded disabled:bg-red-300 hover:bg-red-600"
+                disabled={loading}
+              >
+                Remove
+              </button>
+            </div>
           )))
         )}
       </div>

@@ -393,16 +393,16 @@ const Training = () => {
     const [buddyStatuses, setBuddyStatuses] = useState({});
     const { user } = useAuth();
   
+    // UPDATED: Now uses profiles collection directly instead of users
     useEffect(() => {
       const fetchBuddyStatuses = async () => {
         if (!details || !user) return;
         try {
-          const userRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userRef);
-          if (userDoc.exists()) {
-            const buddyList = userDoc.data()?.buddyList || {};
-            setBuddyStatuses(buddyList);
-          }
+          // Access profiles collection directly
+          const profileRef = doc(db, 'profiles', user.uid);
+          const profileSnap = await getDoc(profileRef);
+          const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
+          setBuddyStatuses(buddyList);
         } catch (err) {
           console.error('Error fetching buddy statuses:', err);
         }
@@ -435,20 +435,21 @@ const Training = () => {
       setIsMessagingOpen(true);
     };
   
+    // UPDATED: Now updates profiles collection directly instead of users
     const sendBuddyRequest = async (buddy) => {
       try {
         // Check if request already exists
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-        const buddyList = userDoc.data()?.buddyList || {};
+        const profileRef = doc(db, 'profiles', user.uid);
+        const profileSnap = await getDoc(profileRef);
+        const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
         
         if (buddyList[buddy.uid]) {
           console.log('Buddy request already exists');
           return;
         }
   
-        // Update sender's buddy list
-        await updateDoc(userRef, {
+        // Update sender's buddy list in profiles collection
+        await updateDoc(profileRef, {
           [`buddyList.${buddy.uid}`]: {
             status: 'pending',
             timestamp: serverTimestamp(),
@@ -456,9 +457,9 @@ const Training = () => {
           }
         });
   
-        // Update recipient's buddy list
-        const recipientRef = doc(db, 'users', buddy.uid);
-        await updateDoc(recipientRef, {
+        // Update recipient's buddy list in profiles collection
+        const recipientProfileRef = doc(db, 'profiles', buddy.uid);
+        await updateDoc(recipientProfileRef, {
           [`buddyList.${user.uid}`]: {
             status: 'pending',
             timestamp: serverTimestamp(),
@@ -484,13 +485,13 @@ const Training = () => {
         {/* Course Header */}
         <div className="p-4">
         <div className="mb-2">
-  <div className="flex items-start gap-2">
-    <h4 className="text-lg font-semibold">{training.courseName}</h4>
-  </div>
-  <p className="text-sm text-gray-600">
-    {training.location} • {new Date(training.startDate).toLocaleDateString()} - {new Date(training.endDate).toLocaleDateString()}
-  </p>
-</div>
+          <div className="flex items-start gap-2">
+            <h4 className="text-lg font-semibold">{training.courseName}</h4>
+          </div>
+          <p className="text-sm text-gray-600">
+            {training.location} • {new Date(training.startDate).toLocaleDateString()} - {new Date(training.endDate).toLocaleDateString()}
+          </p>
+        </div>
           
           {/* Header Buttons */}
           <div className="flex justify-between items-center">
@@ -615,7 +616,7 @@ const Training = () => {
                       <p className="text-sm text-gray-600">Instructor information not available</p>
                     )}
                   </div>
-
+  
                   {/* Course Assistants */}
                   {details.assistants?.length > 0 && (
                     <div>
@@ -674,7 +675,7 @@ const Training = () => {
                       </div>
                     </div>
                   )}
-
+  
                   {/* Fellow Students */}
                   {details.students?.length > 0 && (
                     <div>
@@ -749,7 +750,7 @@ const Training = () => {
             )}
           </div>
         )}
-
+  
         {/* Course Messaging Modal */}
         {isMessagingOpen && (
           <CourseMessaging

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getVerificationSetting, setVerificationSetting } from '../../utils/verificationSettings';
 
 function EmailVerification() {
   const { user, sendVerificationEmail, logout } = useAuth();
@@ -11,13 +10,13 @@ function EmailVerification() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // If user doesn't need verification or is already verified, redirect home
+    // If user is already verified or not logged in, redirect appropriately
     if (!user) {
       navigate('/login');
       return;
     }
     
-    if (!getVerificationSetting() || user.emailVerified) {
+    if (user.emailVerified) {
       navigate('/');
     }
   }, [user, navigate]);
@@ -46,13 +45,6 @@ function EmailVerification() {
       setError('Failed to log out.');
       console.error(error);
     }
-  };
-
-  const handleSkipVerification = () => {
-    // Disable verification requirement
-    setVerificationSetting(false);
-    // Redirect to home
-    navigate('/');
   };
 
   // If no user is logged in, redirect to login
@@ -120,17 +112,6 @@ function EmailVerification() {
           >
             Log Out
           </button>
-          
-          {/* Developer option to skip verification - only visible in development */}
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <p className="text-xs text-gray-500 text-center mb-2">Developer Options</p>
-            <button
-              onClick={handleSkipVerification}
-              className="w-full flex justify-center py-2 px-4 border border-yellow-300 rounded-md shadow-sm text-xs font-medium text-yellow-800 bg-yellow-50 hover:bg-yellow-100 focus:outline-none"
-            >
-              Skip Verification (Development Only)
-            </button>
-          </div>
         </div>
       </div>
     </div>

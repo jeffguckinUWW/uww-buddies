@@ -1,48 +1,81 @@
 // src/components/Admin/TestCreator.js
 import React, { useState } from 'react';
-import createNAUIOpenWaterTest from '../../utils/createNAUITest';
-import createSDIOpenWaterTest from '../../utils/createSDITest';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../ui/card';
-import { Loader2, Check, AlertCircle } from 'lucide-react';
+import { Loader2, Check, AlertCircle, Database } from 'lucide-react';
 
 const TestCreator = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [testType, setTestType] = useState('');
 
-  const handleCreateNAUITest = async () => {
+  // Fix quiz counts function
+  const handleFixQuizCounts = async () => {
     setIsLoading(true);
-    setTestType('NAUI');
+    setTestType('FixCounts');
     setResult(null);
     try {
-      const success = await createNAUIOpenWaterTest();
-      if (success) {
-        setResult({ success: true, message: "NAUI Open Water test created successfully!" });
+      // Step 1: Get all categories
+      const categoriesSnapshot = await getDocs(collection(db, 'quizCategories'));
+      const categories = categoriesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Step 2: Get all quizzes
+      const quizzesSnapshot = await getDocs(collection(db, 'quizzes'));
+      const quizzes = quizzesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        categoryId: doc.data().categoryId,
+        ...doc.data()
+      }));
+      
+      // Step 3: Count quizzes per category
+      const categoryQuizCounts = {};
+      categories.forEach(category => {
+        categoryQuizCounts[category.id] = 0;
+      });
+      
+      quizzes.forEach(quiz => {
+        if (quiz.categoryId && categoryQuizCounts.hasOwnProperty(quiz.categoryId)) {
+          categoryQuizCounts[quiz.categoryId]++;
+        }
+      });
+      
+      // Step 4: Update each category with the correct count
+      let updateCount = 0;
+      const updateDetails = [];
+      
+      for (const category of categories) {
+        const currentCount = category.quizCount || 0;
+        const actualCount = categoryQuizCounts[category.id] || 0;
+        
+        if (currentCount !== actualCount) {
+          const categoryRef = doc(db, 'quizCategories', category.id);
+          await updateDoc(categoryRef, {
+            quizCount: actualCount
+          });
+          
+          updateDetails.push(`"${category.title}": ${currentCount} → ${actualCount}`);
+          updateCount++;
+        }
+      }
+      
+      if (updateCount > 0) {
+        setResult({ 
+          success: true, 
+          message: `Fixed ${updateCount} categories with incorrect quiz counts:\n${updateDetails.join('\n')}`
+        });
       } else {
-        setResult({ success: false, message: "Failed to create NAUI test, see console for details." });
+        setResult({ 
+          success: true, 
+          message: "All quiz counts are correct. No updates needed."
+        });
       }
     } catch (error) {
-      console.error("Error creating NAUI test:", error);
-      setResult({ success: false, message: `Error: ${error.message}` });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCreateSDITest = async () => {
-    setIsLoading(true);
-    setTestType('SDI');
-    setResult(null);
-    try {
-      const success = await createSDIOpenWaterTest();
-      if (success) {
-        setResult({ success: true, message: "SDI Open Water test created successfully!" });
-      } else {
-        setResult({ success: false, message: "Failed to create SDI test, see console for details." });
-      }
-    } catch (error) {
-      console.error("Error creating SDI test:", error);
+      console.error("Error fixing quiz counts:", error);
       setResult({ success: false, message: `Error: ${error.message}` });
     } finally {
       setIsLoading(false);
@@ -69,71 +102,40 @@ const TestCreator = () => {
             <path d="M12 12v8"></path>
             <path d="M8 16h8"></path>
           </svg>
-          Certification Test Creator
+          Knowledge Creator
         </CardTitle>
       </CardHeader>
       
       <CardContent className="pt-6">
-        <div className="flex flex-col md:flex-row gap-4">
+        {/* Database maintenance button */}
+        <div className="mb-6">
           <Button
-            onClick={handleCreateNAUITest}
+            onClick={handleFixQuizCounts}
             disabled={isLoading}
-            className="flex-1 h-16 relative overflow-hidden group"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="relative z-10 flex items-center justify-center">
-              {isLoading && testType === 'NAUI' ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  <span>Creating NAUI Test...</span>
-                </>
-              ) : (
-                <>
-                  <svg 
-                    className="w-6 h-6 mr-2 text-blue-100"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M2 12H22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M12 2C14.5013 4.73835 15.9228 8.29203 16 12C15.9228 15.708 14.5013 19.2616 12 22C9.49872 19.2616 8.07725 15.708 8 12C8.07725 8.29203 9.49872 4.73835 12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span>Create NAUI Open Water Test</span>
-                </>
-              )}
-            </div>
-          </Button>
-          
-          <Button
-            onClick={handleCreateSDITest}
-            disabled={isLoading}
-            className="flex-1 h-16 relative overflow-hidden group"
+            className="w-full h-12 relative overflow-hidden group bg-gray-100 hover:bg-gray-200 text-gray-800"
             variant="outline"
           >
-            <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="relative z-10 flex items-center justify-center group-hover:text-white">
-              {isLoading && testType === 'SDI' ? (
+            <div className="relative z-10 flex items-center justify-center">
+              {isLoading && testType === 'FixCounts' ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  <span>Creating SDI Test...</span>
+                  <span>Fixing Quiz Counts...</span>
                 </>
               ) : (
                 <>
-                  <svg 
-                    className="w-6 h-6 mr-2 text-indigo-600 group-hover:text-white transition-colors duration-300"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M15 8H15.01M9 8H9.01M15 16H15.01M9 16H9.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12ZM15.5 8C15.5 8.27614 15.2761 8.5 15 8.5C14.7239 8.5 14.5 8.27614 14.5 8C14.5 7.72386 14.7239 7.5 15 7.5C15.2761 7.5 15.5 7.72386 15.5 8ZM9.5 8C9.5 8.27614 9.27614 8.5 9 8.5C8.72386 8.5 8.5 8.27614 8.5 8C8.5 7.72386 8.72386 7.5 9 7.5C9.27614 7.5 9.5 7.72386 9.5 8ZM15.5 16C15.5 16.2761 15.2761 16.5 15 16.5C14.7239 16.5 14.5 16.2761 14.5 16C14.5 15.7239 14.7239 15.5 15 15.5C15.2761 15.5 15.5 15.7239 15.5 16ZM9.5 16C9.5 16.2761 9.27614 16.5 9 16.5C8.72386 16.5 8.5 16.2761 8.5 16C8.5 15.7239 8.72386 15.5 9 15.5C9.27614 15.5 9.5 15.7239 9.5 16Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span>Create SDI Open Water Test</span>
+                  <Database className="w-5 h-5 mr-2 text-gray-600" />
+                  <span>Fix Quiz Category Counts</span>
                 </>
               )}
             </div>
           </Button>
         </div>
+
+        {/* Placeholder for future quiz buttons */}
+        <div className="text-center text-gray-400 py-8">
+          <p>Add quiz creation buttons here when needed</p>
+        </div>
+        
       </CardContent>
       
       {result && (
@@ -147,7 +149,7 @@ const TestCreator = () => {
             ) : (
               <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
             )}
-            <span>{result.message}</span>
+            <div className="whitespace-pre-line">{result.message}</div>
           </div>
         </CardFooter>
       )}

@@ -131,10 +131,13 @@ const MembershipCard = ({
               </div>
               
               <div>
-                <p className="text-xs text-gray-500">Date Joined</p>
-                <p className="font-medium text-gray-800">
-                  {joinDate ? new Date(joinDate).toLocaleDateString() : 'N/A'}
-                </p>
+              <p className="font-medium text-gray-800">
+                {joinDate?.seconds 
+                  ? new Date(joinDate.seconds * 1000).toLocaleDateString() 
+                  : joinDate instanceof Date
+                    ? joinDate.toLocaleDateString()
+                    : 'N/A'}
+              </p>
               </div>
               
               <div>

@@ -4,6 +4,8 @@ import { Search, Users } from 'lucide-react';
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useAuth } from '../../../context/AuthContext';
+// Remove unused import
+// import { getMergedBuddyList } from '../../../utils/UserProfileHelper';
 
 const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   const { user } = useAuth();
@@ -21,9 +23,10 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
         setLoading(true);
         setError('');
         
-        // Get user's buddy list
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const buddyList = userDoc.data()?.buddyList || {};
+        // Directly use the profiles collection instead of helper
+        const profileRef = doc(db, 'profiles', user.uid);
+        const profileSnap = await getDoc(profileRef);
+        const buddyList = profileSnap.exists() ? profileSnap.data().buddyList || {} : {};
         
         // Filter accepted buddies
         const acceptedBuddies = Object.entries(buddyList)
@@ -133,7 +136,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
     } finally {
       setLoading(false);
     }
-};
+  };
 
   const toggleBuddy = (buddyId) => {
     setSelectedBuddies(current => 
@@ -146,6 +149,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
+        {/* Dialog content unchanged */}
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -202,6 +206,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
                   )}
 
                   <div className="mt-4 max-h-60 overflow-y-auto">
+                    {/* Buddy list rendering unchanged */}
                     {loading ? (
                       <div className="flex justify-center py-4">
                         <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
