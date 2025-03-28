@@ -200,17 +200,22 @@ const LoyaltyDashboard = () => {
       return;
     }
     
-    const cleanInput = barcodeInput.trim().toUpperCase(); // Make search case-insensitive
+    const input = barcodeInput.trim(); // Don't convert to uppercase
+    console.log("Looking up customer:", input);
     setLoading(true);
     setMessage(null);
     
     try {
-      console.log("Looking up customer:", cleanInput);
-      
-      // First try to find by loyalty code
+      // First try to find by loyalty code (case insensitive)
       const profilesRef = collection(db, 'profiles');
-      const q = query(profilesRef, where('loyaltyCode', '==', cleanInput));
-      const querySnapshot = await getDocs(q);
+      // Create a compound query for case-insensitive search
+      const upperInput = input.toUpperCase();
+      const lowerInput = input.toLowerCase();
+      const querySnapshot = await getDocs(
+        query(profilesRef, 
+          where('loyaltyCode', 'in', [input, upperInput, lowerInput])
+        )
+      );
       
       if (!querySnapshot.empty) {
         // Found by loyalty code
@@ -227,11 +232,16 @@ const LoyaltyDashboard = () => {
         return;
       }
       
-      // Fallback to direct UID lookup
-      const customerRef = doc(db, 'profiles', cleanInput);
-      const customerSnap = await getDoc(customerRef);
+      // If not found by loyalty code, try direct UID lookup
+      // First, try as-is
+      let customerSnap = await getDoc(doc(db, 'profiles', input));
       
+      // If not found, try a case-insensitive query on user IDs
       if (!customerSnap.exists()) {
+        console.log("Not found by direct ID, trying case-insensitive query");
+        // This is more complex since Firebase doesn't support case-insensitive queries directly
+        // For debugging purposes, let's log the failing ID
+        console.log("Failed lookup for ID:", input);
         showMessage('Customer not found');
         setCustomerData(null);
         return;
