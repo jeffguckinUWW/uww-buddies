@@ -196,15 +196,39 @@ const LoyaltyDashboard = () => {
 
   const handleCustomerLookup = async () => {
     if (!barcodeInput) {
-      showMessage('Please enter a customer ID');
+      showMessage('Please enter a customer ID or loyalty code');
       return;
     }
     
+    const cleanInput = barcodeInput.trim();
     setLoading(true);
     setMessage(null);
     
     try {
-      const customerRef = doc(db, 'profiles', barcodeInput);
+      console.log("Looking up customer:", cleanInput);
+      
+      // First try to find by loyalty code
+      const profilesRef = collection(db, 'profiles');
+      const q = query(profilesRef, where('loyaltyCode', '==', cleanInput));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        // Found by loyalty code
+        const doc = querySnapshot.docs[0];
+        const data = doc.data();
+        
+        setCustomerData({
+          id: doc.id,
+          ...data,
+          currentTier: calculateTier(data.lifetimePoints || 0)
+        });
+        
+        showMessage('Customer found by loyalty code', MESSAGE_TYPES.SUCCESS);
+        return;
+      }
+      
+      // Fallback to direct UID lookup
+      const customerRef = doc(db, 'profiles', cleanInput);
       const customerSnap = await getDoc(customerRef);
       
       if (!customerSnap.exists()) {

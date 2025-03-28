@@ -17,10 +17,14 @@ const RewardsSection = ({ loyaltyData, profile, userId }) => {
   };
   
   // Format member ID properly - now using the full ID
-  const formatMemberId = (id) => {
-    if (!id) return 'MEMBER-ID';
+  const formatMemberId = (id, profile) => {
+    // Use loyalty code if available
+    if (profile.loyaltyCode) {
+      return profile.loyaltyCode;
+    }
     
-    // Return the full ID without truncating
+    // Fallback to user ID if no loyalty code
+    if (!id) return 'MEMBER-ID';
     return id.toUpperCase();
   };
 
@@ -116,13 +120,14 @@ const RewardsSection = ({ loyaltyData, profile, userId }) => {
                 >
                   {/* Card with proper formatting and display - direct without any background container */}
                   <MembershipCard 
-                    tier={loyaltyData.currentTier?.tier}
-                    memberName={profile.name}
-                    memberId={formatMemberId(userId)}
-                    joinDate={loyaltyData.joinDate}
-                    certificationLevel={profile.certificationLevel}
-                    redeemablePoints={loyaltyData.redeemablePoints}
-                  />
+  tier={loyaltyData.currentTier?.tier}
+  memberName={profile.name}
+  memberId={formatMemberId(userId, profile)}
+  joinDate={loyaltyData.joinDate}
+  certificationLevel={profile.certificationLevel}
+  redeemablePoints={loyaltyData.redeemablePoints}
+/>
+
                   
                   {/* Subtle "enlarge" indicator */}
                   <div className="absolute top-2 right-2 bg-black bg-opacity-20 hover:bg-opacity-50 p-1 rounded-full transition-all">
@@ -156,14 +161,14 @@ const RewardsSection = ({ loyaltyData, profile, userId }) => {
             
             {/* Full card display with properly formatted member ID and points data */}
             <div className="transform hover:scale-[1.02] transition-transform">
-              <MembershipCard 
-                tier={loyaltyData.currentTier?.tier}
-                memberName={profile.name}
-                memberId={formatMemberId(userId)}
-                joinDate={loyaltyData.joinDate}
-                certificationLevel={profile.certificationLevel}
-                redeemablePoints={loyaltyData.redeemablePoints}
-              />
+            <MembershipCard 
+  tier={loyaltyData.currentTier?.tier}
+  memberName={profile.name}
+  memberId={formatMemberId(userId, profile)}
+  joinDate={loyaltyData.joinDate}
+  certificationLevel={profile.certificationLevel}
+  redeemablePoints={loyaltyData.redeemablePoints}
+/>
             </div>
             
             <p className="text-center text-white text-sm mt-4">

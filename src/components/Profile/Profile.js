@@ -53,6 +53,22 @@ const TIER_LEVELS = {
   LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
 };
 
+// Add the loyalty code generator function here
+const generateLoyaltyCode = (name, uid) => {
+  // Extract last name (or use full name if no space)
+  const nameParts = name.trim().split(' ');
+  const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : name;
+  
+  // Get uppercase version with max 8 chars
+  const namePart = lastName.toUpperCase().substring(0, 8);
+  
+  // Get last 6 chars of UID
+  const uidPart = uid.substring(Math.max(0, uid.length - 6));
+  
+  // Combine name and UID part (no prefix)
+  return `${namePart}${uidPart}`;
+};
+
 // Enhanced ProfileHeader component
 const ProfileHeader = ({ 
   profile, 
@@ -1055,7 +1071,9 @@ function Profile() {
           divingStats = logbookStats;
         }
       }
-  
+
+      const loyaltyCode = profile.loyaltyCode || generateLoyaltyCode(formData.name || '', user.uid);
+
       // Clean object with no undefined values
       const updatedProfile = {
         // User details
@@ -1066,6 +1084,10 @@ function Profile() {
         bio: formData.bio || '',
         city: formData.city || '',
         state: formData.state || '',
+        
+        // Loyalty code
+        loyaltyCode: loyaltyCode,
+        loyaltyAccess: { hasAccess: true },
         
         // Diving info
         divingStats: divingStats,
