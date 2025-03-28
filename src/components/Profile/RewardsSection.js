@@ -123,6 +123,7 @@ const RewardsSection = ({ loyaltyData, profile, userId }) => {
   tier={loyaltyData.currentTier?.tier}
   memberName={profile.name}
   memberId={formatMemberId(userId, profile)}
+  loyaltyCode={profile.loyaltyCode} // Add this line
   joinDate={loyaltyData.joinDate}
   certificationLevel={profile.certificationLevel}
   redeemablePoints={loyaltyData.redeemablePoints}
@@ -165,6 +166,7 @@ const RewardsSection = ({ loyaltyData, profile, userId }) => {
   tier={loyaltyData.currentTier?.tier}
   memberName={profile.name}
   memberId={formatMemberId(userId, profile)}
+  loyaltyCode={profile.loyaltyCode} // Add this line
   joinDate={loyaltyData.joinDate}
   certificationLevel={profile.certificationLevel}
   redeemablePoints={loyaltyData.redeemablePoints}

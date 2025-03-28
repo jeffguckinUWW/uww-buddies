@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Shield } from 'lucide-react';
+import Barcode from 'react-barcode';
 
 const MembershipCard = ({ 
   tier, 
@@ -7,7 +8,8 @@ const MembershipCard = ({
   memberId, 
   joinDate,
   certificationLevel,
-  redeemablePoints
+  redeemablePoints,
+  loyaltyCode // Add this prop to explicitly receive loyalty code
 }) => {
   const [showBack, setShowBack] = useState(false);
   const [cardImage, setCardImage] = useState(null);
@@ -56,36 +58,8 @@ const MembershipCard = ({
     ? `${redeemablePoints.toLocaleString()} pts` 
     : 'Check your account';
 
-  // Generate simple barcode pattern based on member ID
-  const generateBarcodeBars = () => {
-    if (!memberId) return [];
-    
-    const bars = [];
-    // Use the member ID to generate a deterministic barcode pattern
-    // This ensures the same ID always generates the same barcode
-    const idString = String(memberId);
-    
-    for (let i = 0; i < 30; i++) {
-      // Use the characters in the ID to determine bar width
-      const charIndex = i % idString.length;
-      const charCode = idString.charCodeAt(charIndex);
-      const width = (charCode % 4) + 1; // Width between 1-4 based on character code
-      const space = i * 7;
-      
-      bars.push(
-        <rect 
-          key={i} 
-          x={space} 
-          y="5" 
-          width={width} 
-          height="40" 
-          fill="black" 
-        />
-      );
-    }
-    
-    return bars;
-  };
+  // Determine the barcode value - prioritize loyaltyCode if available
+  const barcodeValue = loyaltyCode || memberId || 'MEMBER-ID';
 
   // Simplified card with direct front/back toggle
   return (
@@ -131,13 +105,14 @@ const MembershipCard = ({
               </div>
               
               <div>
-              <p className="font-medium text-gray-800">
-                {joinDate?.seconds 
-                  ? new Date(joinDate.seconds * 1000).toLocaleDateString() 
-                  : joinDate instanceof Date
-                    ? joinDate.toLocaleDateString()
-                    : 'N/A'}
-              </p>
+                <p className="text-xs text-gray-500">Member Since</p>
+                <p className="font-medium text-gray-800">
+                  {joinDate?.seconds 
+                    ? new Date(joinDate.seconds * 1000).toLocaleDateString() 
+                    : joinDate instanceof Date
+                      ? joinDate.toLocaleDateString()
+                      : 'N/A'}
+                </p>
               </div>
               
               <div>
@@ -146,16 +121,19 @@ const MembershipCard = ({
               </div>
             </div>
             
-            {/* Barcode - reduced size to fit better on mobile */}
+            {/* Scannable Barcode - using react-barcode */}
             <div className="mt-1 pt-2 border-t">
               <div className="flex flex-col items-center">
-                <svg width="180" height="40" className="barcode mb-1" viewBox="0 0 210 50" preserveAspectRatio="xMidYMid meet">
-                  <rect x="0" y="0" width="210" height="50" fill="white" />
-                  {generateBarcodeBars()}
-                </svg>
-                <p className="text-sm text-gray-700 font-mono text-center break-all">
-                  {memberId || 'MEMBER-ID'}
-                </p>
+              <Barcode
+  value={barcodeValue}
+  format="CODE39" // Try CODE39 which is often better for hardware scanners
+  width={2.5}     // Increase width of bars (was 1.5)
+  height={70}     // Increase height (was 40)
+  displayValue={true}
+  textMargin={8}  // Increase text margin (was 2)
+  fontSize={14}   // Larger text (was 12)
+  margin={10}     // Add more margin around the barcode (was 0)
+/>
               </div>
             </div>
             
