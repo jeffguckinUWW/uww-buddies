@@ -92,6 +92,7 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
           @media print {
             @page { margin: 0.5in; }
             body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .navigation-controls { display: none; }
           }
           body {
             font-family: Arial, sans-serif;
@@ -184,34 +185,47 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
             font-size: 0.9em;
             color: #4b5563;
           }
-          /* Back button styles */
-          .back-button {
+          /* Navigation controls */
+          .navigation-controls {
             position: fixed;
-            top: 20px;
-            left: 20px;
+            bottom: 0;
+            left: 0;
+            right: 0;
             background-color: #0066B3;
             color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+          }
+          .nav-button {
+            background-color: white;
+            color: #0066B3;
             border: none;
             border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 14px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            z-index: 1000;
           }
-          .back-button:hover {
-            background-color: #004d8c;
+          .nav-button:hover {
+            background-color: #f0f0f0;
           }
-          @media print {
-            .back-button {
-              display: none; /* Hide back button when printing */
-            }
+          .print-button {
+            background-color: #28a745;
+            color: white;
+          }
+          .print-button:hover {
+            background-color: #218838;
+          }
+          /* Add some bottom padding to ensure content isn't hidden behind the navigation bar */
+          body {
+            padding-bottom: 70px;
           }
         </style>
       </head>
       <body>
-        <!-- Back button to return to the app -->
-        <button class="back-button" onclick="window.close()">← Back to App</button>
-        
         <div class="header">
           <img src="/logo.png" alt="Underwater World" />
         </div>
@@ -260,6 +274,62 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
             </div>
           ` : ''}
         </div>
+        
+        <!-- Fixed navigation bar at the bottom with Back and Print buttons -->
+        <div class="navigation-controls">
+          <button class="nav-button back-button" onclick="attemptNavBack()">← Back to App</button>
+          <button class="nav-button print-button" onclick="window.print()">Print Document</button>
+        </div>
+
+        <script>
+          // Function to handle back navigation - tries multiple approaches
+          function attemptNavBack() {
+            // Try various methods to go back, in order of preference
+            if (window.opener && !window.opener.closed) {
+              // If opened from another window that's still available
+              window.close();
+            } else if (history.length > 1) {
+              // If there's history to go back to
+              history.back();
+            } else if (navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+              // If in PWA standalone mode, try to open the main app
+              // This uses the current origin/domain
+              window.location.href = '/';
+            } else {
+              // Last resort - just try to close
+              window.close();
+              // If we're still here after trying to close, show a message
+              setTimeout(function() {
+                alert("Please use your browser's back button or close this tab to return to the app.");
+              }, 300);
+            }
+          }
+
+          // Detect if coming from print dialog and show a notification
+          window.addEventListener('afterprint', function() {
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.top = '20px';
+            notification.style.left = '50%';
+            notification.style.transform = 'translateX(-50%)';
+            notification.style.backgroundColor = '#28a745';
+            notification.style.color = 'white';
+            notification.style.padding = '10px 20px';
+            notification.style.borderRadius = '4px';
+            notification.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            notification.style.zIndex = '2000';
+            notification.textContent = 'Print complete! You can now return to the app.';
+            document.body.appendChild(notification);
+            
+            setTimeout(function() {
+              notification.style.opacity = '0';
+              notification.style.transition = 'opacity 0.5s ease';
+              setTimeout(function() {
+                document.body.removeChild(notification);
+              }, 500);
+            }, 3000);
+          });
+        </script>
       </body>
     </html>
   `;
@@ -268,6 +338,7 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
   printWindow.document.close();
   
   printWindow.onload = () => {
-    printWindow.print();
+    // We don't automatically print now - user can click the Print button
+    // printWindow.print();
   };
 };
