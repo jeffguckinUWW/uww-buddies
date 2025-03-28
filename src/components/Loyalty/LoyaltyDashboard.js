@@ -200,7 +200,7 @@ const LoyaltyDashboard = () => {
       return;
     }
     
-    const cleanInput = barcodeInput.trim();
+    const cleanInput = barcodeInput.trim().toUpperCase(); // Make search case-insensitive
     setLoading(true);
     setMessage(null);
     
