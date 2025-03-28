@@ -16,6 +16,17 @@ const TIER_LEVELS = {
   LIFETIME_ELITE: { min: 100000, max: Infinity, multiplier: 2.0, name: 'Lifetime Elite' }
 };
 
+const formatMemberId = (id, profile) => {
+  // Use loyalty code if available
+  if (profile?.loyaltyCode) {
+    return profile.loyaltyCode;
+  }
+  
+  // Fallback to user ID if no loyalty code
+  if (!id) return 'MEMBER-ID';
+  return id.toUpperCase();
+};
+
 const calculateTier = (lifetimePoints) => {
   return Object.entries(TIER_LEVELS).reduce((acc, [tier, details]) => {
     if (lifetimePoints >= details.min && lifetimePoints <= details.max) {
@@ -182,11 +193,13 @@ const RewardsPage = () => {
                 <div className="flex space-x-4 overflow-x-auto pb-4 scrollbar-hide">
                   {/* Membership Card */}
                   <div className="flex-none w-64">
-                    <MembershipCard
+                  <MembershipCard
                       tier={currentTier?.tier}
                       memberName={profileData?.name}
-                      memberId={user?.uid}
+                      memberId={formatMemberId(user?.uid, profileData)}
                       joinDate={profileData?.joinDate || Date.now()}
+                      certificationLevel={profileData?.certificationLevel}
+                      redeemablePoints={profileData?.redeemablePoints}
                     />
                   </div>
 
