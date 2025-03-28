@@ -184,9 +184,34 @@ export const generateTrainingRecordPDF = (course, student, trainingRecord, progr
             font-size: 0.9em;
             color: #4b5563;
           }
+          /* Back button styles */
+          .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: #0066B3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 1000;
+          }
+          .back-button:hover {
+            background-color: #004d8c;
+          }
+          @media print {
+            .back-button {
+              display: none; /* Hide back button when printing */
+            }
+          }
         </style>
       </head>
       <body>
+        <!-- Back button to return to the app -->
+        <button class="back-button" onclick="window.close()">← Back to App</button>
+        
         <div class="header">
           <img src="/logo.png" alt="Underwater World" />
         </div>
