@@ -9,7 +9,7 @@ const MembershipCard = ({
   joinDate,
   certificationLevel,
   redeemablePoints,
-  loyaltyCode // Add this prop to explicitly receive loyalty code
+  loyaltyCode // New prop to explicitly receive loyalty code
 }) => {
   const [showBack, setShowBack] = useState(false);
   const [cardImage, setCardImage] = useState(null);
@@ -60,6 +60,9 @@ const MembershipCard = ({
 
   // Determine the barcode value - prioritize loyaltyCode if available
   const barcodeValue = loyaltyCode || memberId || 'MEMBER-ID';
+  
+  // Format for Code 39 compatibility - only allow uppercase letters, numbers, and some special chars
+  const formattedBarcodeValue = barcodeValue.toUpperCase().replace(/[^A-Z0-9\-./+%$\s]/g, '');
 
   // Simplified card with direct front/back toggle
   return (
@@ -121,19 +124,20 @@ const MembershipCard = ({
               </div>
             </div>
             
-            {/* Scannable Barcode - using react-barcode */}
+            {/* Scannable Barcode using CODE39 format */}
             <div className="mt-1 pt-2 border-t">
               <div className="flex flex-col items-center">
-              <Barcode
-  value={barcodeValue}
-  format="CODE39" // Try CODE39 which is often better for hardware scanners
-  width={2.5}     // Increase width of bars (was 1.5)
-  height={70}     // Increase height (was 40)
-  displayValue={true}
-  textMargin={8}  // Increase text margin (was 2)
-  fontSize={14}   // Larger text (was 12)
-  margin={10}     // Add more margin around the barcode (was 0)
-/>
+                <Barcode
+                  value={formattedBarcodeValue}
+                  format="CODE39"
+                  width={3}
+                  height={60}
+                  displayValue={true}
+                  textMargin={6}
+                  fontSize={14}
+                  margin={10}
+                  background="#FFFFFF"
+                />
               </div>
             </div>
             
