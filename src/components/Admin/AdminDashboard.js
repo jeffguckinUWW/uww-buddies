@@ -11,7 +11,7 @@ import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import KnowledgeManager from '../Knowledge/Admin/KnowledgeManager';
-import { User, BookOpen, Award } from 'lucide-react';
+import { User, BookOpen, Award, Users } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -31,6 +31,12 @@ const AdminDashboard = () => {
   
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // Helper function to safely format dates
+  const formatDate = (timestamp) => {
+    if (!timestamp || !timestamp.seconds) return 'N/A';
+    return new Date(timestamp.seconds * 1000).toLocaleDateString();
+  };
 
   // Fetch users data
   useEffect(() => {
@@ -241,6 +247,43 @@ const AdminDashboard = () => {
     }
   };
 
+  // New function for Team Portal access
+  const toggleTeamAccess = async (userId, currentAccess) => {
+    if (!window.confirm(
+      currentAccess 
+        ? 'Are you sure you want to revoke team portal access?' 
+        : 'Are you sure you want to grant team portal access?'
+    )) return;
+
+    try {
+      const userRef = doc(db, 'profiles', userId);
+      const updateData = {
+        teamAccess: currentAccess 
+          ? null
+          : {
+              hasAccess: true,
+              grantedAt: Timestamp.now(),
+              grantedBy: user.email
+            }
+      };
+      
+      await updateDoc(userRef, updateData);
+
+      setUsers(users.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            teamAccess: updateData.teamAccess
+          };
+        }
+        return u;
+      }));
+    } catch (err) {
+      setError('Error updating team access');
+      console.error('Error:', err);
+    }
+  };
+
   const resetInstructorSignature = async (userId) => {
     if (!window.confirm('Are you sure you want to reset this instructor\'s signature? They will need to generate a new one before they can sign documents.')) {
       return;
@@ -333,6 +376,8 @@ const AdminDashboard = () => {
              user.courseEndReports.some(r => !r.courseEndReport?.finalized);
     } else if (filterBy === 'loyalty') {
       return searchMatch && user.loyaltyAccess?.hasAccess;
+    } else if (filterBy === 'team') {
+      return searchMatch && user.teamAccess?.hasAccess;
     } else {
       return searchMatch;
     }
@@ -463,6 +508,15 @@ const AdminDashboard = () => {
                     </svg>
                     Loyalty Admins
                   </Button>
+                  <Button 
+                    variant={filterBy === 'team' ? 'default' : 'outline'} 
+                    onClick={() => setFilterBy('team')}
+                    size="sm"
+                    className="flex-grow md:flex-grow-0"
+                  >
+                    <Users size={16} className="mr-2" />
+                    Team Portal
+                  </Button>
                 </div>
               </div>
 
@@ -498,6 +552,11 @@ const AdminDashboard = () => {
                                   Loyalty Admin
                                 </div>
                               )}
+                              {user.teamAccess?.hasAccess && (
+                                <div className="bg-purple-100 text-purple-800 border border-purple-200 text-xs px-2.5 py-0.5 rounded-full">
+                                  Team Portal
+                                </div>
+                              )}
                             </div>
                           </div>
                         </CardHeader>
@@ -508,9 +567,9 @@ const AdminDashboard = () => {
                               <div className="flex justify-between items-center">
                                 <label className="text-sm font-medium flex items-center">
                                   <span className="mr-2">Loyalty Admin Access</span>
-                                  {user.loyaltyAccess?.hasAccess && (
+                                  {user.loyaltyAccess?.hasAccess && user.loyaltyAccess?.grantedAt && (
                                     <span className="text-xs text-gray-500 hidden sm:inline">
-                                      since {new Date(user.loyaltyAccess.grantedAt.seconds * 1000).toLocaleDateString()}
+                                      since {formatDate(user.loyaltyAccess.grantedAt)}
                                     </span>
                                   )}
                                 </label>
@@ -531,9 +590,9 @@ const AdminDashboard = () => {
                               <div className="flex justify-between items-center">
                                 <label className="text-sm font-medium flex items-center">
                                   <span className="mr-2">Instructor Access</span>
-                                  {user.instructorAccess?.hasAccess && (
+                                  {user.instructorAccess?.hasAccess && user.instructorAccess?.grantedAt && (
                                     <span className="text-xs text-gray-500 hidden sm:inline">
-                                      since {new Date(user.instructorAccess.grantedAt.seconds * 1000).toLocaleDateString()}
+                                      since {formatDate(user.instructorAccess.grantedAt)}
                                     </span>
                                   )}
                                 </label>
@@ -547,6 +606,29 @@ const AdminDashboard = () => {
                                   />
                                   <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.instructorAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
                                     <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.instructorAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                  </div>
+                                </label>
+                              </div>
+
+                              <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium flex items-center">
+                                  <span className="mr-2">Team Portal Access</span>
+                                  {user.teamAccess?.hasAccess && user.teamAccess?.grantedAt && (
+                                    <span className="text-xs text-gray-500 hidden sm:inline">
+                                      since {formatDate(user.teamAccess.grantedAt)}
+                                    </span>
+                                  )}
+                                </label>
+                                {/* Simple toggle using checkbox and styling */}
+                                <label className="inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only"
+                                    checked={!!user.teamAccess?.hasAccess}
+                                    onChange={() => toggleTeamAccess(user.id, user.teamAccess?.hasAccess)}
+                                  />
+                                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.teamAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
+                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
                                   </div>
                                 </label>
                               </div>
@@ -576,7 +658,7 @@ const AdminDashboard = () => {
                                       <div className="bg-gray-50 p-3 rounded-md">
                                         <p className="font-mono text-sm">{user.instructorSignature.code}</p>
                                         <p className="text-xs text-gray-500 mt-1">
-                                          Created: {new Date(user.instructorSignature.createdAt.seconds * 1000).toLocaleDateString()}
+                                          Created: {user.instructorSignature?.createdAt ? formatDate(user.instructorSignature.createdAt) : 'N/A'}
                                         </p>
                                         <Button 
                                           onClick={() => resetInstructorSignature(user.id)}
@@ -591,7 +673,7 @@ const AdminDashboard = () => {
                                       <div className="bg-amber-50 p-3 rounded-md">
                                         <p className="text-sm text-amber-600">Using legacy PIN</p>
                                         <p className="text-xs text-gray-500 mt-1">
-                                          Updated: {new Date(user.instructorPin.lastUpdated.seconds * 1000).toLocaleDateString()}
+                                          Updated: {user.instructorPin?.lastUpdated ? formatDate(user.instructorPin.lastUpdated) : 'N/A'}
                                         </p>
                                         <Button 
                                           onClick={() => resetInstructorSignature(user.id)}
@@ -655,6 +737,9 @@ const AdminDashboard = () => {
                         Instructor Access
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Team Portal
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Signature
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -665,7 +750,7 @@ const AdminDashboard = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                        <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                           No users match your search criteria
                         </td>
                       </tr>
@@ -712,7 +797,7 @@ const AdminDashboard = () => {
                                   <span className="flex flex-col">
                                     <span className="font-medium">Enabled</span>
                                     <span className="text-xs text-gray-500">
-                                      {new Date(user.loyaltyAccess.grantedAt.seconds * 1000).toLocaleDateString()}
+                                      {user.loyaltyAccess?.grantedAt ? formatDate(user.loyaltyAccess.grantedAt) : 'N/A'}
                                     </span>
                                   </span>
                                 ) : (
@@ -740,7 +825,35 @@ const AdminDashboard = () => {
                                   <span className="flex flex-col">
                                     <span className="font-medium">Enabled</span>
                                     <span className="text-xs text-gray-500">
-                                      {new Date(user.instructorAccess.grantedAt.seconds * 1000).toLocaleDateString()}
+                                      {user.instructorAccess?.grantedAt ? formatDate(user.instructorAccess.grantedAt) : 'N/A'}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  'Disabled'
+                                )}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {/* Simple toggle using checkbox and styling */}
+                              <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={!!user.teamAccess?.hasAccess}
+                                  onChange={() => toggleTeamAccess(user.id, user.teamAccess?.hasAccess)}
+                                />
+                                <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.teamAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
+                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                </div>
+                              </label>
+                              <span className="ml-2 text-sm text-gray-600">
+                                {user.teamAccess?.hasAccess ? (
+                                  <span className="flex flex-col">
+                                    <span className="font-medium">Enabled</span>
+                                    <span className="text-xs text-gray-500">
+                                      {user.teamAccess?.grantedAt ? formatDate(user.teamAccess.grantedAt) : 'N/A'}
                                     </span>
                                   </span>
                                 ) : (
@@ -757,7 +870,7 @@ const AdminDashboard = () => {
                                     <div className="text-sm">
                                       <span className="font-mono font-medium">{user.instructorSignature.code}</span>
                                       <p className="text-xs text-gray-500 mt-1">
-                                        Created: {new Date(user.instructorSignature.createdAt.seconds * 1000).toLocaleDateString()}
+                                        Created: {user.instructorSignature?.createdAt ? formatDate(user.instructorSignature.createdAt) : 'N/A'}
                                       </p>
                                     </div>
                                     <Button 
@@ -774,7 +887,7 @@ const AdminDashboard = () => {
                                     <div className="text-sm text-amber-600">
                                       Using legacy PIN
                                       <p className="text-xs text-gray-500 mt-1">
-                                        Updated: {new Date(user.instructorPin.lastUpdated.seconds * 1000).toLocaleDateString()}
+                                        Updated: {user.instructorPin?.lastUpdated ? formatDate(user.instructorPin.lastUpdated) : 'N/A'}
                                       </p>
                                     </div>
                                     <Button 
@@ -907,9 +1020,9 @@ const AdminDashboard = () => {
                                 Finalized
                               </span>
                               <p className="mt-1 text-gray-600 text-xs">
-                                {course.courseEndReport.finalizedAt?.toDate().toLocaleDateString()}
+                                {course.courseEndReport?.finalizedAt ? formatDate(course.courseEndReport.finalizedAt) : 'N/A'}
                                 <br />
-                                By: {course.courseEndReport.finalizedBy}
+                                By: {course.courseEndReport?.finalizedBy || 'Unknown'}
                               </p>
                             </div>
                           )}
@@ -925,7 +1038,7 @@ const AdminDashboard = () => {
                             <div className="bg-gray-50 p-3 rounded-md text-sm space-y-1">
                               <p>Location: {course.location}</p>
                               <p>Completed: {course.completedAt ? 
-                                new Date(course.completedAt.seconds * 1000).toLocaleDateString() : 
+                                formatDate(course.completedAt) : 
                                 'Not completed'}</p>
                             </div>
                           </div>

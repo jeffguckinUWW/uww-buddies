@@ -108,42 +108,52 @@ const Layout = ({ children }) => {
             </div>
 
             {/* Special Access Links */}
-            <div className="px-4 mt-4 pt-4 border-t">
+<div className="px-4 mt-4 pt-4 border-t">
+  <button
+    onClick={() => handleNavigation('/instructor')}
+    className="flex items-center justify-between w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+  >
+    <div className="flex items-center space-x-2">
+      <GraduationCap size={20} className="text-blue-600" />
+      <span>Instructor Portal</span>
+    </div>
+    {unreadCounts.instructor > 0 && (
+      <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+        {unreadCounts.instructor > 9 ? '9+' : unreadCounts.instructor}
+      </span>
+    )}
+  </button>
+
+  {user?.loyaltyAccess?.hasAccess && (
     <button
-      onClick={() => handleNavigation('/instructor')}
-      className="flex items-center justify-between w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+      onClick={() => handleNavigation('/loyalty')}
+      className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
     >
-      <div className="flex items-center space-x-2">
-        <GraduationCap size={20} className="text-blue-600" />
-        <span>Instructor Portal</span>
-      </div>
-      {unreadCounts.instructor > 0 && (
-        <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-          {unreadCounts.instructor > 9 ? '9+' : unreadCounts.instructor}
-        </span>
-      )}
+      <Award size={20} className="text-blue-600" />
+      <span>Loyalty Program</span>
     </button>
+  )}
 
-    {user?.loyaltyAccess?.hasAccess && (
-      <button
-        onClick={() => handleNavigation('/loyalty')}
-        className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
-      >
-        <Award size={20} className="text-blue-600" />
-        <span>Loyalty Program</span>
-      </button>
-    )}
+  {user?.teamAccess?.hasAccess && (
+    <button
+      onClick={() => handleNavigation('/team')}
+      className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+    >
+      <Users size={20} className="text-blue-600" />
+      <span>Team Portal</span>
+    </button>
+  )}
 
-    {isAdmin && (
-      <button
-        onClick={() => handleNavigation('/admin')}
-        className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
-      >
-        <ShieldCheck size={20} className="text-blue-600" />
-        <span>Admin Dashboard</span>
-      </button>
-    )}
-  </div>
+  {isAdmin && (
+    <button
+      onClick={() => handleNavigation('/admin')}
+      className="flex items-center space-x-2 w-full px-2 py-2 text-left hover:bg-gray-100 rounded-lg"
+    >
+      <ShieldCheck size={20} className="text-blue-600" />
+      <span>Admin Dashboard</span>
+    </button>
+  )}
+</div>
 
             {/* Logout Button */}
             <div className="absolute bottom-0 left-0 right-0 p-4 border-t">

@@ -17,6 +17,8 @@ import { BuddyList } from './components/Messaging/BuddyList';
 import { BuddyProfile } from './components/Messaging/BuddyProfile';
 import LoyaltyDashboard from './components/Loyalty/LoyaltyDashboard';
 import RequireLoyaltyAccess from './components/Loyalty/RequireLoyaltyAccess';
+import RequireTeamAccess from './components/Team/RequireTeamAccess';
+import TeamPortal from './components/Team/TeamPortal';
 import HomePage from './pages/Home';
 import Layout from './components/Layout/Layout';
 import RewardsPage from './pages/RewardsPage';
@@ -83,6 +85,14 @@ function AuthRoutes() {
             <RequireLoyaltyAccess>
               <LoyaltyDashboard />
             </RequireLoyaltyAccess>
+          } 
+        />
+        <Route 
+          path="/team" 
+          element={
+            <RequireTeamAccess>
+              <TeamPortal />
+            </RequireTeamAccess>
           } 
         />
         <Route path="/knowledge/*" element={<KnowledgePage />} />
