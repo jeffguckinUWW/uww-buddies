@@ -27,6 +27,22 @@ export const BuddyList = () => {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('buddies');
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  // Check screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsSmallScreen(window.innerWidth < 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => {
+      window.removeEventListener('resize', checkScreenSize);
+    };
+  }, []);
 
   // Mark buddy notifications as read when component mounts
   useEffect(() => {
@@ -126,7 +142,7 @@ export const BuddyList = () => {
   const fetchBuddies = async (userId) => {
     try {
       setLoading(true);
-      const userRef = doc(db, 'profiles', userId); // Changed from 'users' to 'profiles'
+      const userRef = doc(db, 'profiles', userId);
       const userDoc = await getDoc(userRef);
       
       if (!userDoc.exists()) {
@@ -371,39 +387,66 @@ export const BuddyList = () => {
     }
   };
   
-  // Helper function to render a buddy card with consistent layout
+  // Helper function to render a buddy card with improved styling
   const renderBuddyCard = (buddy, buttons) => (
-    <div key={buddy.id} className="flex items-center justify-between p-2 border-b hover:bg-gray-50">
+    <div key={buddy.id} className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 border-b hover:bg-gray-50 transition-colors">
       <div 
-        className="flex-grow cursor-pointer"
+        className="flex-grow cursor-pointer mb-2 md:mb-0 w-full md:w-auto"
         onClick={() => navigate(`/buddy/${buddy.id}`)}
       >
-        <p className="font-medium">{buddy.name || 'Unknown User'}</p>
-        <Badges
-          certificationLevel={buddy.certificationLevel}
-          specialties={buddy.specialties}
-          numberOfDives={buddy.numberOfDives}
-          size="small"
-          showSections={false}
-        />
-        {!buddy.hideEmail && buddy.email && (
-          <p className="text-sm text-gray-600">{buddy.email}</p>
-        )}
-        {buddy.certificationLevel && (
-          <p className="text-sm text-gray-600">
-            Certification: {buddy.certificationLevel}
-          </p>
-        )}
-        {buddy.numberOfDives > 0 && (
-          <p className="text-sm text-gray-600">
-            Dives: {buddy.numberOfDives}
-          </p>
-        )}
+        <div className="flex items-center">
+          {buddy.photoURL && buddy.photoURL.trim() !== '' ? (
+            <img 
+              src={buddy.photoURL} 
+              alt={buddy.name || 'User'} 
+              className="w-10 h-10 rounded-full mr-3 object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.style.display = 'none';
+                e.target.parentNode.querySelector('.fallback-avatar').style.display = 'flex';
+              }}
+            />
+          ) : null}
+          <div 
+            className={`w-10 h-10 rounded-full mr-3 bg-blue-100 flex items-center justify-center fallback-avatar ${buddy.photoURL && buddy.photoURL.trim() !== '' ? 'hidden' : ''}`}
+          >
+            <span className="text-sm font-medium text-blue-600">
+              {buddy.name && buddy.name.trim() !== '' ? buddy.name.trim()[0].toUpperCase() : '?'}
+            </span>
+          </div>
+          <div>
+            <p className="font-medium text-gray-800">{buddy.name || 'Unknown User'}</p>
+            {!buddy.hideEmail && buddy.email && (
+              <p className="text-xs text-gray-500">{buddy.email}</p>
+            )}
+          </div>
+        </div>
+        <div className="mt-2 pl-12">
+          <Badges
+            certificationLevel={buddy.certificationLevel}
+            specialties={buddy.specialties}
+            numberOfDives={buddy.numberOfDives}
+            size="small"
+            showSections={false}
+          />
+          <div className="flex flex-wrap gap-2 mt-1">
+            {buddy.certificationLevel && (
+              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                {buddy.certificationLevel}
+              </span>
+            )}
+            {buddy.numberOfDives > 0 && (
+              <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
+                {buddy.numberOfDives} dives
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex gap-2">
+      <div className={`flex ${isSmallScreen ? 'flex-col w-full space-y-2' : 'space-x-2'}`}>
         <button
           onClick={() => navigate(`/buddy/${buddy.id}`)}
-          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+          className={`text-xs py-1.5 px-3 bg-gray-100 text-gray-700 rounded border border-gray-200 hover:bg-gray-200 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
         >
           View Profile
         </button>
@@ -412,129 +455,190 @@ export const BuddyList = () => {
     </div>
   );
 
+  // Tab navigation for mobile
+  const renderTabs = () => (
+    <div className="mb-4 border-b">
+      <div className="flex">
+        <button
+          onClick={() => setActiveTab('buddies')}
+          className={`py-2 px-4 text-sm font-medium ${activeTab === 'buddies' 
+            ? 'text-blue-600 border-b-2 border-blue-600' 
+            : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          My Buddies {buddies.length > 0 && `(${buddies.length})`}
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`py-2 px-4 text-sm font-medium ${activeTab === 'requests' 
+            ? 'text-blue-600 border-b-2 border-blue-600' 
+            : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Requests {(pendingIncoming.length + pendingOutgoing.length) > 0 && 
+            `(${pendingIncoming.length + pendingOutgoing.length})`}
+        </button>
+        <button
+          onClick={() => setActiveTab('search')}
+          className={`py-2 px-4 text-sm font-medium ${activeTab === 'search' 
+            ? 'text-blue-600 border-b-2 border-blue-600' 
+            : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Find Buddies
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="p-4">
+    <div className="max-w-4xl mx-auto p-3 md:p-4 bg-white md:shadow-sm md:rounded-lg">
       {error && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-md">{error}</div>
+        <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm border border-red-100">{error}</div>
       )}
 
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Search by name or email..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full p-2 border rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          disabled={loading}
-        />
-        {searchQuery.length === 1 && (
-          <p className="text-sm text-gray-500 mt-1">Type at least 2 characters to search</p>
-        )}
-      </div>
+      {isSmallScreen && renderTabs()}
+
+      {/* Search Bar - Always visible on desktop, only on search tab on mobile */}
+      {(!isSmallScreen || activeTab === 'search') && (
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search by name or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full p-2 pl-9 border border-gray-300 rounded focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+              disabled={loading}
+            />
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 absolute left-3 top-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          {searchQuery.length === 1 && (
+            <p className="text-xs text-gray-500 mt-1">Type at least 2 characters to search</p>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto" />
         </div>
       )}
 
       {/* Search Results */}
-      {!loading && filteredUsers.length > 0 && (
-  <div className="mb-6">
-    <h3 className="text-lg font-semibold mb-2">Search Results</h3>
-    {filteredUsers.map(user => renderBuddyCard(user, (
-      user.buddyStatus === 'none' ? (
-        <button
-          onClick={() => sendBuddyRequest(user.id)}
-          className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
-          disabled={loading}
-        >
-          Add Buddy
-        </button>
-      ) : user.buddyStatus === 'pending' ? (
-        <div className="px-3 py-1 bg-gray-100 text-gray-600 rounded">
-          Request Pending
+      {!loading && filteredUsers.length > 0 && (!isSmallScreen || activeTab === 'search') && (
+        <div className="mb-6">
+          <h3 className="text-sm uppercase font-semibold text-gray-500 mb-2 tracking-wider">Search Results</h3>
+          <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+            {filteredUsers.map(user => renderBuddyCard(user, (
+              user.buddyStatus === 'none' ? (
+                <button
+                  onClick={() => sendBuddyRequest(user.id)}
+                  className={`text-xs py-1.5 px-3 bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
+                  disabled={loading}
+                >
+                  Add Buddy
+                </button>
+              ) : user.buddyStatus === 'pending' ? (
+                <div className="text-xs py-1.5 px-3 bg-gray-50 text-gray-500 rounded border border-gray-200">
+                  Request Pending
+                </div>
+              ) : (
+                <div className="text-xs py-1.5 px-3 bg-green-50 text-green-700 rounded border border-green-200">
+                  Already Buddies
+                </div>
+              )
+            )))}
+          </div>
         </div>
-      ) : (
-        <div className="px-3 py-1 bg-blue-100 text-blue-600 rounded">
-          Already Buddies
-        </div>
-      )
-    )))}
-  </div>
-)}
+      )}
 
-      {!loading && searchQuery.length >= 2 && filteredUsers.length === 0 && (
-        <div className="text-center py-4 text-gray-500">
+      {!loading && searchQuery.length >= 2 && filteredUsers.length === 0 && (!isSmallScreen || activeTab === 'search') && (
+        <div className="text-center py-4 text-gray-500 text-sm bg-gray-50 rounded-lg border border-gray-200">
           No users found matching your search
         </div>
       )}
 
       {/* Incoming Buddy Requests */}
-      {pendingIncoming.length > 0 && (
+      {pendingIncoming.length > 0 && (!isSmallScreen || activeTab === 'requests') && (
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Incoming Buddy Requests</h3>
-          {pendingIncoming.map(buddy => renderBuddyCard(buddy, (
-            <>
-              <button
-                onClick={() => handleBuddyRequest(buddy.id, true)}
-                className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
-                disabled={loading}
-              >
-                Accept
-              </button>
-              <button
-                onClick={() => handleBuddyRequest(buddy.id, false)}
-                className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
-                disabled={loading}
-              >
-                Decline
-              </button>
-            </>
-          )))}
+          <h3 className="text-sm uppercase font-semibold text-gray-500 mb-2 tracking-wider">Incoming Buddy Requests</h3>
+          <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+            {pendingIncoming.map(buddy => renderBuddyCard(buddy, (
+              <div className={`flex ${isSmallScreen ? 'flex-col space-y-2 w-full' : 'space-x-2'}`}>
+                <button
+                  onClick={() => handleBuddyRequest(buddy.id, true)}
+                  className={`text-xs py-1.5 px-3 bg-green-50 text-green-700 rounded border border-green-200 hover:bg-green-100 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
+                  disabled={loading}
+                >
+                  Accept
+                </button>
+                <button
+                  onClick={() => handleBuddyRequest(buddy.id, false)}
+                  className={`text-xs py-1.5 px-3 bg-red-50 text-red-700 rounded border border-red-200 hover:bg-red-100 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
+                  disabled={loading}
+                >
+                  Decline
+                </button>
+              </div>
+            )))}
+          </div>
         </div>
       )}
 
       {/* Pending Outgoing Requests */}
-      {pendingOutgoing.length > 0 && (
+      {pendingOutgoing.length > 0 && (!isSmallScreen || activeTab === 'requests') && (
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Pending Requests</h3>
-          {pendingOutgoing.map(buddy => renderBuddyCard(buddy, (
-            <div className="px-3 py-1 bg-gray-100 text-gray-600 rounded">
-              Awaiting Response
-            </div>
-          )))}
+          <h3 className="text-sm uppercase font-semibold text-gray-500 mb-2 tracking-wider">Pending Requests</h3>
+          <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+            {pendingOutgoing.map(buddy => renderBuddyCard(buddy, (
+              <div className="text-xs py-1.5 px-3 bg-gray-50 text-gray-500 rounded border border-gray-200">
+                Awaiting Response
+              </div>
+            )))}
+          </div>
         </div>
       )}
 
       {/* Accepted Buddies */}
-      <div>
-        <h3 className="text-lg font-semibold mb-2">My Buddies</h3>
-        {loading && buddies.length === 0 ? (
-          <p className="text-gray-500">Loading buddies...</p>
-        ) : buddies.length === 0 ? (
-          <p className="text-gray-500">No buddies yet</p>
-        ) : (
-          buddies.map(buddy => renderBuddyCard(buddy, (
-            <div className="flex gap-2">
-              <button
-                onClick={() => startChat(buddy.id)}
-                className="px-3 py-1 bg-green-500 text-white rounded disabled:bg-green-300 hover:bg-green-600"
-                disabled={loading}
+      {(!isSmallScreen || activeTab === 'buddies') && (
+        <div>
+          <h3 className="text-sm uppercase font-semibold text-gray-500 mb-2 tracking-wider">My Buddies</h3>
+          {loading && buddies.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">Loading buddies...</p>
+          ) : buddies.length === 0 ? (
+            <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-gray-500 text-sm mb-2">No buddies yet</p>
+              <button 
+                onClick={() => isSmallScreen ? setActiveTab('search') : null}
+                className="text-xs py-1.5 px-4 bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
               >
-                Message
-              </button>
-              <button
-                onClick={() => removeBuddy(buddy.id)}
-                className="px-3 py-1 bg-red-500 text-white rounded disabled:bg-red-300 hover:bg-red-600"
-                disabled={loading}
-              >
-                Remove
+                Find Buddies
               </button>
             </div>
-          )))
-        )}
-      </div>
+          ) : (
+            <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+              {buddies.map(buddy => renderBuddyCard(buddy, (
+                <div className={`flex ${isSmallScreen ? 'flex-col space-y-2 w-full' : 'space-x-2'}`}>
+                  <button
+                    onClick={() => startChat(buddy.id)}
+                    className={`text-xs py-1.5 px-3 bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
+                    disabled={loading}
+                  >
+                    Message
+                  </button>
+                  <button
+                    onClick={() => removeBuddy(buddy.id)}
+                    className={`text-xs py-1.5 px-3 bg-red-50 text-red-700 rounded border border-red-200 hover:bg-red-100 transition-colors ${isSmallScreen ? 'w-full' : ''}`}
+                    disabled={loading}
+                  >
+                    Remove
+                  </button>
+                </div>
+              )))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

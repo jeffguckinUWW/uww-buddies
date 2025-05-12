@@ -9,8 +9,9 @@ const MessageInput = ({
   className = "",
   isSending = false,
   sendError = null,
-  typingParams = null,    // Add this
-  onTypingStatus = null   // Add this
+  typingParams = null,
+  onTypingStatus = null,
+  hasLargerSendButton = false // New prop for mobile optimization
 }) => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +90,7 @@ const MessageInput = ({
   };
 
   return (
-    <div className="p-4 bg-white border-t">
+    <div className={`p-3 md:p-4 bg-white border-t ${className}`}>
       {/* Error message */}
       {sendError && (
         <div className="mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
@@ -110,25 +111,28 @@ const MessageInput = ({
           </span>
           <button
             onClick={() => setSelectedFile(null)}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-gray-400 hover:text-gray-600 p-1 touch-target"
+            aria-label="Remove file"
           >
             <X size={16} />
           </button>
         </div>
       )}
       
-      <div className="flex gap-2 items-center bg-gray-50 rounded-full px-4 py-2">
+      <div className="flex gap-2 items-center bg-gray-50 rounded-full px-3 md:px-4 py-2">
         <FileUpload
           onFileSelect={setSelectedFile}
           selectedFile={selectedFile}
           onClearFile={() => setSelectedFile(null)}
+          isSmallScreen={hasLargerSendButton}
         >
           <button
             type="button"
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className={`text-gray-400 hover:text-gray-600 ${hasLargerSendButton ? 'p-2' : 'p-1'} touch-target no-tap-highlight`}
             disabled={disabled || isSubmitting || isSending}
+            aria-label="Attach file"
           >
-            <Paperclip size={20} />
+            <Paperclip size={hasLargerSendButton ? 24 : 20} />
           </button>
         </FileUpload>
 
@@ -138,21 +142,24 @@ const MessageInput = ({
           onChange={handleMessageChange}
           placeholder={isSending ? "Sending..." : placeholder}
           disabled={disabled || isSubmitting || isSending}
-          className="flex-1 bg-transparent border-0 focus:outline-none text-gray-600 placeholder-gray-500"
+          className="flex-1 bg-transparent border-0 focus:outline-none text-gray-600 placeholder-gray-500 touch-input"
         />
         
         <button
           onClick={handleSubmit}
           disabled={disabled || isSubmitting || isSending || (!message.trim() && !selectedFile)}
           className={`
-            text-blue-500 hover:text-blue-600 disabled:text-gray-400 p-1
+            text-blue-500 hover:text-blue-600 disabled:text-gray-400 
+            ${hasLargerSendButton ? 'p-2' : 'p-1'}
             ${isSending ? 'animate-pulse' : ''}
+            touch-target no-tap-highlight
           `}
+          aria-label="Send message"
         >
           {isSending ? (
-            <div className="h-5 w-5 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+            <div className={`rounded-full border-2 border-blue-500 border-t-transparent animate-spin ${hasLargerSendButton ? 'h-6 w-6' : 'h-5 w-5'}`} />
           ) : (
-            <Send className="w-5 h-5 rotate-45" />
+            <Send className={hasLargerSendButton ? 'w-6 h-6 rotate-45' : 'w-5 h-5 rotate-45'} />
           )}
         </button>
       </div>

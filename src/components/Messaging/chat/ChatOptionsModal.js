@@ -1,4 +1,4 @@
-// src/components/Messaging/ChatOptionsModal.js
+// src/components/Messaging/chat/ChatOptionsModal.js
 import React, { useState, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 
@@ -13,6 +13,40 @@ export const ChatOptionsModal = ({
   isGroup 
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteChat = async () => {
+    if (window.confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      setIsDeleting(true);
+      try {
+        // Ensure the delete function is called
+        if (typeof onDeleteChat === 'function') {
+          await onDeleteChat();
+        }
+      } catch (error) {
+        console.error('Error deleting chat:', error);
+        alert('Failed to delete chat. Please try again.');
+      } finally {
+        setIsDeleting(false);
+        onClose();
+      }
+    }
+  };
+
+  const handleLeaveChat = () => {
+    if (window.confirm('Are you sure you want to leave this group chat?')) {
+      if (typeof onLeaveChat === 'function') {
+        onLeaveChat();
+      }
+      onClose();
+    }
+  };
+
+  const handleViewProfile = () => {
+    if (typeof onViewProfile === 'function') {
+      onViewProfile();
+    }
+    onClose();
+  };
 
   return (
     <Transition appear show={isOpen} as={Fragment}>
@@ -52,10 +86,7 @@ export const ChatOptionsModal = ({
                   {/* Direct Chat Options */}
                   {!isGroup && participantId && (
                     <button
-                      onClick={() => {
-                        onViewProfile();
-                        onClose();
-                      }}
+                      onClick={handleViewProfile}
                       className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded transition-colors duration-150"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
@@ -67,14 +98,7 @@ export const ChatOptionsModal = ({
 
                   {/* Delete Chat Option */}
                   <button
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
-                        setIsDeleting(true);
-                        await onDeleteChat();
-                        setIsDeleting(false);
-                        onClose();
-                      }
-                    }}
+                    onClick={handleDeleteChat}
                     disabled={isDeleting}
                     className="w-full flex items-center px-4 py-2 text-red-600 hover:bg-red-50 rounded transition-colors duration-150"
                   >
@@ -87,12 +111,7 @@ export const ChatOptionsModal = ({
                   {/* Group Chat Leave Option */}
                   {isGroup && (
                     <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to leave this group chat?')) {
-                          onLeaveChat();
-                          onClose();
-                        }
-                      }}
+                      onClick={handleLeaveChat}
                       className="w-full flex items-center px-4 py-2 text-red-600 hover:bg-red-50 rounded transition-colors duration-150"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">

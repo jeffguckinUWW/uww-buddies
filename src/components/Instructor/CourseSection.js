@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import CourseMessaging from '../Messaging/course/CourseMessaging';
 import TrainingRecordSelector from '../Training/TrainingRecordSelector';
 import StudentTrainingRecord from '../Training/StudentTrainingRecord';
 import CourseCreationModal from '../Training/CourseCreationModal';
 import CourseEndReport from './CourseEndReport';
 import NotificationService from '../../services/NotificationService';
+import UnifiedMessaging from '../Messaging/shared/UnifiedMessaging';
+
 
 const CourseSection = ({ user, instructorProfile }) => {
   const [courses, setCourses] = useState([]);
@@ -1014,19 +1015,21 @@ const CourseSection = ({ user, instructorProfile }) => {
 
       {/* Course Messaging Modal */}
       {messageModalState.course && (
-        <CourseMessaging
-          course={messageModalState.course}
-          isOpen={messageModalState.isOpen}
-          messageRecipient={messageModalState.recipient}
-          onClose={() => {
-            setMessageModalState({
-              isOpen: false,
-              course: null,
-              recipient: null
-            });
-          }}
-        />
-      )}
+  <UnifiedMessaging
+    context={messageModalState.course}
+    contextType="course"
+    isOpen={messageModalState.isOpen}
+    onClose={() => {
+      setMessageModalState({
+        isOpen: false,
+        course: null,
+        recipient: null
+      });
+    }}
+    recipient={messageModalState.recipient}
+    defaultTab={messageModalState.recipient ? 'private' : 'discussion'}
+  />
+)}
 
       {/* Training Record Modal */}
       {isTrainingRecordModalOpen && selectedStudent && (

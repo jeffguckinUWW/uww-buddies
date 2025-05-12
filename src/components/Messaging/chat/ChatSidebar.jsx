@@ -16,7 +16,7 @@ const NotificationBadge = ({ count }) => {
   );
 };
 
-const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
+const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, isSmallScreen }) => {
   const { user } = useAuth();
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,10 +131,10 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
 
   return (
     <>
-      <div className="p-4 border-b">
+      <div className="p-3 md:p-4 border-b">
         <button
           onClick={onNewChat}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 md:py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
         >
           <MessageSquarePlus size={20} />
           <span>New Chat</span>
@@ -160,12 +160,14 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat }) => {
               <button
                 key={chat.id}
                 onClick={() => handleChatSelection(chat.id)}
-                className={`w-full text-left p-4 hover:bg-gray-100 transition-colors
+                className={`w-full text-left p-3 md:p-4 hover:bg-gray-100 transition-colors
                   ${selectedChatId === chat.id ? 'bg-gray-100' : ''}
+                  ${isSmallScreen ? 'py-4' : ''}
+                  border-b border-gray-100
                 `}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-medium truncate">
+                  <h3 className="font-medium truncate text-gray-800">
                     {getChatName(chat)}
                   </h3>
                   <div className="flex items-center space-x-2">

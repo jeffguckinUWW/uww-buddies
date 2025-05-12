@@ -1,11 +1,10 @@
+// src/components/Messaging/chat/NewChatModal.js
 import React, { useState, useEffect, Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { Search, Users } from 'lucide-react';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useAuth } from '../../../context/AuthContext';
-// Remove unused import
-// import { getMergedBuddyList } from '../../../utils/UserProfileHelper';
 
 const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   const { user } = useAuth();
@@ -81,6 +80,37 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
       setLoading(true);
       setError('');
       
+      // First check if a direct chat already exists with this buddy
+      if (selectedBuddies.length === 1) {
+        const buddyId = selectedBuddies[0];
+        
+        // Query existing chats for a direct chat with this buddy
+        const chatsRef = collection(db, 'chats');
+        const userChatsQuery = query(
+          chatsRef,
+          where('activeParticipants', 'array-contains', user.uid)
+        );
+        
+        const userChatsSnapshot = await getDocs(userChatsQuery);
+        
+        // Find a direct chat that contains just the user and this buddy
+        const existingChat = userChatsSnapshot.docs.find(doc => {
+          const data = doc.data();
+          return (
+            data.type === 'direct' && 
+            data.activeParticipants.length === 2 &&
+            data.activeParticipants.includes(buddyId)
+          );
+        });
+        
+        if (existingChat) {
+          console.log('Found existing chat:', existingChat.id);
+          onChatCreated(existingChat.id);
+          return;
+        }
+      }
+      
+      // If no existing chat was found or this is a group chat, create a new one
       const userProfileDoc = await getDoc(doc(db, 'profiles', user.uid));
       const userName = userProfileDoc.exists() ? userProfileDoc.data().name || 'Unknown User' : 'Unknown User';
 
@@ -149,7 +179,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
-        {/* Dialog content unchanged */}
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"
@@ -206,7 +235,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
                   )}
 
                   <div className="mt-4 max-h-60 overflow-y-auto">
-                    {/* Buddy list rendering unchanged */}
                     {loading ? (
                       <div className="flex justify-center py-4">
                         <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />

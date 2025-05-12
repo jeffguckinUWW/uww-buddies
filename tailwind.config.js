@@ -53,7 +53,27 @@ module.exports = {
       },
       transform: {
         'perspective': 'perspective(1000px)',
-      }
+      },
+      // Add these screen breakpoints if you need more precise mobile control
+      screens: {
+        'xs': '480px',
+        // Keep existing Tailwind breakpoints
+      },
+      // Add skeleton loading animation keyframes
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '-468px 0' },
+          '100%': { backgroundPosition: '468px 0' }
+        }
+      },
+      animation: {
+        'shimmer': 'shimmer 1.5s linear infinite'
+      },
+      // Add safe area variables for modern mobile devices
+      spacing: {
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-top': 'env(safe-area-inset-top)',
+      },
     },
   },
   plugins: [
@@ -71,7 +91,24 @@ module.exports = {
         '.backface-hidden': {
           backfaceVisibility: 'hidden',
           '-webkit-backface-visibility': 'hidden',
-        }
+        },
+        // Add these mobile-friendly utilities
+        '.smooth-scroll': {
+          '-webkit-overflow-scrolling': 'touch',
+          'scrollBehavior': 'smooth',
+        },
+        '.no-tap-highlight': {
+          '-webkit-tap-highlight-color': 'transparent',
+        },
+        '.no-select': {
+          '-webkit-user-select': 'none',
+          'userSelect': 'none',
+        },
+        '.skeleton': {
+          'background': 'linear-gradient(to right, #f0f0f0 8%, #e0e0e0 18%, #f0f0f0 33%)',
+          'backgroundSize': '800px 104px',
+          'animation': 'shimmer 1.5s linear infinite',
+        },
       })
     }
   ],

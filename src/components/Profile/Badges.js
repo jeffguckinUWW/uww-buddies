@@ -40,29 +40,34 @@ const DIVE_COUNT_BADGES = [
 ];
 
 const Badge = ({ name, imageName, description, size = "full" }) => {
-  // Size classes for different display contexts
+  // Size classes for different display contexts - refined for more compact mobile display
   const sizeClasses = {
-    small: "w-10 h-10 p-0.5",
-    medium: "w-12 h-12 p-1",
-    large: "w-14 h-14 p-1.5",
-    full: "w-16 h-16 p-2"
+    tiny: "w-7 h-7 p-0.5",
+    small: "w-8 h-8 p-0.5",
+    medium: "w-10 h-10 p-1",
+    large: "w-12 h-12 p-1",
+    full: "w-14 h-14 p-1"
   }[size];
 
   return (
     <div className="relative group">
-      <div className={`rounded-full bg-cyan-50 flex items-center justify-center hover:bg-cyan-100 transition-colors ${sizeClasses}`}>
+      <div className={`rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-100 ${sizeClasses}`}>
         <img 
           src={`/images/badges/${imageName}`}
           alt={name}
           className="w-full h-full object-contain"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = "/images/badges/placeholder.png";
+          }}
         />
       </div>
-      {/* Tooltip */}
+      {/* Improved tooltip that's more subtle */}
       <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 hidden group-hover:block z-50">
-        <div className="bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+        <div className="bg-gray-800 text-white text-xs rounded py-0.5 px-1.5 whitespace-nowrap shadow-lg">
           {name}
           {description && (
-            <div className="text-gray-300 text-xs">{description}</div>
+            <div className="text-gray-300 text-xs font-light">{description}</div>
           )}
         </div>
       </div>
@@ -74,11 +79,11 @@ const BadgeSection = ({ title, badges, showTitle = true, size }) => {
   if (!badges || badges.length === 0) return null;
 
   return (
-    <div className={showTitle ? "mb-6" : "inline"}>
+    <div className={showTitle ? "mb-4" : "inline"}>
       {showTitle && (
-        <h4 className="text-sm font-medium text-gray-700 mb-2">{title}</h4>
+        <h4 className="text-xs font-medium text-gray-700 mb-2">{title}</h4>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {badges.map((badge, index) => (
           <Badge
             key={index}
@@ -97,7 +102,7 @@ const Badges = ({
   certificationLevel, 
   specialties = [], 
   numberOfDives = 0,
-  size = "full", // "small", "medium", "large", or "full"
+  size = "full", // "tiny", "small", "medium", "large", or "full"
   showSections = true // whether to show section titles and separate sections
 }) => {
   // Get certification badges
@@ -136,8 +141,8 @@ const Badges = ({
 
   if (showSections) {
     return (
-      <div className="mt-6">
-        <h3 className="font-medium text-gray-900 mb-3">Achievements</h3>
+      <div className="mt-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Achievements</h3>
         <BadgeSection title="Certification Level" badges={certificationBadges} size={size} />
         <BadgeSection title="Specialties" badges={specialtyBadges} size={size} />
         <BadgeSection title="Experience" badges={diveCountBadges} size={size} />
@@ -145,12 +150,18 @@ const Badges = ({
     );
   }
 
-  // Compact display for mini version
+  // Compact display for mini version - improved spacing
   return (
     <div className="flex flex-wrap gap-1 items-center">
-      <BadgeSection badges={certificationBadges} showTitle={false} size={size} />
-      <BadgeSection badges={specialtyBadges} showTitle={false} size={size} />
-      <BadgeSection badges={diveCountBadges} showTitle={false} size={size} />
+      {certificationBadges.length > 0 && (
+        <BadgeSection badges={certificationBadges} showTitle={false} size={size} />
+      )}
+      {specialtyBadges.length > 0 && (
+        <BadgeSection badges={specialtyBadges} showTitle={false} size={size} />
+      )}
+      {diveCountBadges.length > 0 && (
+        <BadgeSection badges={diveCountBadges} showTitle={false} size={size} />
+      )}
     </div>
   );
 };

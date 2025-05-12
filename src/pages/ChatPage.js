@@ -9,6 +9,23 @@ import { db } from '../firebase/config';
 const ChatPage = () => {
   const { user } = useAuth();
   const [chatNotifications, setChatNotifications] = useState({});
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  // Check screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsSmallScreen(window.innerWidth < 768);
+    };
+    
+    // Check immediately
+    checkScreenSize();
+    
+    // Add listener for window resize
+    window.addEventListener('resize', checkScreenSize);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Subscribe to chat notifications
   useEffect(() => {
@@ -44,15 +61,6 @@ const ChatPage = () => {
     }).catch(error => {
       console.error("Error fetching chats:", error);
       
-      // Provide more specific error messages based on error type
-      if (error.code === 'permission-denied') {
-        console.error("Permission denied: Check that you have access to these chats");
-        // You could set an error state here to display to the user
-      } else if (error.code === 'unavailable') {
-        console.error("Firebase is temporarily unavailable. Please try again later.");
-        // You could set a connectivity error state here
-      }
-      
       // Initialize empty notifications to prevent further errors
       setChatNotifications({});
     });
@@ -60,10 +68,12 @@ const ChatPage = () => {
 
   return (
     <MessageProvider>
-      <div className="container mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <ChatContainer chatNotifications={chatNotifications} />
-        </div>
+      {/* Remove outer container divs to simplify structure */}
+      <div className="h-[calc(100vh-8rem)] chat-container safe-area-insets">
+        <ChatContainer 
+          chatNotifications={chatNotifications} 
+          isSmallScreen={isSmallScreen}
+        />
       </div>
     </MessageProvider>
   );

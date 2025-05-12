@@ -1,12 +1,22 @@
-import React from 'react';
+// src/components/Messaging/shared/MessageBubble.jsx - Updated with embedded context awareness
+
+import React, { useState } from 'react';
 import { Trash2, Megaphone, Mail, Users } from 'lucide-react';
 
 const MessageBubble = ({
   message,
   isCurrentUser,
   onDelete,
-  showSender = true
+  showSender = true,
+  touchedMessageId = null,
+  onTouchStart = null,
+  onTouchEnd = null,
+  isSmallScreen = false,
+  isEmbedded = false // New prop to handle embedded vs modal contexts
 }) => {
+  // Add state to track hover state for delete button visibility
+  const [isHovered, setIsHovered] = useState(false);
+  
   const formatTimestamp = (timestamp) => {
     if (!timestamp) return '';
     
@@ -82,8 +92,38 @@ const MessageBubble = ({
 
   const badge = getMessageBadge();
 
+  // Touch event handlers for mobile feedback
+  const handleTouchStart = () => {
+    if (onTouchStart) {
+      onTouchStart(message.id);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (onTouchEnd) {
+      onTouchEnd(null);
+    }
+  };
+
+  const isTouched = touchedMessageId === message.id;
+
+  // Handle showing delete button based on context - different approach for embedded view
+  const showDeleteButton = isCurrentUser && onDelete && (
+    isEmbedded ? 
+      // For embedded view - always visible with hover enhancement
+      (isHovered || isSmallScreen) :
+      // For modal view - visible on hover, touch, or small screen
+      (isHovered || isTouched || isSmallScreen)
+  );
+
   return (
-    <div className={`flex items-start ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+    <div 
+      className={`flex items-start ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+      onMouseEnter={() => setIsHovered(true)} 
+      onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {!isCurrentUser && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center mr-2">
           <span className="text-sm font-medium text-gray-600">
@@ -92,7 +132,7 @@ const MessageBubble = ({
         </div>
       )}
       
-      <div className="group max-w-[70%]">
+      <div className="group max-w-[75%] md:max-w-[70%] relative">
         {showSender && !isCurrentUser && (
           <div className="font-medium text-sm text-gray-600 mb-1 px-1 flex items-center">
             {message.senderName}
@@ -105,7 +145,11 @@ const MessageBubble = ({
           </div>
         )}
         
-        <div className={`relative p-3 ${getMessageStyle()}`}>
+        <div 
+          className={`relative p-3 ${getMessageStyle()} ${
+            isTouched ? 'opacity-80' : 'opacity-100'
+          } transition-opacity`}
+        >
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
           <div className={`mt-1 text-xs ${
             isCurrentUser ? 'text-blue-100' : 'text-gray-500'
@@ -113,13 +157,24 @@ const MessageBubble = ({
             {formatTimestamp(message.timestamp)}
           </div>
 
-          {isCurrentUser && onDelete && (
+          {/* More aggressive styling for the delete button - use inline style for position */}
+          {showDeleteButton && (
             <button
-              onClick={() => onDelete(message.id)}
-              className="absolute -left-8 top-2 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => {
+                // Add confirmation before deleting
+                if (window.confirm('Are you sure you want to delete this message?')) {
+                  onDelete(message.id);
+                }
+              }}
+              // Use a more visually distinct styling
+              className="absolute bg-white text-red-500 p-2 rounded-full shadow-md border border-gray-200 z-10"
+              style={{ 
+                left: isEmbedded ? '-2.5rem' : '-3rem',
+                top: '0.5rem'
+              }}
               aria-label="Delete message"
             >
-              <Trash2 size={16} className="text-red-500 hover:text-red-600" />
+              <Trash2 className="text-red-500" size={isSmallScreen ? 18 : 16} />
             </button>
           )}
         </div>

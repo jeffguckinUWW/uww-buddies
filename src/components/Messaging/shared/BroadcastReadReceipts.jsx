@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from '../../../components/ui/dialog';
 
-const BroadcastReadReceipts = ({ message, isInstructor }) => {
+const BroadcastReadReceipts = ({ message, isInstructor, isSmallScreen = false }) => {
   const { user } = useAuth();
   const { markAsRead } = useMessages();
   const [retryCount, setRetryCount] = useState(0);
@@ -105,25 +105,29 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
-          <Users size={14} />
+        <button className={`flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 ${
+          isSmallScreen ? 'p-2 touch-target' : ''
+        } no-tap-highlight`}>
+          <Users size={isSmallScreen ? 16 : 14} />
           {readCount}/{totalRecipients} read
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className={`${isSmallScreen ? 'w-[95%]' : 'max-w-md'}`}>
         <DialogHeader>
-          <DialogTitle>Read Receipts</DialogTitle>
+          <DialogTitle className="text-lg">Read Receipts</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="max-h-[60vh] overflow-y-auto smooth-scroll p-1">
           {/* Read Section */}
           <div className="mb-4">
-            <h3 className="text-sm font-medium text-green-600 mb-2">
+            <h3 className="text-sm font-medium text-green-600 mb-2 px-2">
               Read ({readUsers.length})
             </h3>
             <div className="space-y-2">
               {readUsers.map(([userId, statusObj]) => (
-                <div key={userId} className="flex justify-between items-center text-sm">
-                  <span>{readStatus[userId]?.name || 'Unknown User'}</span>
+                <div key={userId} className={`flex justify-between items-center text-sm px-2 py-2 ${
+                  isSmallScreen ? 'hover:bg-gray-50 rounded' : ''
+                }`}>
+                  <span className="font-medium">{readStatus[userId]?.name || 'Unknown User'}</span>
                   <span className="text-xs text-gray-500">
                   {statusObj.readAt ? format(
   statusObj.readAt.toDate ? statusObj.readAt.toDate() : 
@@ -134,24 +138,26 @@ const BroadcastReadReceipts = ({ message, isInstructor }) => {
                 </div>
               ))}
               {readUsers.length === 0 && (
-                <div className="text-sm text-gray-500">No one has read this message yet</div>
+                <div className="text-sm text-gray-500 px-2 py-2">No one has read this message yet</div>
               )}
             </div>
           </div>
 
           {/* Unread Section */}
           <div>
-            <h3 className="text-sm font-medium text-gray-600 mb-2">
+            <h3 className="text-sm font-medium text-gray-600 mb-2 px-2">
               Not Yet Read ({unreadUsers.length})
             </h3>
             <div className="space-y-2">
               {unreadUsers.map(([userId]) => (
-                <div key={userId} className="text-sm text-gray-500">
+                <div key={userId} className={`text-sm text-gray-500 px-2 py-2 ${
+                  isSmallScreen ? 'hover:bg-gray-50 rounded' : ''
+                }`}>
                   {readStatus[userId]?.name || 'Unknown User'}
                 </div>
               ))}
               {unreadUsers.length === 0 && (
-                <div className="text-sm text-gray-500">Everyone has read this message</div>
+                <div className="text-sm text-gray-500 px-2 py-2">Everyone has read this message</div>
               )}
             </div>
           </div>

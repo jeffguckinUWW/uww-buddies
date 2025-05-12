@@ -45,7 +45,7 @@ const ChatHeader = ({ chatId, onDeleteChat }) => {
 
     if (chat.type === 'group') return chat.name;
     
-    const otherParticipant = Object.entries(chat.participants)
+    const otherParticipant = Object.entries(chat.participants || {})
       .find(([id]) => id !== user?.uid)?.[1];
       
     return otherParticipant?.displayName || 'Unknown User';
@@ -56,6 +56,35 @@ const ChatHeader = ({ chatId, onDeleteChat }) => {
     return Object.values(chat.participants)
       .filter(p => p.active).length;
   };
+
+  // Get other participant for direct chat options
+  const getOtherParticipant = () => {
+    if (!chat || chat.type === 'group' || !chat.participants) return null;
+    
+    const otherParticipantEntry = Object.entries(chat.participants)
+      .find(([id]) => id !== user?.uid);
+      
+    if (!otherParticipantEntry) return null;
+    
+    return {
+      id: otherParticipantEntry[0],
+      ...otherParticipantEntry[1]
+    };
+  };
+
+  const handleDeleteChat = () => {
+    if (typeof onDeleteChat === 'function') {
+      onDeleteChat();
+    }
+    setShowOptions(false);
+  };
+
+  const handleViewProfile = (userId) => {
+    navigate(`/buddy/${userId}`);
+    setShowOptions(false);
+  };
+
+  const otherParticipant = getOtherParticipant();
 
   return (
     <div className="flex items-center justify-between p-4 border-b bg-white">
@@ -80,12 +109,12 @@ const ChatHeader = ({ chatId, onDeleteChat }) => {
       <ChatOptionsModal
         isOpen={showOptions}
         onClose={() => setShowOptions(false)}
-        onDeleteChat={onDeleteChat}
-        chat={chat}
-        onViewProfile={(userId) => {
-          navigate(`/buddy/${userId}`);
-          setShowOptions(false);
-        }}
+        onDeleteChat={handleDeleteChat}
+        onLeaveChat={handleDeleteChat} // Same function for now
+        onViewProfile={otherParticipant ? () => handleViewProfile(otherParticipant.id) : undefined}
+        participantId={otherParticipant?.id}
+        participantName={otherParticipant?.displayName}
+        isGroup={chat?.type === 'group'}
       />
     </div>
   );

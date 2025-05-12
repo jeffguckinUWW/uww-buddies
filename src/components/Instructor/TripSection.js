@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db } from '../../firebase/config';
 import { doc, getDoc, collection, getDocs, updateDoc, addDoc, query, where, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import TripMessaging from '../Messaging/trip/TripMessaging';
 import NotificationService from '../../services/NotificationService';
+import UnifiedMessaging from '../Messaging/shared/UnifiedMessaging';
+
 
 const TripsSection = ({ user, instructorProfile }) => {
   // Main states
@@ -1367,18 +1368,21 @@ const TripsSection = ({ user, instructorProfile }) => {
 
       {/* Trip Messaging Modal */}
       {messageModalState.isOpen && messageModalState.trip && (
-      <TripMessaging
-        trip={messageModalState.trip}
-        isOpen={messageModalState.isOpen}
-        onClose={() => {
-          setMessageModalState({
-            isOpen: false,
-            trip: null,
-            recipient: null
-          });
-        }}
-      />
-    )}
+  <UnifiedMessaging
+    context={messageModalState.trip}
+    contextType="trip"
+    isOpen={messageModalState.isOpen}
+    onClose={() => {
+      setMessageModalState({
+        isOpen: false,
+        trip: null,
+        recipient: null
+      });
+    }}
+    recipient={messageModalState.recipient}
+    defaultTab={messageModalState.recipient ? 'private' : 'discussion'}
+  />
+)}
     </div>
   );
 };

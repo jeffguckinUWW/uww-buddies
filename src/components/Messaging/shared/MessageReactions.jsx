@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useMessages } from '../../../context/MessageContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../components/ui/tooltip';
 
-const MessageReactions = ({ message, currentUserId }) => {
+const MessageReactions = ({ 
+  message, 
+  currentUserId,
+  isSmallScreen = false 
+}) => {
   const { getSortedReactions } = useMessages();
   
   if (!message.reactions) return null;
@@ -20,15 +24,17 @@ const MessageReactions = ({ message, currentUserId }) => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full 
+                  className={`flex items-center gap-1 text-xs ${
+                    isSmallScreen ? 'px-2 py-1 touch-target' : 'px-1.5 py-0.5'
+                  } rounded-full 
                     ${hasUserReacted ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'} 
-                    hover:bg-gray-200 transition-colors`}
+                    hover:bg-gray-200 transition-colors no-tap-highlight`}
                 >
                   <span>{emoji}</span>
                   <span className="text-xs">{count}</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent side={isSmallScreen ? "top" : "bottom"}>
                 <div className="text-xs max-w-xs">
                   <p className="font-medium mb-1">Reactions:</p>
                   <ul>

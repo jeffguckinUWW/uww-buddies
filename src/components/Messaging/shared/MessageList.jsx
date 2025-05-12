@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Trash2, Megaphone, Edit2, X } from 'lucide-react';
+import { Trash2, Megaphone, Edit2, X, ChevronDown } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../components/ui/alert';
 import BroadcastReadReceipts from './BroadcastReadReceipts';
 import FilePreview from './FilePreview';
@@ -12,6 +12,8 @@ const MessageList = ({
   currentUserId,
   onDeleteMessage,
   onEditMessage,
+  onReplyMessage,
+  onViewThread,
   loading,
   loadingMore,
   error,
@@ -19,15 +21,23 @@ const MessageList = ({
   isInstructor = false,
   hasMore = false,
   onLoadMore,
-  className = ""
+  className = "",
+  activeThreadId = null,
+  // Mobile optimization props
+  touchedMessageId = null,
+  setTouchedMessageId = null,
+  isSmallScreen = false,
+  isEmbedded = false // Added this prop for embedded vs modal context
 }) => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState('');
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const { addReaction, getSortedReactions } = useMessages();
   
   const observerRef = useRef(null);
   const loadingRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const containerRef = useRef(null);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -43,7 +53,7 @@ const MessageList = ({
     }
   }, [hasMore, loadingMore, onLoadMore]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const options = {
       root: null,
       rootMargin: '20px',
@@ -62,6 +72,22 @@ const MessageList = ({
       }
     };
   }, [handleObserver]);
+
+  // Handle scroll to show/hide scroll to bottom button
+  const handleScroll = (e) => {
+    if (!containerRef.current) return;
+    
+    const element = e.target;
+    const isNotAtBottom = element.scrollHeight - element.scrollTop > element.clientHeight + 100;
+    setShowScrollToBottom(isNotAtBottom);
+  };
+
+  // Scroll to bottom function
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   const handleStartEdit = (message) => {
     setEditingMessageId(message.id);
@@ -121,6 +147,19 @@ const MessageList = ({
     return true;
   };
 
+  // Handle touch events for mobile feedback
+  const handleTouchStart = (messageId) => {
+    if (setTouchedMessageId) {
+      setTouchedMessageId(messageId);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (setTouchedMessageId) {
+      setTouchedMessageId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -172,8 +211,13 @@ const MessageList = ({
   };
 
   return (
-    <div className={`flex-1 overflow-y-auto ${className}`} style={{ maxHeight: 'calc(100vh - 180px)' }}>
-      <div className="flex flex-col space-y-4 p-4">
+    <div 
+      className={`flex-1 overflow-y-auto smooth-scroll ${className}`} 
+      style={{ maxHeight: 'calc(100vh - 180px)' }}
+      ref={containerRef}
+      onScroll={handleScroll}
+    >
+      <div className="flex flex-col space-y-3 md:space-y-4 p-3 md:p-4">
         {/* Loading More Indicator */}
         {loadingMore && (
           <div className="flex justify-center py-2">
@@ -186,14 +230,14 @@ const MessageList = ({
 
         {/* Show a message when there are no messages to display */}
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full py-10">
             <div className="text-gray-500">No messages yet</div>
           </div>
         )}
 
         {/* Grouped messages */}
         {Object.entries(groupedMessages).map(([date, dateMessages]) => (
-          <div key={date} className="space-y-4">
+          <div key={date} className="space-y-3 md:space-y-4">
             <div className="sticky top-0 z-10 flex justify-center">
               <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
                 {format(new Date(date), 'MMMM d, yyyy')}
@@ -205,20 +249,14 @@ const MessageList = ({
               const broadcastMessage = isBroadcast(message);
               const isEditing = editingMessageId === message.id;
               const reactions = getMessageReactions(message);
-
-              // Debug info
-              if (broadcastMessage) {
-                console.log('Rendering broadcast message:', {
-                  id: message.id,
-                  type: message.type,
-                  isBroadcast: message.isBroadcast
-                });
-              }
+              const isTouched = touchedMessageId === message.id;
 
               return (
                 <div
                   key={message.id}
                   className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                  onTouchStart={() => handleTouchStart(message.id)}
+                  onTouchEnd={handleTouchEnd}
                 >
                   <div
                     className={`relative group max-w-[80%] ${
@@ -227,7 +265,7 @@ const MessageList = ({
                         : isOwnMessage
                         ? 'bg-[#4460F1] text-white rounded-2xl rounded-tr-sm p-3'
                         : 'bg-gray-100 rounded-2xl rounded-tl-sm p-3'
-                    }`}
+                    } ${isTouched ? 'opacity-80' : 'opacity-100'} transition-opacity`}
                   >
                     {/* Broadcast Icon */}
                     {(broadcastMessage && showBroadcastIndicator) && (
@@ -256,20 +294,22 @@ const MessageList = ({
                         <textarea
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
-                          className="w-full p-2 rounded border text-gray-800 min-h-[60px] resize-none"
+                          className="w-full p-2 rounded border text-gray-800 min-h-[60px] resize-none touch-input"
                           autoFocus
                         />
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={handleCancelEdit}
-                            className="p-1 hover:bg-gray-100 rounded text-gray-600"
+                            className="p-2 hover:bg-gray-100 rounded text-gray-600 touch-target"
+                            aria-label="Cancel edit"
                           >
                             <X size={16} />
                           </button>
                           <button
                             onClick={() => handleSaveEdit(message.id)}
-                            className="p-1 hover:bg-gray-100 rounded text-green-600"
+                            className="p-2 hover:bg-gray-100 rounded text-green-600 touch-target"
                             disabled={!editText.trim()}
+                            aria-label="Save edit"
                           >
                             <Edit2 size={16} />
                           </button>
@@ -303,7 +343,7 @@ const MessageList = ({
                           <button
                             key={reaction.emoji}
                             onClick={() => handleReaction(message.id, reaction.emoji)}
-                            className={`px-1.5 py-0.5 rounded-full text-xs ${
+                            className={`px-2 py-1 rounded-full text-xs ${isSmallScreen ? 'touch-target' : ''} ${
                               reaction.users.some(u => u.id === currentUserId)
                                 ? 'bg-blue-100 text-blue-700'
                                 : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
@@ -313,6 +353,18 @@ const MessageList = ({
                           </button>
                         ))}
                       </div>
+                    )}
+
+                    {/* Show thread link if there are replies */}
+                    {message.replyCount > 0 && (
+                      <button
+                        onClick={() => onViewThread && onViewThread(message.id)}
+                        className={`mt-1 text-xs underline ${
+                          isOwnMessage ? 'text-blue-100' : 'text-gray-500'
+                        } ${isSmallScreen ? 'p-1 touch-target' : ''}`}
+                      >
+                        View thread ({message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'})
+                      </button>
                     )}
 
                     {/* Footer: Timestamp, Read Status, Actions */}
@@ -333,15 +385,40 @@ const MessageList = ({
 
                       {/* Edit/Delete Controls */}
                       {!isEditing && (
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <div className={`${
+                          isEmbedded 
+                            ? 'opacity-100' // Always visible in embedded view with hover enhancement
+                            : isSmallScreen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          } transition-opacity flex gap-2`}>
                           {/* Reaction Picker */}
-                            <ReactionPicker
-                              messageId={message.id}
-                              onReactionSelect={(emoji) => {
-                                if (emoji) handleReaction(message.id, emoji);
-                              }}
-                              isOwnMessage={isOwnMessage}
-                            />
+                          <ReactionPicker
+                            messageId={message.id}
+                            onReactionSelect={(emoji) => {
+                              if (emoji) handleReaction(message.id, emoji);
+                            }}
+                            isOwnMessage={isOwnMessage}
+                            isSmallScreen={isSmallScreen}
+                          />
+
+                          {/* Reply Button - for non-thread views */}
+                          {!activeThreadId && onReplyMessage && (
+                            <button
+                              onClick={() => onViewThread && onViewThread(message.id)}
+                              className={`${
+                                broadcastMessage
+                                  ? 'text-blue-600 hover:text-blue-800'
+                                  : isOwnMessage
+                                  ? 'text-blue-200 hover:text-white'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              } ${isSmallScreen ? 'p-2 touch-target' : ''}`}
+                              aria-label="Reply to message"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width={isSmallScreen ? "18" : "14"} height={isSmallScreen ? "18" : "14"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="15 10 20 15 15 20"></polyline>
+                                <path d="M4 4v7a4 4 0 0 0 4 4h12"></path>
+                              </svg>
+                            </button>
+                          )}
 
                           {/* Edit Button */}
                           {isMessageEditable(message) && (
@@ -350,26 +427,33 @@ const MessageList = ({
                               className={`${
                                 broadcastMessage
                                   ? 'text-blue-600 hover:text-blue-800'
-                                  : 'text-blue-200 hover:text-white'
-                              }`}
+                                  : isOwnMessage
+                                  ? 'text-blue-200 hover:text-white'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              } ${isSmallScreen ? 'p-2 touch-target' : ''}`}
                               aria-label="Edit message"
                             >
-                              <Edit2 size={14} />
+                              <Edit2 size={isSmallScreen ? 18 : 14} />
                             </button>
                           )}
 
                           {/* Delete Button */}
-                          <button
-                            onClick={() => onDeleteMessage && onDeleteMessage(message.id)}
-                            className={`${
-                              broadcastMessage
-                                ? 'text-blue-600 hover:text-blue-800'
-                                : 'text-blue-200 hover:text-white'
-                            }`}
-                            aria-label="Delete message"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {isOwnMessage && onDeleteMessage && (
+                            <button
+                              onClick={() => onDeleteMessage(message.id)}
+                              className={`${
+                                broadcastMessage
+                                  ? 'text-blue-600 hover:text-blue-800'
+                                  : 'text-blue-200 hover:text-white'
+                              } ${isSmallScreen ? 'p-2 touch-target' : ''} ${
+                                isEmbedded ? 'hover:scale-110 hover:bg-red-50 rounded-full' : ''
+                              }`}
+                              style={isEmbedded ? { zIndex: 10 } : {}}
+                              aria-label="Delete message"
+                            >
+                              <Trash2 size={isSmallScreen ? 18 : 14} />
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -395,6 +479,17 @@ const MessageList = ({
         {/* Scroll anchor for auto-scrolling */}
         <div ref={messagesEndRef} />
       </div>
+      
+      {/* Scroll to bottom button */}
+      {showScrollToBottom && (
+        <button
+          onClick={scrollToBottom}
+          className="fixed bottom-24 right-4 bg-white shadow-md rounded-full p-2 z-10"
+          aria-label="Scroll to bottom"
+        >
+          <ChevronDown size={20} className="text-gray-600" />
+        </button>
+      )}
     </div>
   );
 };

@@ -82,6 +82,112 @@ code {
   }
 }
 
+/* Add this to your index.css file after your existing @layer utilities section */
+
+@layer utilities {
+  /* Existing 3D transform utilities... */
+  
+  /* Mobile optimizations */
+  .safe-area-insets {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  
+  /* Touch-friendly targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Use in combination with touch-target for form controls */
+  .touch-input {
+    @apply text-base;
+  } 
+  
+  /* Improved mobile scrolling */
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent pull-to-refresh behavior */
+  .no-overscroll {
+    overscroll-behavior: none;
+  }
+  
+  /* Optimized tap highlight */
+  .no-tap-highlight {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Prevent unintended selection */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Message list optimization */
+  .contain-content {
+    contain: content;
+  }
+  
+  /* Performance optimization */
+  .gpu-accelerated {
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+
+/* Add these media queries outside of the @layer directive */
+
+/* Enhanced mobile styles */
+@media (max-width: 767px) {
+  /* Make buttons more tappable on mobile */
+  .btn, button:not(.inline-btn) {
+    @apply py-3 px-4;
+  }
+  
+  /* Increase form element spacing */
+  .form-input, .form-select, .form-textarea {
+    @apply my-2;
+  }
+  
+  /* Chat containers */
+  .chat-container {
+    @apply safe-area-insets smooth-scroll;
+  }
+  
+  /* Message input at bottom of screen */
+  .message-input-container {
+    @apply safe-bottom;
+  }
+  
+  /* Bottom navigation */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 flex justify-around bg-white border-t border-gray-200 py-2 z-40;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Dark mode support (integrates with your existing dark mode) */
+@media (prefers-color-scheme: dark) {
+  .theme-aware-bg {
+    @apply bg-background text-foreground;
+  }
+  
+  .theme-aware-card {
+    @apply bg-card text-card-foreground;
+  }
+  
+  .bottom-nav {
+    @apply bg-background border-border;
+  }
+}
+
 .dive-pattern-bg {
   background-color: rgba(255, 255, 255, 0.1);
   background-image: 
