@@ -28,6 +28,34 @@ import LearningResources from './components/Knowledge/LearningResources';
 import ResourceViewer from './components/Knowledge/ResourceViewer';
 import { getVerificationSetting } from './utils/verificationSettings';
 
+// Mobile viewport height fix component
+function ViewportHeightFix() {
+  useEffect(() => {
+    const setAppHeight = () => {
+      // Get viewport height and set custom property
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    // Set initially and on resize
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    
+    // Re-calculate on orientation change for iOS
+    window.addEventListener('orientationchange', () => {
+      // Small delay to ensure iOS has completed its UI adjustments
+      setTimeout(setAppHeight, 200);
+    });
+    
+    return () => {
+      window.removeEventListener('resize', setAppHeight);
+      window.removeEventListener('orientationchange', setAppHeight);
+    };
+  }, []);
+  
+  return null;
+}
+
 function AuthRoutes() {
   const location = useLocation();
   const [error, setError] = useState('');
@@ -114,7 +142,7 @@ function MainContent() {
   // If user is not logged in, show login, register, or forgot password pages
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-screen-safe bg-gray-100 smooth-scroll">
         <Routes>
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -143,7 +171,11 @@ function App() {
     <AuthProvider>
       <MessageProvider>
         <Router>
-          <MainContent />
+          {/* Add viewport height fix component */}
+          <ViewportHeightFix />
+          <div className="no-tap-highlight smooth-scroll no-overscroll">
+            <MainContent />
+          </div>
         </Router>
       </MessageProvider>
     </AuthProvider>

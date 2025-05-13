@@ -326,14 +326,14 @@ const ShiftSwapAvailable = () => {
               key={request.id} 
               className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="flex justify-between items-start mb-2">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2">
                 <div>
                   <h3 className="font-semibold">{request.requestorName}</h3>
                   <p className="text-sm text-gray-600">
                     {new Date(request.date.seconds * 1000).toLocaleDateString()}
                   </p>
                 </div>
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs inline-block mt-2 sm:mt-0 w-fit">
                   Pending
                 </span>
               </div>
@@ -357,7 +357,7 @@ const ShiftSwapAvailable = () => {
               
               <button
                 onClick={() => handleAcceptRequest(request.id)}
-                className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors touch-target"
               >
                 Accept Shift
               </button>

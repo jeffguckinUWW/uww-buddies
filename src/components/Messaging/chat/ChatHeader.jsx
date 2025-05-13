@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, ChevronLeft } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/config';
 import { useAuth } from '../../../context/AuthContext';
 import ChatOptionsModal from './ChatOptionsModal';
 
-const ChatHeader = ({ chatId, onDeleteChat }) => {
+const ChatHeader = ({ chatId, onDeleteChat, showBackButton = false, onBack }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [chat, setChat] = useState(null);
@@ -84,19 +84,36 @@ const ChatHeader = ({ chatId, onDeleteChat }) => {
     setShowOptions(false);
   };
 
+  const handleBack = () => {
+    if (typeof onBack === 'function') {
+      onBack();
+    }
+  };
+
   const otherParticipant = getOtherParticipant();
 
   return (
     <div className="flex items-center justify-between p-4 border-b bg-white">
-      <div className="flex-1 min-w-0">
-        <h2 className="text-lg font-medium text-gray-900 truncate">
-          {getChatTitle()}
-        </h2>
-        {chat?.type === 'group' && (
-          <p className="text-sm text-gray-500">
-            {getParticipantCount()} participants
-          </p>
+      <div className="flex items-center flex-1 min-w-0">
+        {showBackButton && (
+          <button
+            onClick={handleBack}
+            className="mr-2 p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Back to chat list"
+          >
+            <ChevronLeft size={20} />
+          </button>
         )}
+        <div>
+          <h2 className="text-lg font-medium text-gray-900 truncate">
+            {getChatTitle()}
+          </h2>
+          {chat?.type === 'group' && (
+            <p className="text-sm text-gray-500">
+              {getParticipantCount()} participants
+            </p>
+          )}
+        </div>
       </div>
 
       <button

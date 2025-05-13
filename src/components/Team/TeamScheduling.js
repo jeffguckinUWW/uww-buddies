@@ -257,43 +257,43 @@ const TimeClockComponent = ({ userId, currentUserProfile }) => {
   
   return (
     <div className="mt-4">
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-          <div className="mb-3 md:mb-0">
-            <div className="text-sm font-medium">Current Status:</div>
-            <div className={`text-lg font-bold ${
-              currentStatus === 'clock-in' ? 'text-green-600' : 'text-gray-600'
-            }`}>
-              {currentStatus === 'clock-in' ? 'Clocked In' : 'Clocked Out'}
-            </div>
-            
-            {lastAction && lastAction.timestamp && (
-              <div className="text-xs text-gray-500 mt-1">
-                Last action: {new Date(lastAction.timestamp.seconds * 1000).toLocaleTimeString()}
-              </div>
-            )}
-          </div>
-          
-          <div className="flex gap-2">
-            {currentStatus !== 'clock-in' ? (
-              <Button 
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center"
-                onClick={() => handleClockAction('clock-in')}
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                Clock In
-              </Button>
-            ) : (
-              <Button 
-                className="bg-red-600 hover:bg-red-700 text-white flex items-center"
-                onClick={() => handleClockAction('clock-out')}
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                Clock Out
-              </Button>
-            )}
-          </div>
+  <Card className="p-4">
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+      <div className="mb-3 md:mb-0">
+        <div className="text-sm font-medium">Current Status:</div>
+        <div className={`text-lg font-bold ${
+          currentStatus === 'clock-in' ? 'text-green-600' : 'text-gray-600'
+        }`}>
+          {currentStatus === 'clock-in' ? 'Clocked In' : 'Clocked Out'}
         </div>
+        
+        {lastAction && lastAction.timestamp && (
+          <div className="text-xs text-gray-500 mt-1">
+            Last action: {new Date(lastAction.timestamp.seconds * 1000).toLocaleTimeString()}
+          </div>
+        )}
+      </div>
+      
+      <div className="flex gap-2 w-full md:w-auto">
+        {currentStatus !== 'clock-in' ? (
+          <Button 
+            className="bg-green-600 hover:bg-green-700 text-white flex items-center w-full md:w-auto h-12 md:h-auto"
+            onClick={() => handleClockAction('clock-in')}
+          >
+            <Clock className="h-4 w-4 mr-1" />
+            Clock In
+          </Button>
+        ) : (
+          <Button 
+            className="bg-red-600 hover:bg-red-700 text-white flex items-center w-full md:w-auto h-12 md:h-auto"
+            onClick={() => handleClockAction('clock-out')}
+          >
+            <Clock className="h-4 w-4 mr-1" />
+            Clock Out
+          </Button>
+        )}
+      </div>
+    </div>
         
         {hasShiftToday ? (
           <div className="bg-blue-50 mt-3 p-2 rounded text-sm">

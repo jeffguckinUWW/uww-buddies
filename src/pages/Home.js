@@ -87,9 +87,14 @@ const Home = () => {
         />
         <div className="absolute inset-0 bg-black bg-opacity-40 flex flex-col justify-center px-4">
           <h1 className="text-white text-2xl font-bold mb-2">EXPLORE THE UNDERWATER WORLD</h1>
-          <button className="bg-white text-blue-600 px-6 py-2 rounded-lg w-40 font-semibold">
-            Book a dive
-          </button>
+          <a 
+            href="https://shop.diveunderwaterworld.com/iishop?dynamicFilters=%7B%22class_category%22:%7B%22788902742%22:true%7D%7D"
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="bg-white text-blue-600 px-6 py-2 rounded-lg w-40 font-semibold text-center"
+          >
+            Book a trip
+          </a>
         </div>
       </div>
 
@@ -124,17 +129,6 @@ const Home = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Promotional Section */}
-      <div className="m-4 p-4 bg-blue-50 rounded-lg flex items-center justify-between">
-        <div>
-          <h3 className="font-bold">Love diving?</h3>
-          <p className="text-sm">Refer a friend and earn rewards</p>
-        </div>
-        <button className="text-blue-600 font-semibold">
-          Learn more →
-        </button>
       </div>
     </div>
   );

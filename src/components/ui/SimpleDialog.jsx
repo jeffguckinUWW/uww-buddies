@@ -23,9 +23,9 @@ import {
 const SimpleDialog = ({ open, onClose, title, description, children, footer }) => {
   if (!open) return null;
   
-  return (
+    return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col w-[95vw] sm:w-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
@@ -35,7 +35,7 @@ const SimpleDialog = ({ open, onClose, title, description, children, footer }) =
           {children}
         </div>
         
-        <DialogFooter className="flex-shrink-0">
+        <DialogFooter className="flex-shrink-0 flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
           {footer}
         </DialogFooter>
       </DialogContent>

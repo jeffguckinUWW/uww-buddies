@@ -167,10 +167,10 @@ const ChatSidebar = ({ selectedChatId, onChatSelect, onNewChat, isSmallScreen })
                 `}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <h3 className="font-medium truncate text-gray-800">
+                  <h3 className={`font-medium truncate text-gray-800 ${isSmallScreen ? 'max-w-[70%]' : 'max-w-[60%]'}`}>
                     {getChatName(chat)}
                   </h3>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 shrink-0">
                     {/* Show notification badge if there are unread messages */}
                     {notificationCount > 0 && (
                       <NotificationBadge count={notificationCount} />

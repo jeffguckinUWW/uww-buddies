@@ -87,27 +87,27 @@ const TeamDashboard = () => {
         <div className="p-0">
           <Tabs defaultValue="directory" className="w-full">
             <TabsList className="w-full flex border-b justify-start overflow-x-auto no-scrollbar mt-2 p-0">
-              <TabsTrigger value="directory" className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500">
-                <Users size={18} className="mr-2" />
-                <span>Staff Directory</span>
-              </TabsTrigger>
-              <TabsTrigger value="schedule" className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500">
-                <Calendar size={18} className="mr-2" />
-                <span>Schedule</span>
-              </TabsTrigger>
-              <TabsTrigger value="calendar" className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500">
-                <CalendarDays size={18} className="mr-2" />
-                <span>Team Calendar</span>
-              </TabsTrigger>
-              <TabsTrigger value="timeoff" className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500">
-                <Clock size={18} className="mr-2" />
-                <span>Time Off</span>
-              </TabsTrigger>
-              <TabsTrigger value="shiftswap" className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500">
-                <ArrowLeftRight size={18} className="mr-2" />
-                <span>Shift Swaps</span>
-              </TabsTrigger>
-            </TabsList>
+            <TabsTrigger value="directory" className="flex items-center py-3 px-2 sm:px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 no-tap-highlight">
+              <Users size={18} className="mr-1 sm:mr-2" />
+              <span className="text-sm sm:text-base">Staff Directory</span>
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="flex items-center py-3 px-2 sm:px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 no-tap-highlight">
+              <Calendar size={18} className="mr-1 sm:mr-2" />
+              <span className="text-sm sm:text-base">Schedule</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex items-center py-3 px-2 sm:px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 no-tap-highlight">
+              <CalendarDays size={18} className="mr-1 sm:mr-2" />
+              <span className="text-sm sm:text-base">Team Calendar</span>
+            </TabsTrigger>
+            <TabsTrigger value="timeoff" className="flex items-center py-3 px-2 sm:px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 no-tap-highlight">
+              <Clock size={18} className="mr-1 sm:mr-2" />
+              <span className="text-sm sm:text-base">Time Off</span>
+            </TabsTrigger>
+            <TabsTrigger value="shiftswap" className="flex items-center py-3 px-2 sm:px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500 no-tap-highlight">
+              <ArrowLeftRight size={18} className="mr-1 sm:mr-2" />
+              <span className="text-sm sm:text-base">Shift Swaps</span>
+            </TabsTrigger>
+          </TabsList>
             
             <TabsContent value="directory" className="p-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">

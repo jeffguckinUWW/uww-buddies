@@ -1,3 +1,4 @@
+// src/index.js - Updated
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -7,7 +8,9 @@ import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <div className="no-tap-highlight smooth-scroll no-overscroll">
+      <App />
+    </div>
   </React.StrictMode>
 );
 

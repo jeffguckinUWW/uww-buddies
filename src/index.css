@@ -82,8 +82,6 @@ code {
   }
 }
 
-/* Add this to your index.css file after your existing @layer utilities section */
-
 @layer utilities {
   /* Existing 3D transform utilities... */
   
@@ -92,9 +90,21 @@ code {
     padding-bottom: env(safe-area-inset-bottom);
     padding-top: env(safe-area-inset-top);
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
   
   .safe-bottom {
     padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+  
+  .safe-top {
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
   }
   
   /* Touch-friendly targets */
@@ -140,6 +150,17 @@ code {
     transform: translateZ(0);
     backface-visibility: hidden;
   }
+  
+  /* Custom viewport height classes */
+  .h-screen-safe {
+    height: 100vh; /* Fallback */
+    height: calc(var(--vh, 1vh) * 100);
+  }
+
+  .min-h-screen-safe {
+    min-height: 100vh; /* Fallback */
+    min-height: calc(var(--vh, 1vh) * 100);
+  }
 }
 
 /* Add these media queries outside of the @layer directive */
@@ -171,6 +192,15 @@ code {
     @apply fixed bottom-0 left-0 right-0 flex justify-around bg-white border-t border-gray-200 py-2 z-40;
     padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
   }
+  
+  /* Update tailwind container heights for mobile */
+  .min-h-screen {
+    min-height: calc(var(--vh, 1vh) * 100);
+  }
+  
+  .h-screen {
+    height: calc(var(--vh, 1vh) * 100);
+  }
 }
 
 /* Dark mode support (integrates with your existing dark mode) */
@@ -195,4 +225,25 @@ code {
     radial-gradient(circle, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: 0 0, 10px 10px;
+}
+
+/* iOS viewport height fix - modified for better scrolling */
+@supports (-webkit-touch-callout: none) {
+  .min-h-screen {
+    min-height: -webkit-fill-available;
+  }
+  
+  html {
+    height: -webkit-fill-available;
+  }
+  
+  body {
+    min-height: -webkit-fill-available;
+    /* Don't set overflow: hidden here as it blocks scrolling */
+  }
+  
+  #root {
+    min-height: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
 }

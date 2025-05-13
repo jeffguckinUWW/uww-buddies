@@ -1,3 +1,4 @@
+// src/pages/ChatPage.js - Updated
 import React, { useState, useEffect } from 'react';
 import { MessageProvider } from '../context/MessageContext';
 import ChatContainer from '../components/Messaging/chat/ChatContainer';
@@ -68,8 +69,8 @@ const ChatPage = () => {
 
   return (
     <MessageProvider>
-      {/* Remove outer container divs to simplify structure */}
-      <div className="h-[calc(100vh-8rem)] chat-container safe-area-insets">
+      {/* Using full height and width of available space */}
+      <div className="h-full w-full chat-container smooth-scroll no-overscroll">
         <ChatContainer 
           chatNotifications={chatNotifications} 
           isSmallScreen={isSmallScreen}
