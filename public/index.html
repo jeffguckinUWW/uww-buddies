@@ -8,39 +8,146 @@
     <link rel="icon" type="image/png" sizes="96x96" href="%PUBLIC_URL%/favicon-96x96-v2.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="UWW Buddies"
-    />
+    <!-- Critical CSP for iOS -->
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'self' data: gap: capacitor: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; script-src * 'self' 'unsafe-inline' 'unsafe-eval';">
+    <meta name="description" content="UWW Buddies" />
     <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon-v2.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
-
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
     <title>UWW Buddies</title>
+    <style>
+      #app-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: white;
+        z-index: 9999;
+        font-family: -apple-system, system-ui, sans-serif;
+        transition: opacity 0.5s;
+      }
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .hide-loader {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
   </head>
   <body>
+    <div id="app-loader">
+      <div class="spinner"></div>
+      <div id="loading-text">Loading UWW Buddies...</div>
+    </div>
+    
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
+    
+    <script>
+      // Add a global error handler that doesn't show UI errors
+      // (prevents error message from showing at the top)
+      window.addEventListener('error', function(e) {
+        console.error('JavaScript error:', e.message, e.filename, e.lineno);
+        return true;  // Prevents default error handling
+      });
+      
+      // Handle loading with retries and delays
+      document.addEventListener('DOMContentLoaded', function() {
+        var loadAttempts = 0;
+        var maxAttempts = 3;
+        var loadingText = document.getElementById('loading-text');
+        
+        function attemptLoad() {
+          loadAttempts++;
+          loadingText.textContent = 'Loading UWW Buddies... (Attempt ' + loadAttempts + ')';
+          
+          // Create script element for main bundle
+          var script = document.createElement('script');
+          script.defer = true;  // Use defer to ensure DOM is ready
+          
+          script.onload = function() {
+            console.log('Main bundle loaded successfully');
+            
+            // Give the app extra time to initialize on iOS
+            setTimeout(function() {
+              var loader = document.getElementById('app-loader');
+              if (loader) {
+                loader.classList.add('hide-loader');
+                // Remove the loader after animation completes
+                setTimeout(function() {
+                  if (loader.parentNode) {
+                    loader.parentNode.removeChild(loader);
+                  }
+                }, 500);
+              }
+            }, 2000);  // 2 second delay before hiding loader
+          };
+          
+          script.onerror = function() {
+            console.error('Failed to load bundle (attempt ' + loadAttempts + ')');
+            
+            if (loadAttempts < maxAttempts) {
+              // Retry with increasing delay
+              setTimeout(attemptLoad, 1000 * loadAttempts);
+            } else {
+              loadingText.textContent = 'Error loading app. Please try again later.';
+            }
+          };
+          
+          // Try to find and load the bundle
+          try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', './static/js/', true);
+            
+            xhr.onload = function() {
+              if (xhr.status === 200) {
+                // Look for the bundle file
+                var match = xhr.responseText.match(/main\.[a-zA-Z0-9]+\.js/);
+                if (match) {
+                  script.src = './static/js/' + match[0];
+                } else {
+                  script.src = './static/js/main.js';
+                }
+                document.head.appendChild(script);
+              } else {
+                script.src = './static/js/main.js';
+                document.head.appendChild(script);
+              }
+            };
+            
+            xhr.onerror = function() {
+              // Direct loading if XHR fails
+              script.src = './static/js/main.js';
+              document.head.appendChild(script);
+            };
+            
+            xhr.send();
+          } catch (e) {
+            // Fallback to direct loading
+            script.src = './static/js/main.js';
+            document.head.appendChild(script);
+          }
+        }
+        
+        // Add a slight delay before first load attempt
+        // This can help with iOS WebView initialization
+        setTimeout(attemptLoad, 500);
+      });
+    </script>
   </body>
 </html>

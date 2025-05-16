@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon-v2.ico" />
+    <link rel="shortcut icon" href="%PUBLIC_URL%/favicon-v2.ico?v=2" />
+    <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/favicon-v2.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="%PUBLIC_URL%/favicon-96x96-v2.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#000000" />
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'self' data: gap: capacitor: https://ssl.gstatic.com 'unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src *; script-src * 'self' 'unsafe-inline' 'unsafe-eval';">
+    <meta name="description" content="UWW Buddies" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/apple-touch-icon-v2.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>UWW Buddies</title>
+    <style>
+      #loading-indicator {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: 20px;
+        background: #f0f0f0;
+        z-index: 9999;
+        transition: opacity 1s;
+      }
+    </style>
+    <script>
+      // Simple error handler
+      window.addEventListener('error', function(event) {
+        console.error('Global error:', event.message, event.filename, event.lineno);
+        
+        // Show error visually
+        var errorDiv = document.createElement('div');
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '50%';
+        errorDiv.style.left = '0';
+        errorDiv.style.right = '0';
+        errorDiv.style.padding = '20px';
+        errorDiv.style.background = 'rgba(255,0,0,0.8)';
+        errorDiv.style.color = 'white';
+        errorDiv.style.zIndex = '10000';
+        errorDiv.innerHTML = 'JavaScript Error: ' + event.message;
+        document.body.appendChild(errorDiv);
+      });
+      
+      // Track DOM Loading
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM Content Loaded');
+        
+        // Add loading indicator that will be removed when app loads
+        var loadingDiv = document.createElement('div');
+        loadingDiv.id = 'loading-indicator';
+        loadingDiv.innerHTML = '<h3>Loading UWW Buddies...</h3><p>If you see this message for more than a few seconds, there may be an issue with loading the app.</p>';
+        document.body.insertBefore(loadingDiv, document.body.firstChild);
+        
+        // Hide indicator after React should have loaded
+        setTimeout(function() {
+          var indicator = document.getElementById('loading-indicator');
+          if (indicator) {
+            indicator.style.opacity = '0';
+            setTimeout(function() {
+              if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+              }
+            }, 1000);
+          }
+        }, 5000);
+      });
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

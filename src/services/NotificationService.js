@@ -15,9 +15,13 @@ import {
   getDoc,
   writeBatch,
   setDoc,
-  limit
+  limit,
+  arrayUnion
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { MessageTypes } from './MessageConstants';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 
 class NotificationService {
   // Create a notification in the database
@@ -711,6 +715,138 @@ class NotificationService {
     } catch (error) {
       console.error('Error resetting negative counters:', error);
       return false;
+    }
+  }
+  
+  // === PUSH NOTIFICATION METHODS ===
+  
+  // Initialize push notifications (call this on app startup)
+  static async initPushNotifications() {
+    // Only proceed on native platforms (iOS/Android)
+    if (!Capacitor.isNativePlatform()) {
+      console.log('Push notifications not available on this platform');
+      return;
+    }
+    
+    try {
+      // Request permission
+      const permissionStatus = await PushNotifications.requestPermissions();
+      
+      if (permissionStatus.receive === 'granted') {
+        // Register with Apple/Google to receive push
+        await PushNotifications.register();
+      } else {
+        console.log('Push notification permission denied');
+        return;
+      }
+      
+      // Configure push notification handlers
+      this.setupPushListeners();
+    } catch (error) {
+      console.error('Error initializing push notifications:', error);
+    }
+  }
+  
+  // Set up event listeners for push notifications
+  static setupPushListeners() {
+    // On successful registration
+    PushNotifications.addListener('registration', (token) => {
+      console.log('Push registration success:', token.value);
+      // Save the token to the user's profile in Firebase
+      this.savePushToken(token.value);
+    });
+    
+    // If registration fails
+    PushNotifications.addListener('registrationError', (error) => {
+      console.error('Push registration failed:', JSON.stringify(error));
+    });
+    
+    // When a notification is received while the app is in foreground
+    PushNotifications.addListener('pushNotificationReceived', (notification) => {
+      console.log('Push notification received:', notification);
+      
+      // Convert push notification to an in-app notification
+      this.handleReceivedPushNotification(notification);
+    });
+    
+    // When a notification action is performed (notification clicked)
+    PushNotifications.addListener('pushNotificationActionPerformed', (actionPerformed) => {
+      console.log('Push notification action performed:', actionPerformed);
+      
+      // Handle navigation when a notification is tapped
+      const notification = actionPerformed.notification;
+      this.handleNotificationTap(notification);
+    });
+  }
+  
+  // Save the device token to the user's profile
+  static async savePushToken(token) {
+    try {
+      // Get the current user ID
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.log('No user logged in, cannot save push token');
+        return;
+      }
+      
+      const userId = currentUser.uid;
+      
+      // Save the token to the user's profile
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        pushTokens: arrayUnion(token),
+        lastTokenUpdate: serverTimestamp()
+      });
+      
+      console.log('Push token saved successfully');
+    } catch (error) {
+      console.error('Error saving push token:', error);
+    }
+  }
+  
+  // Handle a received push notification when app is in foreground
+  static async handleReceivedPushNotification(notification) {
+    try {
+      // Extract data from the notification
+      const title = notification.title;
+      const body = notification.body;
+      const data = notification.data;
+      
+      // Display an alert or in-app notification
+      // You could use a custom toast or alert component here
+      console.log(`Push Notification: ${title} - ${body}`);
+      
+      // If the notification contains specific data, handle it
+      if (data) {
+        // For example, update in-app notification counters
+        // or trigger a refresh of relevant data
+      }
+    } catch (error) {
+      console.error('Error handling received push notification:', error);
+    }
+  }
+  
+  // Navigate when a notification is tapped
+  static handleNotificationTap(notification) {
+    try {
+      const data = notification.data;
+      
+      if (!data) return;
+      
+      // Extract navigation information
+      const targetRoute = data.targetRoute;
+      
+      // Navigate to the appropriate screen based on the notification type
+      if (targetRoute) {
+        // Navigate using your app's router/navigation system
+        // For example, if using React Router:
+        // window.location.href = targetRoute;
+        console.log(`Should navigate to: ${targetRoute}`);
+      }
+    } catch (error) {
+      console.error('Error handling notification tap:', error);
     }
   }
 }

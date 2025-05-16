@@ -325,11 +325,11 @@ const TimeOffRequest = () => {
       </div>
       
       {/* Status filter - tabs for different statuses */}
-      <div className="flex flex-wrap gap-2 border-b">
+      <div className="flex overflow-x-auto no-scrollbar border-b">
         <Button 
           variant="ghost" 
           size="sm"
-          className={statusFilter === 'all' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'}
+          className={`py-3 min-w-[80px] ${statusFilter === 'all' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'} no-tap-highlight`}
           onClick={() => handleStatusFilterChange('all')}
         >
           All Requests
@@ -337,7 +337,7 @@ const TimeOffRequest = () => {
         <Button 
           variant="ghost" 
           size="sm"
-          className={statusFilter === 'pending' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'}
+          className={`py-3 min-w-[80px] ${statusFilter === 'pending' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'} no-tap-highlight`}
           onClick={() => handleStatusFilterChange('pending')}
         >
           <Clock className="h-4 w-4 mr-1 text-amber-500" />
@@ -346,7 +346,7 @@ const TimeOffRequest = () => {
         <Button 
           variant="ghost" 
           size="sm"
-          className={statusFilter === 'approved' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'}
+          className={`py-3 min-w-[80px] ${statusFilter === 'approved' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'} no-tap-highlight`}
           onClick={() => handleStatusFilterChange('approved')}
         >
           <CheckCircle className="h-4 w-4 mr-1 text-green-500" />
@@ -355,7 +355,7 @@ const TimeOffRequest = () => {
         <Button 
           variant="ghost" 
           size="sm"
-          className={statusFilter === 'denied' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'}
+          className={`py-3 min-w-[80px] ${statusFilter === 'denied' ? 'border-b-2 border-blue-500 rounded-none' : 'rounded-none'} no-tap-highlight`}
           onClick={() => handleStatusFilterChange('denied')}
         >
           <XCircle className="h-4 w-4 mr-1 text-red-500" />
@@ -390,7 +390,7 @@ const TimeOffRequest = () => {
                   
                   {/* Request status badge */}
                   <div className={`
-                    rounded-full px-3 py-1 text-xs font-medium
+                    rounded-full px-3 py-1 text-xs font-medium mt-2 sm:mt-0
                     ${request.status === 'pending' ? 'bg-amber-100 text-amber-700' : ''}
                     ${request.status === 'approved' ? 'bg-green-100 text-green-700' : ''}
                     ${request.status === 'denied' ? 'bg-red-100 text-red-700' : ''}
@@ -450,14 +450,14 @@ const TimeOffRequest = () => {
                 )}
                 
                 {/* Action buttons */}
-                <div className="flex justify-end mt-3 space-x-2">
+                <div className="flex flex-col sm:flex-row sm:justify-end mt-3 space-y-2 sm:space-y-0 sm:space-x-2">
                   {/* Regular users can delete their own pending requests */}
                   {(!isAdmin && request.status === 'pending') && (
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={() => deleteRequest(request.id)}
-                      className="text-red-600 hover:bg-red-50"
+                      className="text-red-600 hover:bg-red-50 py-3 sm:py-2 w-full sm:w-auto"
                     >
                       <XCircle className="h-4 w-4 mr-1" />
                       Cancel
@@ -471,7 +471,7 @@ const TimeOffRequest = () => {
                         variant="outline" 
                         size="sm"
                         onClick={() => deleteRequest(request.id)}
-                        className="text-red-600 hover:bg-red-50"
+                        className="text-red-600 hover:bg-red-50 py-3 sm:py-2 w-full sm:w-auto"
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Delete
@@ -482,7 +482,7 @@ const TimeOffRequest = () => {
                           variant="outline" 
                           size="sm"
                           onClick={() => handleReviewRequest(request)}
-                          className="text-blue-600 hover:bg-blue-50"
+                          className="text-blue-600 hover:bg-blue-50 py-3 sm:py-2 w-full sm:w-auto"
                         >
                           <FileText className="h-4 w-4 mr-1" />
                           Review
