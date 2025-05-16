@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>528108258916-0tj274jgb3pmv7fu2s3scbvm4hfniu6k.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.528108258916-0tj274jgb3pmv7fu2s3scbvm4hfniu6k</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>528108258916-080r4bsussah4toh6epdi1nhov1pjt51.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyBTLLpz6jbJA67c-LfsDOFcd_EtTfe4TRU</string>
+	<key>GCM_SENDER_ID</key>
+	<string>528108258916</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.diveuww.uwwbuddies</string>
+	<key>PROJECT_ID</key>
+	<string>uww-buddies</string>
+	<key>STORAGE_BUCKET</key>
+	<string>uww-buddies.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:528108258916:ios:ad8e1d6745b39a2fc8c171</string>
+</dict>
+</plist>
