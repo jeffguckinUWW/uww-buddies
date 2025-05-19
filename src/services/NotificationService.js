@@ -729,12 +729,26 @@ class NotificationService {
     }
     
     try {
+      console.log('Initializing push notifications on native platform');
+      
+      // Check if already registered to avoid duplicate registrations
+      try {
+        const { receive } = await PushNotifications.checkPermissions();
+        console.log('Current permission status:', receive);
+      } catch (err) {
+        console.log('Error checking permissions:', err);
+      }
+      
       // Request permission
+      console.log('Requesting push notification permissions...');
       const permissionStatus = await PushNotifications.requestPermissions();
+      console.log('Permission request result:', permissionStatus);
       
       if (permissionStatus.receive === 'granted') {
         // Register with Apple/Google to receive push
+        console.log('Permission granted, registering for push notifications...');
         await PushNotifications.register();
+        console.log('Registration request sent');
       } else {
         console.log('Push notification permission denied');
         return;
@@ -792,15 +806,31 @@ class NotificationService {
       }
       
       const userId = currentUser.uid;
+      console.log(`Attempting to save push token for user ${userId}: ${token}`);
       
-      // Save the token to the user's profile
+      // First check if token already exists to avoid duplicates
       const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        pushTokens: arrayUnion(token),
-        lastTokenUpdate: serverTimestamp()
-      });
+      const userDoc = await getDoc(userRef);
       
-      console.log('Push token saved successfully');
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const existingTokens = userData.pushTokens || [];
+        
+        if (existingTokens.includes(token)) {
+          console.log('Token already exists in user profile, skipping save');
+          return;
+        }
+        
+        // Save the token to the user's profile
+        await updateDoc(userRef, {
+          pushTokens: arrayUnion(token),
+          lastTokenUpdate: serverTimestamp()
+        });
+        
+        console.log('Push token saved successfully to user profile');
+      } else {
+        console.error('User document does not exist');
+      }
     } catch (error) {
       console.error('Error saving push token:', error);
     }
@@ -817,6 +847,7 @@ class NotificationService {
       // Display an alert or in-app notification
       // You could use a custom toast or alert component here
       console.log(`Push Notification: ${title} - ${body}`);
+      console.log('Notification data:', data);
       
       // If the notification contains specific data, handle it
       if (data) {
@@ -842,8 +873,10 @@ class NotificationService {
       if (targetRoute) {
         // Navigate using your app's router/navigation system
         // For example, if using React Router:
-        // window.location.href = targetRoute;
         console.log(`Should navigate to: ${targetRoute}`);
+        
+        // You can implement actual navigation here
+        window.location.href = targetRoute;
       }
     } catch (error) {
       console.error('Error handling notification tap:', error);
