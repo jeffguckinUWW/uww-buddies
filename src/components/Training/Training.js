@@ -490,6 +490,7 @@ const Training = () => {
           </div>
           <p className="text-sm text-gray-600">
             {training.location} • {new Date(training.startDate).toLocaleDateString()} - {new Date(training.endDate).toLocaleDateString()}
+            {training.status === 'completed' && training.completedAt && ` • Completed ${new Date(training.completedAt).toLocaleDateString()}`}
           </p>
         </div>
           

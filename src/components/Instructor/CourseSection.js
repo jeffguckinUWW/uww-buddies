@@ -364,7 +364,7 @@ const CourseSection = ({ user, instructorProfile }) => {
         return;
       }
 
-      const completedAt = new Date();
+      const completedAt = new Date().toISOString();
       const courseRef = doc(db, 'courses', courseId);
       
       const updatePromises = currentCourse.students.map(async (student) => {
@@ -442,7 +442,7 @@ const CourseSection = ({ user, instructorProfile }) => {
   const handleCourseEndReportSubmit = async (reportData) => {
     try {
       const courseId = courseToComplete.id;
-      const completedAt = new Date();
+      const completedAt = new Date().toISOString();
 
       const courseRef = doc(db, 'courses', courseId);
       

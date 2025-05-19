@@ -319,6 +319,259 @@ const TRAINING_RECORD_TYPES = [
       title: 'Instructor Notes and Observation',
       type: 'textarea'
     }
+  },
+  {
+    id: 'naui-advanced-scuba',
+    name: 'Advanced SCUBA Diver, NAUI',
+    description: 'NAUI Advanced SCUBA certification requirements',
+    sections: [
+      {
+        title: 'Academics',
+        skills: [
+          'Intro to Navigation, Planning and Debriefing',
+          'Intro to Night/Low Visibility, Planning and Debriefing',
+          'Intro to Deep Diving, Planning and Debriefing',
+          'Intro to ___________________, Planning and Debriefing',
+          'Intro to ___________________, Planning and Debriefing',
+          'Intro to ___________________, Planning and Debriefing',
+          'eLearning',
+          'Final Written Exam'
+        ]
+      },
+      {
+        title: 'Practical Skills',
+        skills: [
+          'Review Dive Planning, Rescue Skills and Assist Skills',
+          'Record Dives in Logbooks',
+          'Conduct Appropriate Skills for all Dives'
+        ]
+      },
+      {
+        title: 'Required Dives',
+        // Using a custom format for dives with multiple fields
+        diveFormat: true,
+        dives: [
+          {
+            title: 'Navigation',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Night/Low Visibility',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Deep Dive (130\' Max)',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+        ],
+        // Adding these as skills also to ensure compatibility with the existing verification system
+        skills: [
+          'Navigation',
+          'Night/Low Visibility',
+          'Deep Dive (130\' Max)'
+        ]
+      },
+      {
+        title: 'Elective Dives',
+        diveFormat: true,
+        dives: [
+          {
+            title: 'Elective Dive #1',
+            fields: [
+              { name: 'Dive Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Elective Dive #2',
+            fields: [
+              { name: 'Dive Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Elective Dive #3',
+            fields: [
+              { name: 'Dive Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          }
+        ],
+        // Skills for verification
+        skills: [
+          'Elective Dive #1',
+          'Elective Dive #2',
+          'Elective Dive #3'
+        ]
+      }
+    ],
+    notes: {
+      title: 'Instructor Notes and Observations',
+      type: 'textarea'
+    }
+  },
+  {
+    id: 'sdi-advanced-scuba',
+    name: 'Advanced Adventurer SCUBA Diver, SDI',
+    description: 'SDI Advanced Adventurer certification requirements',
+    sections: [
+      {
+        title: 'Academics',
+        subsections: [
+          {
+            title: 'Deep Diver Academics',
+            skills: [
+              'Diving Tables & Computers',
+              'Speciality Equipment',
+              'Physics and Physiology',
+              'Emergency Procedures',
+              'Review of First Aid'
+            ]
+          },
+          {
+            title: 'Navigation Academics',
+            skills: [
+              'Aquatic Environment',
+              'Natural Navigation',
+              'Compass Understanding',
+              'Use of Compass',
+              'Estimating Distance Underwater'
+            ]
+          },
+          {
+            title: 'Elective Academics',
+            skills: [
+              'Intro/Overview of ___________________',
+              'Intro/Overview of ___________________',
+              'Intro/Overview of ___________________'
+            ]
+          }
+        ]
+      },
+      {
+        title: 'Practical Skills',
+        subsections: [
+          {
+            title: 'Deep Dive',
+            skills: [
+              'Test and Check All Equipment',
+              'Familiarization of the Dive Area',
+              'Descend to Planned Depth and Do Not Exceed any Limits',
+              'Dive According to Plan and Do Not Exceed 100ft',
+              'Ascend and Complete a Safety Stop'
+            ]
+          },
+          {
+            title: 'Navigation Dive',
+            skills: [
+              'Plan a Dive',
+              'Enter Water from Boat or Shore',
+              'Practice Out and Back Technique',
+              'Squares and Triangles on the Surface',
+              'Squares and Triangles on the Bottom',
+              'Ascend and Exit the Water'
+            ]
+          },
+          {
+            title: 'Speciality Dive Skills',
+            skills: [
+              'Dive 1 Skills from Speciality #1',
+              'Dive 1 Skills from Speciality #2',
+              'Dive 1 Skills from Speciality #3'
+            ]
+          }
+        ]
+      },
+      {
+        title: 'Required Dives',
+        diveFormat: true,
+        dives: [
+          {
+            title: 'Deep Dive',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Navigation Dive',
+            fields: [
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Speciality Dive #1',
+            fields: [
+              { name: 'Speciality Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Speciality Dive #2',
+            fields: [
+              { name: 'Speciality Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          },
+          {
+            title: 'Speciality Dive #3',
+            fields: [
+              { name: 'Speciality Type', type: 'text' },
+              { name: 'Dive Date', type: 'date' },
+              { name: 'Dive Location', type: 'text' },
+              { name: 'Max Depth', type: 'number' },
+              { name: 'Dive Time', type: 'text' }
+            ]
+          }
+        ],
+        skills: [
+          'Deep Dive',
+          'Navigation Dive',
+          'Speciality Dive #1',
+          'Speciality Dive #2', 
+          'Speciality Dive #3'
+        ]
+      }
+    ],
+    notes: {
+      title: 'Instructor Notes and Observations',
+      type: 'textarea'
+    }
   }
 ];
 
