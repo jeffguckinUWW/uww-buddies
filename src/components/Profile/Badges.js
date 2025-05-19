@@ -7,9 +7,9 @@ const CERTIFICATION_BADGES = {
   "Rescue Diver": "Rescue.png",
   "Advanced Rescue Diver": "AdvancedRescue.png",
   "Master SCUBA Diver": "Master.png",
-  "Divemaster": "Master.png",
-  "Assistant Instructor": "Master.png",
-  "Instructor": "Master.png"
+  "Divemaster": "Divemaster.png",
+  "Assistant Instructor": "Divemaster.png",
+  "Instructor": "Instructor.png"
 };
 
 const SPECIALTY_BADGES = {
