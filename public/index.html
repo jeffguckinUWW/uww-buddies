@@ -48,6 +48,23 @@
         pointer-events: none;
       }
     </style>
+    <script>
+      // Simple loader that automatically hides after React initializes
+      window.addEventListener('DOMContentLoaded', function() {
+        // Hide loader after 3.5 seconds (gives React time to initialize)
+        setTimeout(function() {
+          var loader = document.getElementById('app-loader');
+          if (loader) {
+            loader.classList.add('hide-loader');
+            setTimeout(function() {
+              if (loader.parentNode) {
+                loader.parentNode.removeChild(loader);
+              }
+            }, 500);
+          }
+        }, 3500);
+      });
+    </script>
   </head>
   <body>
     <div id="app-loader">
@@ -57,97 +74,6 @@
     
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    
-    <script>
-      // Add a global error handler that doesn't show UI errors
-      // (prevents error message from showing at the top)
-      window.addEventListener('error', function(e) {
-        console.error('JavaScript error:', e.message, e.filename, e.lineno);
-        return true;  // Prevents default error handling
-      });
-      
-      // Handle loading with retries and delays
-      document.addEventListener('DOMContentLoaded', function() {
-        var loadAttempts = 0;
-        var maxAttempts = 3;
-        var loadingText = document.getElementById('loading-text');
-        
-        function attemptLoad() {
-          loadAttempts++;
-          loadingText.textContent = 'Loading UWW Buddies... (Attempt ' + loadAttempts + ')';
-          
-          // Create script element for main bundle
-          var script = document.createElement('script');
-          script.defer = true;  // Use defer to ensure DOM is ready
-          
-          script.onload = function() {
-            console.log('Main bundle loaded successfully');
-            
-            // Give the app extra time to initialize on iOS
-            setTimeout(function() {
-              var loader = document.getElementById('app-loader');
-              if (loader) {
-                loader.classList.add('hide-loader');
-                // Remove the loader after animation completes
-                setTimeout(function() {
-                  if (loader.parentNode) {
-                    loader.parentNode.removeChild(loader);
-                  }
-                }, 500);
-              }
-            }, 2000);  // 2 second delay before hiding loader
-          };
-          
-          script.onerror = function() {
-            console.error('Failed to load bundle (attempt ' + loadAttempts + ')');
-            
-            if (loadAttempts < maxAttempts) {
-              // Retry with increasing delay
-              setTimeout(attemptLoad, 1000 * loadAttempts);
-            } else {
-              loadingText.textContent = 'Error loading app. Please try again later.';
-            }
-          };
-          
-          // Try to find and load the bundle
-          try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', './static/js/', true);
-            
-            xhr.onload = function() {
-              if (xhr.status === 200) {
-                // Look for the bundle file
-                var match = xhr.responseText.match(/main\.[a-zA-Z0-9]+\.js/);
-                if (match) {
-                  script.src = './static/js/' + match[0];
-                } else {
-                  script.src = './static/js/main.js';
-                }
-                document.head.appendChild(script);
-              } else {
-                script.src = './static/js/main.js';
-                document.head.appendChild(script);
-              }
-            };
-            
-            xhr.onerror = function() {
-              // Direct loading if XHR fails
-              script.src = './static/js/main.js';
-              document.head.appendChild(script);
-            };
-            
-            xhr.send();
-          } catch (e) {
-            // Fallback to direct loading
-            script.src = './static/js/main.js';
-            document.head.appendChild(script);
-          }
-        }
-        
-        // Add a slight delay before first load attempt
-        // This can help with iOS WebView initialization
-        setTimeout(attemptLoad, 500);
-      });
-    </script>
+    <!-- Create React App will automatically inject the bundle scripts here -->
   </body>
 </html>

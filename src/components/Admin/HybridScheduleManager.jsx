@@ -1,12 +1,6 @@
-// src/components/Admin/HybridScheduleManager.jsx
 import React, { useState, useEffect } from 'react';
 import { 
-  collection, 
-  getDocs, 
-  query, 
-  where, 
-  addDoc, 
-  serverTimestamp 
+  collection, getDocs, query, where, addDoc, serverTimestamp 
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
@@ -17,9 +11,12 @@ import {
   User,
   CalendarRange,
   CalendarDays,
-  Clock
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import AdminScheduleBuilder from './AdminScheduleBuilder';
+import AdminTimeOffManager from './AdminTimeOffManager';
+import ShiftSwapManager from './ShiftSwapManager';
 import SimpleTeamCalendarView from '../Team/SimpleTeamCalendarView';
 import { getDateKey } from '../../utils/dateUtils';
 import { useUserProfile } from '../../hooks/useUserProfile';
@@ -325,11 +322,19 @@ const TimeClockComponent = ({ userId, currentUserProfile }) => {
   );
 };
 
+// Removed TimeCardReport component - redundant with management functionality
+
 const HybridScheduleManager = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('personal');
   const [loading, setLoading] = useState(true);
   const { userProfile: currentUserProfile, loading: profileLoading } = useUserProfile();
+
+  // Check if user has management access or is a global admin
+  const hasManagementAccess = 
+    currentUserProfile?.managementRights?.hasAccess || 
+    currentUserProfile?.email === 'jeff@diveuww.com' || 
+    currentUserProfile?.email === 'kevin@ferrero.bz';
 
   // Update loading state to include the profile loading
   useEffect(() => {
@@ -339,17 +344,37 @@ const HybridScheduleManager = () => {
   if (loading) {
     return <LoadingSpinner message="Loading schedule data..." />;
   }
+
+  // If user doesn't have team access at all, show a message
+  if (!currentUserProfile?.teamAccess?.hasAccess) {
+    return (
+      <div className="w-full mt-6">
+        <Card className="p-8 text-center">
+          <AlertCircle className="h-12 w-12 text-amber-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Access Required</h2>
+          <p className="text-gray-600 mb-4">
+            You need Team Portal access to view schedule information.
+          </p>
+          <p className="text-sm text-gray-500">
+            Please contact an administrator to request access.
+          </p>
+        </Card>
+      </div>
+    );
+  }
   
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <div className="text-xs text-blue-700 px-2 py-1 rounded-full bg-blue-100 ml-auto">
-          Admin Access
-        </div>
+        {hasManagementAccess && (
+          <div className="text-xs text-blue-700 px-2 py-1 rounded-full bg-blue-100 ml-auto">
+            Management Access
+          </div>
+        )}
       </div>
       
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full flex justify-start border-b">
+        <TabsList className="w-full flex justify-start border-b overflow-x-auto">
           <TabsTrigger 
             value="personal" 
             className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
@@ -367,12 +392,33 @@ const HybridScheduleManager = () => {
           </TabsTrigger>
           
           <TabsTrigger 
-            value="admin-schedule" 
+            value="shift-swap" 
             className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
           >
             <CalendarRange size={18} className="mr-2" />
-            <span>Schedule Manager</span>
+            <span>Shift Swaps</span>
           </TabsTrigger>
+          
+          {/* Only show admin tabs if user has management access */}
+          {hasManagementAccess && (
+            <>
+              <TabsTrigger 
+                value="admin-schedule" 
+                className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+              >
+                <CalendarRange size={18} className="mr-2" />
+                <span>Schedule Manager</span>
+              </TabsTrigger>
+              
+              <TabsTrigger 
+                value="time-off" 
+                className="flex items-center py-3 px-4 data-[state=active]:border-b-2 data-[state=active]:border-blue-500"
+              >
+                <CalendarRange size={18} className="mr-2" />
+                <span>Time-Off Requests</span>
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
         
         {/* Personal Tab */}
@@ -402,10 +448,24 @@ const HybridScheduleManager = () => {
           <SimpleTeamCalendarView currentUserProfile={currentUserProfile} />
         </TabsContent>
         
-        {/* Admin Schedule Manager Tab */}
-        <TabsContent value="admin-schedule" className="pt-4">
-          <AdminScheduleBuilder />
+        {/* Shift Swap Tab */}
+        <TabsContent value="shift-swap" className="pt-4">
+          <ShiftSwapManager />
         </TabsContent>
+        
+        {/* Admin Schedule Manager Tab - Only visible with management access */}
+        {hasManagementAccess && (
+          <TabsContent value="admin-schedule" className="pt-4">
+            <AdminScheduleBuilder />
+          </TabsContent>
+        )}
+        
+        {/* Time-Off Manager Tab - Only visible with management access */}
+        {hasManagementAccess && (
+          <TabsContent value="time-off" className="pt-4">
+            <AdminTimeOffManager />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

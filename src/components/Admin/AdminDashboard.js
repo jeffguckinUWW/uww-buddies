@@ -11,7 +11,7 @@ import { Button } from '../ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import KnowledgeManager from '../Knowledge/Admin/KnowledgeManager';
-import { User, BookOpen, Award, Users } from 'lucide-react';
+import { User, BookOpen, Award, Users, Edit } from 'lucide-react';
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -22,7 +22,6 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState('all');
-  const [expandedUser, setExpandedUser] = useState(null);
   
   // Knowledge Center states
   const [quizCategories, setQuizCategories] = useState([]);
@@ -36,6 +35,13 @@ const AdminDashboard = () => {
   const formatDate = (timestamp) => {
     if (!timestamp || !timestamp.seconds) return 'N/A';
     return new Date(timestamp.seconds * 1000).toLocaleDateString();
+  };
+
+  // Helper function to extract last name for sorting
+  const getLastName = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(' ');
+    return parts.length > 1 ? parts[parts.length - 1] : fullName;
   };
 
   // Fetch users data
@@ -74,13 +80,26 @@ const AdminDashboard = () => {
           courseEndReports: courseReports[user.id] || []
         }));
 
-        // Sort users - instructors first, then by those with pending reports
+        // Sort users based on access level and last name
         const sortedUsers = enrichedUsers.sort((a, b) => {
-          if (a.instructorAccess?.hasAccess && !b.instructorAccess?.hasAccess) return -1;
-          if (!a.instructorAccess?.hasAccess && b.instructorAccess?.hasAccess) return 1;
-          if (a.courseEndReports?.length > 0 && b.courseEndReports?.length === 0) return -1;
-          if (a.courseEndReports?.length === 0 && b.courseEndReports?.length > 0) return 1;
-          return 0;
+          // First, sort by access level hierarchy
+          const aAccessLevel = a.managementRights?.hasAccess ? 4 : 
+                              a.teamAccess?.hasAccess ? 3 : 
+                              a.instructorAccess?.hasAccess ? 2 : 1;
+          
+          const bAccessLevel = b.managementRights?.hasAccess ? 4 : 
+                              b.teamAccess?.hasAccess ? 3 : 
+                              b.instructorAccess?.hasAccess ? 2 : 1;
+          
+          if (aAccessLevel !== bAccessLevel) {
+            return bAccessLevel - aAccessLevel; // Higher access level first
+          }
+          
+          // If same access level, sort alphabetically by last name
+          const aLastName = getLastName(a.name || '');
+          const bLastName = getLastName(b.name || '');
+          
+          return aLastName.localeCompare(bLastName);
         });
 
         setUsers(sortedUsers);
@@ -247,7 +266,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // New function for Team Portal access
+  // Function for Team Portal access
   const toggleTeamAccess = async (userId, currentAccess) => {
     if (!window.confirm(
       currentAccess 
@@ -280,6 +299,43 @@ const AdminDashboard = () => {
       }));
     } catch (err) {
       setError('Error updating team access');
+      console.error('Error:', err);
+    }
+  };
+
+  // Function for Management Rights access
+  const toggleManagementRights = async (userId, currentAccess) => {
+    if (!window.confirm(
+      currentAccess 
+        ? 'Are you sure you want to revoke management rights?' 
+        : 'Are you sure you want to grant management rights?'
+    )) return;
+
+    try {
+      const userRef = doc(db, 'profiles', userId);
+      const updateData = {
+        managementRights: currentAccess 
+          ? null
+          : {
+              hasAccess: true,
+              grantedAt: Timestamp.now(),
+              grantedBy: user.email
+            }
+      };
+      
+      await updateDoc(userRef, updateData);
+
+      setUsers(users.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            managementRights: updateData.managementRights
+          };
+        }
+        return u;
+      }));
+    } catch (err) {
+      setError('Error updating management rights');
       console.error('Error:', err);
     }
   };
@@ -378,18 +434,15 @@ const AdminDashboard = () => {
       return searchMatch && user.loyaltyAccess?.hasAccess;
     } else if (filterBy === 'team') {
       return searchMatch && user.teamAccess?.hasAccess;
+    } else if (filterBy === 'management') {
+      return searchMatch && user.managementRights?.hasAccess;
     } else {
       return searchMatch;
     }
   });
   
-  const toggleUserExpand = (userId) => {
-    if (expandedUser === userId) {
-      setExpandedUser(null);
-    } else {
-      setExpandedUser(userId);
-    }
-  };
+  // This function is no longer used with the new layout
+  // Removed to fix eslint warning
 
   if (loading) {
     return (
@@ -506,7 +559,7 @@ const AdminDashboard = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                       <path d="M12 1v4M4 5l2 2M18 5l-2 2M3 13h4M17 13h4M12 23v-4M8 17l-2 2M16 17l2 2M12 18a6 6 0 100-12 6 6 0 000 12z"/>
                     </svg>
-                    Loyalty Admins
+                    Loyalty
                   </Button>
                   <Button 
                     variant={filterBy === 'team' ? 'default' : 'outline'} 
@@ -515,7 +568,16 @@ const AdminDashboard = () => {
                     className="flex-grow md:flex-grow-0"
                   >
                     <Users size={16} className="mr-2" />
-                    Team Portal
+                    Team
+                  </Button>
+                  <Button 
+                    variant={filterBy === 'management' ? 'default' : 'outline'} 
+                    onClick={() => setFilterBy('management')}
+                    size="sm"
+                    className="flex-grow md:flex-grow-0"
+                  >
+                    <Edit size={16} className="mr-2" />
+                    Management
                   </Button>
                 </div>
               </div>
@@ -557,46 +619,23 @@ const AdminDashboard = () => {
                                   Team Portal
                                 </div>
                               )}
+                              {user.managementRights?.hasAccess && (
+                                <div className="bg-green-100 text-green-800 border border-green-200 text-xs px-2.5 py-0.5 rounded-full">
+                                  Management
+                                </div>
+                              )}
                             </div>
                           </div>
                         </CardHeader>
                         
                         <CardContent>
                           <div className="w-full">
-                            <div className="flex flex-col space-y-3">
-                              <div className="flex justify-between items-center">
-                                <label className="text-sm font-medium flex items-center">
-                                  <span className="mr-2">Loyalty Admin Access</span>
-                                  {user.loyaltyAccess?.hasAccess && user.loyaltyAccess?.grantedAt && (
-                                    <span className="text-xs text-gray-500 hidden sm:inline">
-                                      since {formatDate(user.loyaltyAccess.grantedAt)}
-                                    </span>
-                                  )}
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Instructor Portal */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Instructor Portal
                                 </label>
-                                {/* Simple toggle using checkbox and styling */}
-                                <label className="inline-flex items-center cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    className="sr-only"
-                                    checked={!!user.loyaltyAccess?.hasAccess}
-                                    onChange={() => toggleLoyaltyAccess(user.id, user.loyaltyAccess?.hasAccess)}
-                                  />
-                                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.loyaltyAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.loyaltyAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
-                                  </div>
-                                </label>
-                              </div>
-                              
-                              <div className="flex justify-between items-center">
-                                <label className="text-sm font-medium flex items-center">
-                                  <span className="mr-2">Instructor Access</span>
-                                  {user.instructorAccess?.hasAccess && user.instructorAccess?.grantedAt && (
-                                    <span className="text-xs text-gray-500 hidden sm:inline">
-                                      since {formatDate(user.instructorAccess.grantedAt)}
-                                    </span>
-                                  )}
-                                </label>
-                                {/* Simple toggle using checkbox and styling */}
                                 <label className="inline-flex items-center cursor-pointer">
                                   <input
                                     type="checkbox"
@@ -604,22 +643,89 @@ const AdminDashboard = () => {
                                     checked={!!user.instructorAccess?.hasAccess}
                                     onChange={() => toggleInstructorAccess(user.id, user.instructorAccess?.hasAccess)}
                                   />
-                                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.instructorAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.instructorAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                  <div className={`relative w-11 h-6 rounded-full transition ${
+                                    user.instructorAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                  }`}>
+                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                      user.instructorAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                    }`}></div>
                                   </div>
                                 </label>
+                                <div className="text-xs text-center mt-1">
+                                  <div className="font-medium">
+                                    {user.instructorAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                  </div>
+                                  {user.instructorAccess?.hasAccess && user.instructorAccess?.grantedAt && (
+                                    <div className="text-gray-500">
+                                      {formatDate(user.instructorAccess.grantedAt)}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="flex justify-between items-center">
-                                <label className="text-sm font-medium flex items-center">
-                                  <span className="mr-2">Team Portal Access</span>
-                                  {user.teamAccess?.hasAccess && user.teamAccess?.grantedAt && (
-                                    <span className="text-xs text-gray-500 hidden sm:inline">
-                                      since {formatDate(user.teamAccess.grantedAt)}
+                              {/* Instructor PIN */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Instructor PIN
+                                </label>
+                                <div className="w-11 h-6 flex justify-center">
+                                  {user.instructorAccess?.hasAccess ? (
+                                    user.instructorSignature?.code || user.instructorPin?.pin ? (
+                                      <button 
+                                        onClick={() => resetInstructorSignature(user.id)}
+                                        className="w-6 h-6 bg-red-100 hover:bg-red-200 text-red-600 rounded-full flex items-center justify-center"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M3 6h18"></path>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                      </button>
+                                    ) : (
+                                      <span className="w-6 h-6 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <circle cx="12" cy="12" r="10"></circle>
+                                          <line x1="12" y1="8" x2="12" y2="12"></line>
+                                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                        </svg>
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="w-6 h-6 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                      </svg>
                                     </span>
                                   )}
+                                </div>
+                                <div className="text-xs text-center mt-1">
+                                  <div className="font-medium">
+                                    {user.instructorAccess?.hasAccess ? (
+                                      user.instructorSignature?.code ? "Signature" :
+                                      user.instructorPin?.pin ? "PIN Set" :
+                                      "Not Set"
+                                    ) : "N/A"}
+                                  </div>
+                                  {user.instructorAccess?.hasAccess && (
+                                    user.instructorSignature?.createdAt ? (
+                                      <div className="text-gray-500">
+                                        {formatDate(user.instructorSignature.createdAt)}
+                                      </div>
+                                    ) : user.instructorPin?.lastUpdated ? (
+                                      <div className="text-gray-500">
+                                        {formatDate(user.instructorPin.lastUpdated)}
+                                      </div>
+                                    ) : null
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Team Portal */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Team Portal
                                 </label>
-                                {/* Simple toggle using checkbox and styling */}
                                 <label className="inline-flex items-center cursor-pointer">
                                   <input
                                     type="checkbox"
@@ -627,90 +733,135 @@ const AdminDashboard = () => {
                                     checked={!!user.teamAccess?.hasAccess}
                                     onChange={() => toggleTeamAccess(user.id, user.teamAccess?.hasAccess)}
                                   />
-                                  <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.teamAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                  <div className={`relative w-11 h-6 rounded-full transition ${
+                                    user.teamAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                  }`}>
+                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                      user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                    }`}></div>
                                   </div>
                                 </label>
+                                <div className="text-xs text-center mt-1">
+                                  <div className="font-medium">
+                                    {user.teamAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                  </div>
+                                  {user.teamAccess?.hasAccess && user.teamAccess?.grantedAt && (
+                                    <div className="text-gray-500">
+                                      {formatDate(user.teamAccess.grantedAt)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Loyalty Admin */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Loyalty Admin
+                                </label>
+                                <label className="inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only"
+                                    checked={!!user.loyaltyAccess?.hasAccess}
+                                    onChange={() => toggleLoyaltyAccess(user.id, user.loyaltyAccess?.hasAccess)}
+                                  />
+                                  <div className={`relative w-11 h-6 rounded-full transition ${
+                                    user.loyaltyAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                  }`}>
+                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                      user.loyaltyAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                    }`}></div>
+                                  </div>
+                                </label>
+                                <div className="text-xs text-center mt-1">
+                                  <div className="font-medium">
+                                    {user.loyaltyAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                  </div>
+                                  {user.loyaltyAccess?.hasAccess && user.loyaltyAccess?.grantedAt && (
+                                    <div className="text-gray-500">
+                                      {formatDate(user.loyaltyAccess.grantedAt)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Management Access */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Management Access
+                                </label>
+                                <label className="inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    className="sr-only"
+                                    checked={!!user.managementRights?.hasAccess}
+                                    onChange={() => toggleManagementRights(user.id, user.managementRights?.hasAccess)}
+                                  />
+                                  <div className={`relative w-11 h-6 rounded-full transition ${
+                                    user.managementRights?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                  }`}>
+                                    <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                      user.managementRights?.hasAccess ? 'transform translate-x-5' : ''
+                                    }`}></div>
+                                  </div>
+                                </label>
+                                <div className="text-xs text-center mt-1">
+                                  <div className="font-medium">
+                                    {user.managementRights?.hasAccess ? 'Enabled' : 'Disabled'}
+                                  </div>
+                                  {user.managementRights?.hasAccess && user.managementRights?.grantedAt && (
+                                    <div className="text-gray-500">
+                                      {formatDate(user.managementRights.grantedAt)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Reports */}
+                              <div className="flex flex-col items-center mb-3">
+                                <label className="text-sm font-medium text-center mb-1">
+                                  Reports
+                                </label>
+                                <div className="w-11 h-6 flex justify-center">
+                                  {user.instructorAccess?.hasAccess && user.courseEndReports?.length > 0 ? (
+                                    <button 
+                                      onClick={() => handleViewReports(user)}
+                                      className="w-6 h-6 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full flex items-center justify-center"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                                        <polyline points="10 9 9 9 8 9"></polyline>
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    <span className="w-6 h-6 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center">
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                      </svg>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-center mt-1">
+                                  {user.instructorAccess?.hasAccess && user.courseEndReports?.length > 0 ? (
+                                    <>
+                                      <div className="font-medium">
+                                        {user.courseEndReports.filter(r => !r.courseEndReport?.finalized).length} Pending
+                                      </div>
+                                      <div className="text-gray-500">
+                                        {user.courseEndReports.length} Total
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="font-medium">None</div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                            
-                            <button 
-                              onClick={() => toggleUserExpand(user.id)} 
-                              className="w-full text-sm text-blue-600 flex items-center justify-center mt-2 pt-2 border-t"
-                            >
-                              <span className="flex items-center">
-                                {expandedUser === user.id ? "Less details" : "More details"}
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
-                                  {expandedUser === user.id ? 
-                                    <path d="M18 15l-6-6-6 6"/> : 
-                                    <path d="M6 9l6 6 6-6"/>
-                                  }
-                                </svg>
-                              </span>
-                            </button>
-                            
-                            {expandedUser === user.id && (
-                              <div className="pt-4">
-                                {user.instructorAccess?.hasAccess && (
-                                  <div className="space-y-3">
-                                    <h4 className="text-sm font-medium">Instructor Signature</h4>
-                                    {user.instructorSignature?.code ? (
-                                      <div className="bg-gray-50 p-3 rounded-md">
-                                        <p className="font-mono text-sm">{user.instructorSignature.code}</p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                          Created: {user.instructorSignature?.createdAt ? formatDate(user.instructorSignature.createdAt) : 'N/A'}
-                                        </p>
-                                        <Button 
-                                          onClick={() => resetInstructorSignature(user.id)}
-                                          variant="destructive" 
-                                          size="sm"
-                                          className="mt-2 text-xs w-full"
-                                        >
-                                          Reset Signature
-                                        </Button>
-                                      </div>
-                                    ) : user.instructorPin?.pin ? (
-                                      <div className="bg-amber-50 p-3 rounded-md">
-                                        <p className="text-sm text-amber-600">Using legacy PIN</p>
-                                        <p className="text-xs text-gray-500 mt-1">
-                                          Updated: {user.instructorPin?.lastUpdated ? formatDate(user.instructorPin.lastUpdated) : 'N/A'}
-                                        </p>
-                                        <Button 
-                                          onClick={() => resetInstructorSignature(user.id)}
-                                          variant="destructive" 
-                                          size="sm"
-                                          className="mt-2 text-xs w-full"
-                                        >
-                                          Reset PIN
-                                        </Button>
-                                      </div>
-                                    ) : (
-                                      <div className="bg-yellow-50 p-3 rounded-md">
-                                        <p className="text-sm text-yellow-600">No signature set up</p>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Pending Reports */}
-                                    {user.courseEndReports?.length > 0 && (
-                                      <>
-                                        <h4 className="text-sm font-medium mt-4">Pending Reports</h4>
-                                        <Button
-                                          onClick={() => handleViewReports(user)}
-                                          variant="outline"
-                                          className="w-full justify-between"
-                                          size="sm"
-                                        >
-                                          <span>View Reports</span>
-                                          <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
-                                            {user.courseEndReports.filter(r => !r.courseEndReport?.finalized).length}
-                                          </span>
-                                        </Button>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -720,29 +871,29 @@ const AdminDashboard = () => {
               </div>
 
               {/* Desktop Table View for Users */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto max-h-[70vh]">
                 <table className="min-w-full divide-y divide-gray-200 rounded-lg">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                         User
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Certification
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                        Instructor<br/>Portal
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Loyalty Admin
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                        Instructor<br/>PIN
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Instructor Access
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                        Team<br/>Portal
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Team Portal
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                        Loyalty<br/>Admin
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Signature
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+                        Management<br/>Access
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                         Reports
                       </th>
                     </tr>
@@ -765,50 +916,17 @@ const AdminDashboard = () => {
                               <div className="text-sm text-gray-500">
                                 {user.email || 'No email'}
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">
-                              {user.certificationLevel ? (
-                                <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs px-2.5 py-0.5 rounded-full">
+                              {user.certificationLevel && (
+                                <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs px-2 py-0.5 rounded-full mt-1">
                                   {user.certificationLevel}
                                 </span>
-                              ) : (
-                                'Not set'
                               )}
                             </div>
                           </td>
+
+                          {/* Instructor Portal */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {/* Simple toggle using checkbox and styling */}
-                              <label className="inline-flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  className="sr-only"
-                                  checked={!!user.loyaltyAccess?.hasAccess}
-                                  onChange={() => toggleLoyaltyAccess(user.id, user.loyaltyAccess?.hasAccess)}
-                                />
-                                <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.loyaltyAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.loyaltyAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
-                                </div>
-                              </label>
-                              <span className="ml-2 text-sm text-gray-600">
-                                {user.loyaltyAccess?.hasAccess ? (
-                                  <span className="flex flex-col">
-                                    <span className="font-medium">Enabled</span>
-                                    <span className="text-xs text-gray-500">
-                                      {user.loyaltyAccess?.grantedAt ? formatDate(user.loyaltyAccess.grantedAt) : 'N/A'}
-                                    </span>
-                                  </span>
-                                ) : (
-                                  'Disabled'
-                                )}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {/* Simple toggle using checkbox and styling */}
+                            <div className="flex flex-col items-center">
                               <label className="inline-flex items-center cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -816,27 +934,73 @@ const AdminDashboard = () => {
                                   checked={!!user.instructorAccess?.hasAccess}
                                   onChange={() => toggleInstructorAccess(user.id, user.instructorAccess?.hasAccess)}
                                 />
-                                <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.instructorAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.instructorAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                <div className={`relative w-11 h-6 rounded-full transition ${
+                                  user.instructorAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                }`}>
+                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                    user.instructorAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                  }`}></div>
                                 </div>
                               </label>
-                              <span className="ml-2 text-sm text-gray-600">
-                                {user.instructorAccess?.hasAccess ? (
-                                  <span className="flex flex-col">
-                                    <span className="font-medium">Enabled</span>
-                                    <span className="text-xs text-gray-500">
-                                      {user.instructorAccess?.grantedAt ? formatDate(user.instructorAccess.grantedAt) : 'N/A'}
-                                    </span>
-                                  </span>
-                                ) : (
-                                  'Disabled'
+                              <div className="text-xs text-center mt-1">
+                                <div className="font-medium">
+                                  {user.instructorAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                </div>
+                                {user.instructorAccess?.hasAccess && user.instructorAccess?.grantedAt && (
+                                  <div className="text-gray-500">
+                                    {formatDate(user.instructorAccess.grantedAt)}
+                                  </div>
                                 )}
-                              </span>
+                              </div>
                             </div>
                           </td>
+
+                          {/* Instructor PIN */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              {/* Simple toggle using checkbox and styling */}
+                            <div className="flex flex-col items-center">
+                              {user.instructorAccess?.hasAccess ? (
+                                <div className="space-y-2">
+                                  {user.instructorSignature?.code ? (
+                                    <>
+                                      <div className="text-sm font-mono text-center">
+                                        {user.instructorSignature.code}
+                                      </div>
+                                      <Button 
+                                        onClick={() => resetInstructorSignature(user.id)}
+                                        variant="destructive" 
+                                        size="sm"
+                                        className="text-xs"
+                                      >
+                                        Reset Signature
+                                      </Button>
+                                    </>
+                                  ) : user.instructorPin?.pin ? (
+                                    <>
+                                      <div className="text-sm text-amber-600 text-center">
+                                        Legacy PIN
+                                      </div>
+                                      <Button 
+                                        onClick={() => resetInstructorSignature(user.id)}
+                                        variant="destructive" 
+                                        size="sm"
+                                        className="text-xs"
+                                      >
+                                        Reset PIN
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <span className="text-sm text-yellow-600">Not set</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-gray-400">N/A</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Team Portal */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col items-center">
                               <label className="inline-flex items-center cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -844,89 +1008,112 @@ const AdminDashboard = () => {
                                   checked={!!user.teamAccess?.hasAccess}
                                   onChange={() => toggleTeamAccess(user.id, user.teamAccess?.hasAccess)}
                                 />
-                                <div className={`relative w-11 h-6 bg-gray-200 rounded-full transition ${user.teamAccess?.hasAccess ? 'bg-blue-600' : ''}`}>
-                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''}`}></div>
+                                <div className={`relative w-11 h-6 rounded-full transition ${
+                                  user.teamAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                }`}>
+                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                    user.teamAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                  }`}></div>
                                 </div>
                               </label>
-                              <span className="ml-2 text-sm text-gray-600">
-                                {user.teamAccess?.hasAccess ? (
-                                  <span className="flex flex-col">
-                                    <span className="font-medium">Enabled</span>
-                                    <span className="text-xs text-gray-500">
-                                      {user.teamAccess?.grantedAt ? formatDate(user.teamAccess.grantedAt) : 'N/A'}
-                                    </span>
-                                  </span>
-                                ) : (
-                                  'Disabled'
+                              <div className="text-xs text-center mt-1">
+                                <div className="font-medium">
+                                  {user.teamAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                </div>
+                                {user.teamAccess?.hasAccess && user.teamAccess?.grantedAt && (
+                                  <div className="text-gray-500">
+                                    {formatDate(user.teamAccess.grantedAt)}
+                                  </div>
                                 )}
-                              </span>
+                              </div>
                             </div>
                           </td>
+
+                          {/* Loyalty Admin */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {user.instructorAccess?.hasAccess ? (
-                              <div className="flex flex-col space-y-2">
-                                {user.instructorSignature?.code ? (
-                                  <>
-                                    <div className="text-sm">
-                                      <span className="font-mono font-medium">{user.instructorSignature.code}</span>
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        Created: {user.instructorSignature?.createdAt ? formatDate(user.instructorSignature.createdAt) : 'N/A'}
-                                      </p>
-                                    </div>
-                                    <Button 
-                                      onClick={() => resetInstructorSignature(user.id)}
-                                      variant="destructive" 
-                                      size="sm"
-                                      className="text-xs"
-                                    >
-                                      Reset Signature
-                                    </Button>
-                                  </>
-                                ) : user.instructorPin?.pin ? (
-                                  <>
-                                    <div className="text-sm text-amber-600">
-                                      Using legacy PIN
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        Updated: {user.instructorPin?.lastUpdated ? formatDate(user.instructorPin.lastUpdated) : 'N/A'}
-                                      </p>
-                                    </div>
-                                    <Button 
-                                      onClick={() => resetInstructorSignature(user.id)}
-                                      variant="destructive" 
-                                      size="sm"
-                                      className="text-xs"
-                                    >
-                                      Reset PIN
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <span className="text-sm text-yellow-600">No signature</span>
+                            <div className="flex flex-col items-center">
+                              <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={!!user.loyaltyAccess?.hasAccess}
+                                  onChange={() => toggleLoyaltyAccess(user.id, user.loyaltyAccess?.hasAccess)}
+                                />
+                                <div className={`relative w-11 h-6 rounded-full transition ${
+                                  user.loyaltyAccess?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                }`}>
+                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                    user.loyaltyAccess?.hasAccess ? 'transform translate-x-5' : ''
+                                  }`}></div>
+                                </div>
+                              </label>
+                              <div className="text-xs text-center mt-1">
+                                <div className="font-medium">
+                                  {user.loyaltyAccess?.hasAccess ? 'Enabled' : 'Disabled'}
+                                </div>
+                                {user.loyaltyAccess?.hasAccess && user.loyaltyAccess?.grantedAt && (
+                                  <div className="text-gray-500">
+                                    {formatDate(user.loyaltyAccess.grantedAt)}
+                                  </div>
                                 )}
                               </div>
-                            ) : (
-                              <span className="text-sm text-gray-400">N/A</span>
-                            )}
+                            </div>
                           </td>
+
+                          {/* Management Access */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {user.instructorAccess?.hasAccess && (
-                              <div className="flex items-center">
-                                {user.courseEndReports?.length > 0 ? (
-                                  <Button
-                                    onClick={() => handleViewReports(user)}
-                                    variant="outline"
-                                    className="flex items-center space-x-2"
-                                    size="sm"
-                                  >
-                                    <span>View Reports</span>
-                                    <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
-                                      {user.courseEndReports.filter(r => !r.courseEndReport?.finalized).length}
-                                    </span>
-                                  </Button>
-                                ) : (
-                                  <span className="text-sm text-gray-500">No reports</span>
+                            <div className="flex flex-col items-center">
+                              <label className="inline-flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={!!user.managementRights?.hasAccess}
+                                  onChange={() => toggleManagementRights(user.id, user.managementRights?.hasAccess)}
+                                />
+                                <div className={`relative w-11 h-6 rounded-full transition ${
+                                  user.managementRights?.hasAccess ? 'bg-green-600' : 'bg-red-600'
+                                }`}>
+                                  <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-all ${
+                                    user.managementRights?.hasAccess ? 'transform translate-x-5' : ''
+                                  }`}></div>
+                                </div>
+                              </label>
+                              <div className="text-xs text-center mt-1">
+                                <div className="font-medium">
+                                  {user.managementRights?.hasAccess ? 'Enabled' : 'Disabled'}
+                                </div>
+                                {user.managementRights?.hasAccess && user.managementRights?.grantedAt && (
+                                  <div className="text-gray-500">
+                                    {formatDate(user.managementRights.grantedAt)}
+                                  </div>
                                 )}
                               </div>
-                            )}
+                            </div>
+                          </td>
+
+                          {/* Reports */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col items-center">
+                              {user.instructorAccess?.hasAccess && (
+                                <div className="flex items-center">
+                                  {user.courseEndReports?.length > 0 ? (
+                                    <Button
+                                      onClick={() => handleViewReports(user)}
+                                      variant="outline"
+                                      className="flex items-center space-x-2"
+                                      size="sm"
+                                    >
+                                      <span>View Reports</span>
+                                      <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
+                                        {user.courseEndReports.filter(r => !r.courseEndReport?.finalized).length}
+                                      </span>
+                                    </Button>
+                                  ) : (
+                                    <span className="text-sm text-gray-500">No reports</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))

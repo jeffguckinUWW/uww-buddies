@@ -789,7 +789,7 @@ function Profile() {
     "Nitrox Diver",
     "Drysuit Diver",
     "First Aid/CPR",
-    "Emergecy Oxygen Provider",
+    "Emergency Oxygen Provider",
     "Equipment Specialist",
     "Deep Diver",
     "Underwater Navigator",
