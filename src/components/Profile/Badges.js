@@ -20,13 +20,10 @@ const SPECIALTY_BADGES = {
   "Drysuit Diver": "Drysuit.png"
 };
 
+// Updated dive count badges with new values
 const DIVE_COUNT_BADGES = [
-  { count: 1000, image: "1000.png" },
-  { count: 900, image: "900.png" },
-  { count: 800, image: "800.png" },
-  { count: 700, image: "700.png" },
-  { count: 600, image: "600.png" },
   { count: 500, image: "500.png" },
+  { count: 450, image: "450.png" },
   { count: 400, image: "400.png" },
   { count: 350, image: "350.png" },
   { count: 300, image: "300.png" },
@@ -36,7 +33,10 @@ const DIVE_COUNT_BADGES = [
   { count: 100, image: "100.png" },
   { count: 75, image: "75.png" },
   { count: 50, image: "50.png" },
-  { count: 25, image: "25.png" }
+  { count: 25, image: "25.png" },
+  { count: 15, image: "15.png" },
+  { count: 10, image: "10.png" },
+  { count: 5, image: "5.png" }
 ];
 
 const Badge = ({ name, imageName, description, size = "full" }) => {
@@ -47,11 +47,13 @@ const Badge = ({ name, imageName, description, size = "full" }) => {
     medium: "w-10 h-10 p-1",
     large: "w-12 h-12 p-1",
     full: "w-14 h-14 p-1"
-  }[size];
+  };
+  
+  const sizeClass = sizeClasses[size] || sizeClasses.full;
 
   return (
     <div className="relative group">
-      <div className={`rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-100 ${sizeClasses}`}>
+      <div className={`rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-100 ${sizeClass}`}>
         <img 
           src={`/images/badges/${imageName}`}
           alt={name}
@@ -124,14 +126,20 @@ const Badges = ({
     }));
 
   // Get dive count badge (only get the highest achieved)
-  const diveCountBadge = DIVE_COUNT_BADGES
-    .find(badge => numberOfDives >= badge.count);
+  // Don't show any badge for less than 5 dives
+  const diveCountBadge = numberOfDives >= 5 
+    ? DIVE_COUNT_BADGES.find(badge => numberOfDives >= badge.count)
+    : null;
     
   const diveCountBadges = diveCountBadge 
     ? [{
-        name: `${diveCountBadge.count}+ Dives`,
+        name: diveCountBadge.count === 500 && numberOfDives > 500 
+          ? `${diveCountBadge.count}+ Dives` 
+          : `${diveCountBadge.count} Dives`,
         image: diveCountBadge.image,
-        description: `Completed ${diveCountBadge.count}+ dives`
+        description: diveCountBadge.count === 500 && numberOfDives > 500
+          ? `Completed ${diveCountBadge.count}+ dives`
+          : `Completed ${diveCountBadge.count} dives`
       }]
     : [];
 
