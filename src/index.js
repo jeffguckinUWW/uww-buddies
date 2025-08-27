@@ -4,7 +4,6 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
-import NotificationService from './services/NotificationService';
 
 // Add global error handler
 window.addEventListener('error', function(event) {
@@ -37,13 +36,3 @@ try {
 
 // Register the service worker for offline functionality
 serviceWorkerRegistration.register();
-
-// Initialize push notifications when on native platforms
-if (typeof window !== 'undefined') {
-  // Small delay to ensure app is fully initialized
-  setTimeout(() => {
-    NotificationService.initPushNotifications()
-      .then(() => console.log('Push notifications initialized'))
-      .catch(error => console.error('Error initializing push notifications:', error));
-  }, 1000);
-}

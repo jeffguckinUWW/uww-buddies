@@ -27,6 +27,7 @@ import KnowledgePage from './pages/KnowledgePage';
 import LearningResources from './components/Knowledge/LearningResources';
 import ResourceViewer from './components/Knowledge/ResourceViewer';
 import { getVerificationSetting } from './utils/verificationSettings';
+import NotificationService from './services/NotificationService';
 
 // Mobile viewport height fix component
 function ViewportHeightFix() {
@@ -52,6 +53,27 @@ function ViewportHeightFix() {
       window.removeEventListener('orientationchange', setAppHeight);
     };
   }, []);
+  
+  return null;
+}
+
+// Push notification initialization component - now using NotificationService
+function PushNotificationInitializer() {
+  const { user } = useAuth();
+  
+  useEffect(() => {
+    // Only initialize push notifications when user is authenticated
+    if (user) {
+      console.log('User authenticated, initializing push notifications...');
+      NotificationService.initPushNotifications()
+        .then(() => {
+          console.log('Push notifications initialized successfully');
+        })
+        .catch(error => {
+          console.error('Error initializing push notifications:', error);
+        });
+    }
+  }, [user]);
   
   return null;
 }
@@ -173,6 +195,8 @@ function App() {
         <Router>
           {/* Add viewport height fix component */}
           <ViewportHeightFix />
+          {/* Initialize push notifications when user is authenticated */}
+          <PushNotificationInitializer />
           <div className="no-tap-highlight smooth-scroll no-overscroll">
             <MainContent />
           </div>

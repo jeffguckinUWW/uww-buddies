@@ -24,6 +24,9 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 
 class NotificationService {
+  // Static property to track if push notifications are already initialized
+  static _isInitialized = false;
+  
   // Create a notification in the database
   static async createNotification(data) {
     try {
@@ -722,6 +725,12 @@ class NotificationService {
   
   // Initialize push notifications (call this on app startup)
   static async initPushNotifications() {
+    // Prevent multiple initializations
+    if (this._isInitialized) {
+      console.log('Push notifications already initialized, skipping...');
+      return;
+    }
+    
     // Only proceed on native platforms (iOS/Android)
     if (!Capacitor.isNativePlatform()) {
       console.log('Push notifications not available on this platform');
@@ -735,6 +744,11 @@ class NotificationService {
       try {
         const { receive } = await PushNotifications.checkPermissions();
         console.log('Current permission status:', receive);
+        
+        // If permission is already granted and we're already registered, skip
+        if (receive === 'granted') {
+          console.log('Push notifications already have permission');
+        }
       } catch (err) {
         console.log('Error checking permissions:', err);
       }
@@ -749,13 +763,16 @@ class NotificationService {
         console.log('Permission granted, registering for push notifications...');
         await PushNotifications.register();
         console.log('Registration request sent');
+        
+        // Set up listeners
+        this.setupPushListeners();
+        
+        // Mark as initialized
+        this._isInitialized = true;
       } else {
         console.log('Push notification permission denied');
         return;
       }
-      
-      // Configure push notification handlers
-      this.setupPushListeners();
     } catch (error) {
       console.error('Error initializing push notifications:', error);
     }
@@ -763,6 +780,13 @@ class NotificationService {
   
   // Set up event listeners for push notifications
   static setupPushListeners() {
+    // Remove any existing listeners first to prevent duplicates
+    try {
+      PushNotifications.removeAllListeners();
+    } catch (error) {
+      console.log('No existing listeners to remove');
+    }
+    
     // On successful registration
     PushNotifications.addListener('registration', (token) => {
       console.log('Push registration success:', token.value);
