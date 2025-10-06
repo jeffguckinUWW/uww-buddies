@@ -20,13 +20,8 @@ import {
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { MessageTypes } from './MessageConstants';
-import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
 
 class NotificationService {
-  // Static property to track if push notifications are already initialized
-  static _isInitialized = false;
-  
   // Create a notification in the database
   static async createNotification(data) {
     try {
@@ -690,17 +685,17 @@ class NotificationService {
     try {
       const countersRef = doc(db, 'unreadCounters', userId);
       const counterDoc = await getDoc(countersRef);
-      
+
       if (counterDoc.exists()) {
         const counters = counterDoc.data();
-        const needsReset = 
+        const needsReset =
           counters.messages < 0 ||
           counters.training < 0 ||
           counters.travel < 0 ||
           counters.buddies < 0 ||
           counters.instructor < 0 ||
           counters.total < 0;
-        
+
         if (needsReset) {
           console.log(`Resetting negative counters for user ${userId}`);
           await updateDoc(countersRef, {
@@ -718,192 +713,6 @@ class NotificationService {
     } catch (error) {
       console.error('Error resetting negative counters:', error);
       return false;
-    }
-  }
-  
-  // === PUSH NOTIFICATION METHODS ===
-  
-  // Initialize push notifications (call this on app startup)
-  static async initPushNotifications() {
-    // Prevent multiple initializations
-    if (this._isInitialized) {
-      console.log('Push notifications already initialized, skipping...');
-      return;
-    }
-    
-    // Only proceed on native platforms (iOS/Android)
-    if (!Capacitor.isNativePlatform()) {
-      console.log('Push notifications not available on this platform');
-      return;
-    }
-    
-    try {
-      console.log('Initializing push notifications on native platform');
-      
-      // Check if already registered to avoid duplicate registrations
-      try {
-        const { receive } = await PushNotifications.checkPermissions();
-        console.log('Current permission status:', receive);
-        
-        // If permission is already granted and we're already registered, skip
-        if (receive === 'granted') {
-          console.log('Push notifications already have permission');
-        }
-      } catch (err) {
-        console.log('Error checking permissions:', err);
-      }
-      
-      // Request permission
-      console.log('Requesting push notification permissions...');
-      const permissionStatus = await PushNotifications.requestPermissions();
-      console.log('Permission request result:', permissionStatus);
-      
-      if (permissionStatus.receive === 'granted') {
-        // Register with Apple/Google to receive push
-        console.log('Permission granted, registering for push notifications...');
-        await PushNotifications.register();
-        console.log('Registration request sent');
-        
-        // Set up listeners
-        this.setupPushListeners();
-        
-        // Mark as initialized
-        this._isInitialized = true;
-      } else {
-        console.log('Push notification permission denied');
-        return;
-      }
-    } catch (error) {
-      console.error('Error initializing push notifications:', error);
-    }
-  }
-  
-  // Set up event listeners for push notifications
-  static setupPushListeners() {
-    // Remove any existing listeners first to prevent duplicates
-    try {
-      PushNotifications.removeAllListeners();
-    } catch (error) {
-      console.log('No existing listeners to remove');
-    }
-    
-    // On successful registration
-    PushNotifications.addListener('registration', (token) => {
-      console.log('Push registration success:', token.value);
-      // Save the token to the user's profile in Firebase
-      this.savePushToken(token.value);
-    });
-    
-    // If registration fails
-    PushNotifications.addListener('registrationError', (error) => {
-      console.error('Push registration failed:', JSON.stringify(error));
-    });
-    
-    // When a notification is received while the app is in foreground
-    PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      console.log('Push notification received:', notification);
-      
-      // Convert push notification to an in-app notification
-      this.handleReceivedPushNotification(notification);
-    });
-    
-    // When a notification action is performed (notification clicked)
-    PushNotifications.addListener('pushNotificationActionPerformed', (actionPerformed) => {
-      console.log('Push notification action performed:', actionPerformed);
-      
-      // Handle navigation when a notification is tapped
-      const notification = actionPerformed.notification;
-      this.handleNotificationTap(notification);
-    });
-  }
-  
-  // Save the device token to the user's profile
-  static async savePushToken(token) {
-    try {
-      // Get the current user ID
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        console.log('No user logged in, cannot save push token');
-        return;
-      }
-      
-      const userId = currentUser.uid;
-      console.log(`Attempting to save push token for user ${userId}: ${token}`);
-      
-      // First check if token already exists to avoid duplicates
-      const userRef = doc(db, 'users', userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const existingTokens = userData.pushTokens || [];
-        
-        if (existingTokens.includes(token)) {
-          console.log('Token already exists in user profile, skipping save');
-          return;
-        }
-        
-        // Save the token to the user's profile
-        await updateDoc(userRef, {
-          pushTokens: arrayUnion(token),
-          lastTokenUpdate: serverTimestamp()
-        });
-        
-        console.log('Push token saved successfully to user profile');
-      } else {
-        console.error('User document does not exist');
-      }
-    } catch (error) {
-      console.error('Error saving push token:', error);
-    }
-  }
-  
-  // Handle a received push notification when app is in foreground
-  static async handleReceivedPushNotification(notification) {
-    try {
-      // Extract data from the notification
-      const title = notification.title;
-      const body = notification.body;
-      const data = notification.data;
-      
-      // Display an alert or in-app notification
-      // You could use a custom toast or alert component here
-      console.log(`Push Notification: ${title} - ${body}`);
-      console.log('Notification data:', data);
-      
-      // If the notification contains specific data, handle it
-      if (data) {
-        // For example, update in-app notification counters
-        // or trigger a refresh of relevant data
-      }
-    } catch (error) {
-      console.error('Error handling received push notification:', error);
-    }
-  }
-  
-  // Navigate when a notification is tapped
-  static handleNotificationTap(notification) {
-    try {
-      const data = notification.data;
-      
-      if (!data) return;
-      
-      // Extract navigation information
-      const targetRoute = data.targetRoute;
-      
-      // Navigate to the appropriate screen based on the notification type
-      if (targetRoute) {
-        // Navigate using your app's router/navigation system
-        // For example, if using React Router:
-        console.log(`Should navigate to: ${targetRoute}`);
-        
-        // You can implement actual navigation here
-        window.location.href = targetRoute;
-      }
-    } catch (error) {
-      console.error('Error handling notification tap:', error);
     }
   }
 }
