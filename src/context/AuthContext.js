@@ -59,29 +59,24 @@ export const AuthProvider = ({ children }) => {
 
   const checkAndCreateUserDocuments = async (user) => {
     try {
-      // Check and create user document
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          displayName: user.displayName || user.email,
-          email: user.email,
-          buddyList: {},
-          createdAt: new Date()
-        });
-      }
-  
-      // Check and create profile document
+      // ONLY use profiles collection - single source of truth
       const profileRef = doc(db, 'profiles', user.uid);
       const profileSnap = await getDoc(profileRef);
-      
+
       if (!profileSnap.exists()) {
-        // Create a more complete profile with all necessary fields
-        await setDoc(profileRef, {
-          name: user.displayName || user.email,
+        // Extract first name from Google displayName or email
+        let defaultName = user.email.split('@')[0];
+        if (user.displayName) {
+          // If Google sign-in, use their actual name
+          defaultName = user.displayName;
+        }
+
+        // Create a complete profile with all necessary fields
+        // IMPORTANT: photoURL from Google is just a default - users can change it later
+        const profileData = {
+          name: defaultName,
           email: user.email,
-          photoURL: user.photoURL || '',
+          photoURL: user.photoURL || '', // Google photo as default, but user can override
           phone: '',
           bio: '',
           city: '',
@@ -113,16 +108,40 @@ export const AuthProvider = ({ children }) => {
             hideStats: false,
             hideSocial: false
           },
+          buddyList: {}, // Store buddies in profile
           lifetimePoints: 0,
           redeemablePoints: 0,
           transactions: [],
+          authProvider: user.providerData[0]?.providerId || 'password', // Track how they signed up
           joinDate: new Date().toISOString(),
           createdAt: new Date().toISOString(),
           emailVerified: user.emailVerified || false
-        });
+        };
+
+        await setDoc(profileRef, profileData);
+        console.log('Created new profile for user:', user.uid, 'via', profileData.authProvider);
+      } else {
+        // Profile exists - ensure it has all required fields (migration safety)
+        const existingData = profileSnap.data();
+        const updates = {};
+
+        // Add buddyList if missing (for old profiles)
+        if (!existingData.buddyList) {
+          updates.buddyList = {};
+        }
+
+        // Track auth provider if not set
+        if (!existingData.authProvider) {
+          updates.authProvider = user.providerData[0]?.providerId || 'password';
+        }
+
+        // Update if needed
+        if (Object.keys(updates).length > 0) {
+          await setDoc(profileRef, updates, { merge: true });
+        }
       }
     } catch (error) {
-      console.error("Error creating user documents:", error);
+      console.error("Error creating/updating user profile:", error);
     }
   };
 
@@ -154,6 +173,15 @@ export const AuthProvider = ({ children }) => {
       return result;
     } catch (error) {
       console.error("Error signing in with Google:", error);
+
+      // Handle account exists with different credential
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        throw new Error(
+          'An account already exists with this email using a different sign-in method. ' +
+          'Please sign in using your email and password instead.'
+        );
+      }
+
       throw error;
     }
   };
@@ -212,25 +240,26 @@ export const AuthProvider = ({ children }) => {
   const updateUserProfile = async (displayName, photoURL) => {
     if (!user) return;
     try {
-      await updateProfile(user, {
+      // Update Firebase Auth profile (optional, mainly for consistency)
+      await updateProfile(auth.currentUser, {
         displayName: displayName || user.displayName,
         photoURL: photoURL || user.photoURL
       });
 
-      // Update user document
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        displayName: displayName || user.displayName
-      }, { merge: true });
-
-      // Update profile document
+      // Update ONLY profiles collection (single source of truth)
       const profileRef = doc(db, 'profiles', user.uid);
-      await setDoc(profileRef, {
-        name: displayName || user.displayName
-      }, { merge: true });
+      const updates = {};
 
-      // Force a user state update
-      setUser({ ...user, displayName, photoURL });
+      if (displayName) updates.name = displayName;
+      if (photoURL !== undefined) updates.photoURL = photoURL; // Allow empty string to clear photo
+
+      await setDoc(profileRef, updates, { merge: true });
+
+      // Fetch updated profile and update local state
+      const updatedProfile = await getDoc(profileRef);
+      if (updatedProfile.exists()) {
+        setUser({ ...auth.currentUser, ...updatedProfile.data() });
+      }
     } catch (error) {
       console.error("Error updating profile:", error);
       throw error;
