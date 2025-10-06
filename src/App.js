@@ -27,7 +27,9 @@ import KnowledgePage from './pages/KnowledgePage';
 import LearningResources from './components/Knowledge/LearningResources';
 import ResourceViewer from './components/Knowledge/ResourceViewer';
 import { getVerificationSetting } from './utils/verificationSettings';
-import NotificationService from './services/NotificationService';
+import InstallPrompt from './components/PWA/InstallPrompt';
+import NotificationManager from './components/PWA/NotificationManager';
+import ToastNotification from './components/PWA/ToastNotification';
 
 // Mobile viewport height fix component
 function ViewportHeightFix() {
@@ -41,40 +43,19 @@ function ViewportHeightFix() {
     // Set initially and on resize
     setAppHeight();
     window.addEventListener('resize', setAppHeight);
-    
+
     // Re-calculate on orientation change for iOS
     window.addEventListener('orientationchange', () => {
       // Small delay to ensure iOS has completed its UI adjustments
       setTimeout(setAppHeight, 200);
     });
-    
+
     return () => {
       window.removeEventListener('resize', setAppHeight);
       window.removeEventListener('orientationchange', setAppHeight);
     };
   }, []);
-  
-  return null;
-}
 
-// Push notification initialization component - now using NotificationService
-function PushNotificationInitializer() {
-  const { user } = useAuth();
-  
-  useEffect(() => {
-    // Only initialize push notifications when user is authenticated
-    if (user) {
-      console.log('User authenticated, initializing push notifications...');
-      NotificationService.initPushNotifications()
-        .then(() => {
-          console.log('Push notifications initialized successfully');
-        })
-        .catch(error => {
-          console.error('Error initializing push notifications:', error);
-        });
-    }
-  }, [user]);
-  
   return null;
 }
 
@@ -195,8 +176,10 @@ function App() {
         <Router>
           {/* Add viewport height fix component */}
           <ViewportHeightFix />
-          {/* Initialize push notifications when user is authenticated */}
-          <PushNotificationInitializer />
+          {/* PWA Components */}
+          <InstallPrompt />
+          <NotificationManager />
+          <ToastNotification />
           <div className="no-tap-highlight smooth-scroll no-overscroll">
             <MainContent />
           </div>

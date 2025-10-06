@@ -8,7 +8,7 @@
 // resources are updated in the background.
 
 // App version - increment this with each deployment
-export const APP_VERSION = 'v1.0.2';
+export const APP_VERSION = 'v1.1.0';
 
 const isLocalhost = Boolean(
   window.location.hostname === 'localhost' ||

@@ -1,0 +1,7 @@
+Note: Add a notification.mp3 file to this directory for notification sounds.
+You can find free notification sounds at:
+- https://notificationsounds.com/
+- https://mixkit.co/free-sound-effects/notification/
+
+Recommended: A short, pleasant notification sound (1-2 seconds).
+Save as: notification.mp3

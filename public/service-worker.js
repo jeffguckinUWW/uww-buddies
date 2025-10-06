@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'uww-buddies-cache-v3';
+const CACHE_NAME = 'uww-buddies-cache-v4';
 const urlsToCache = [
   '/',
   '/index.html',

@@ -1,0 +1,159 @@
+/* src/components/PWA/InstallPrompt.css */
+.install-prompt {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateX(-50%) translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+.install-prompt-content {
+  padding: 24px;
+  position: relative;
+}
+
+.install-prompt-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.install-prompt-close:hover {
+  background: #f0f0f0;
+}
+
+.install-prompt-icon {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.install-prompt h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  color: #333;
+  text-align: center;
+}
+
+.install-prompt p {
+  margin: 0 0 16px 0;
+  color: #666;
+  text-align: center;
+  font-size: 14px;
+}
+
+.install-benefits {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px 0;
+}
+
+.install-benefits li {
+  padding: 8px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.ios-instructions {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.ios-instructions p {
+  margin: 0 0 12px 0;
+  text-align: left;
+  color: #333;
+}
+
+.ios-instructions ol {
+  margin: 0;
+  padding-left: 20px;
+  text-align: left;
+}
+
+.ios-instructions li {
+  margin: 8px 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.share-icon {
+  display: inline-block;
+  font-size: 18px;
+  color: #007AFF;
+}
+
+.install-button {
+  width: 100%;
+  padding: 14px;
+  background: #007AFF;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: background 0.2s;
+}
+
+.install-button:hover {
+  background: #0051D5;
+}
+
+.install-dismiss {
+  width: 100%;
+  padding: 12px;
+  background: none;
+  color: #666;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.install-dismiss:hover {
+  color: #333;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .install-prompt {
+    bottom: 10px;
+    width: 95%;
+  }
+
+  .install-prompt-content {
+    padding: 20px;
+  }
+}
